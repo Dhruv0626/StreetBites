@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Playfair Display', Georgia, Cambria, 'Times New Roman', serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --color-accent: #D94A38;
+  --color-accent-hover: #C43D2E;
+}
+
+:root {
+  --font-display: 'Playfair Display', Georgia, Cambria, 'Times New Roman', serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --color-accent: #D94A38;
+}
+
+/* Universal Cross-Browser / Cross-Device Typography Lock */
+html {
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FAF7F2;
+  color: #1C1917;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Force buttons, form inputs, dialogs, and select dropdowns to strictly retain typography */
+button,
+input,
+optgroup,
+select,
+textarea,
+p,
+span,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+label,
+table,
+td,
+th {
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display,
+.font-serif {
+  font-family: var(--font-display) !important;
+}
+
+.font-sans {
+  font-family: var(--font-sans) !important;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Small uppercase labels */
+.text-label {
+  font-family: var(--font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Accent highlight in headings */
+.text-accent {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Light diagonal stripe pattern matching customer design images */
+.bg-diagonal-stripes {
+  background-color: #F7F1E8;
+  background-image: repeating-linear-gradient(
+    45deg,
+    #EFE6D8 0,
+    #EFE6D8 12px,
+    #F7F1E8 12px,
+    #F7F1E8 24px
+  );
+}
+
+/* Dark diagonal stripe pattern matching admin design images */
+.bg-diagonal-stripes-dark {
+  background-color: #171514;
+  background-image: repeating-linear-gradient(
+    45deg,
+    #110F0E 0,
+    #110F0E 12px,
+    #171514 12px,
+    #171514 24px
+  );
+}
+
+/* Custom input styling for authentication forms */
+.auth-input {
+  background-color: #FFFFFF;
+  border: 1px solid #E7E2D9;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  color: #1C1917;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: #D94A38;
+  box-shadow: 0 0 0 3px rgba(217, 74, 56, 0.12);
+}
+
+/* Global scrollbar hiding while preserving scrolling functionality */
+html,
+body,
+#root,
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Edge, Opera */
+  width: 0px !important;
+  height: 0px !important;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Universal Single Skeleton Style for any component */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #EAE4DA 0%,
+    #F5F0E8 40%,
+    #FAF7F2 50%,
+    #F5F0E8 60%,
+    #EAE4DA 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+
