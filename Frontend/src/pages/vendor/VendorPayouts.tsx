@@ -3,6 +3,7 @@ import { IndianRupee, ArrowDownLeft, Building2, ExternalLink, ShieldCheck, Clock
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
+import { useAlert } from '../../context/AlertContext';
 
 export interface PayoutTransaction {
   id: string;
@@ -14,6 +15,7 @@ export interface PayoutTransaction {
 
 export const VendorPayoutsPage: React.FC = () => {
   const { user } = useAuth();
+  const { showAlert, toast } = useAlert();
   const navigate = useNavigate();
   const [vendorData, setVendorData] = useState<{ user?: any; stall?: any } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,12 +53,12 @@ export const VendorPayoutsPage: React.FC = () => {
 
   const handleWithdrawClick = () => {
     if (!bankName || !bankAccountNo) {
-      alert('Please add your bank account details in Onboarding Details first.');
+      showAlert('Please add your bank account details in Onboarding Details first.', 'warning');
       navigate('/vendor/registration');
       return;
     }
     if (availableBalance <= 0) {
-      alert('You have ₹0 available balance. Complete customer orders to accumulate earnings.');
+      showAlert('You have ₹0 available balance. Complete customer orders to accumulate earnings.', 'info');
       return;
     }
     setShowWithdrawModal(true);
@@ -67,7 +69,8 @@ export const VendorPayoutsPage: React.FC = () => {
     setTimeout(() => {
       setIsWithdrawing(false);
       setShowWithdrawModal(false);
-      alert('Withdrawal request submitted successfully! Funds will be transferred to your registered bank account.');
+      showAlert('Withdrawal request submitted successfully! Funds will be transferred to your registered bank account.', 'success');
+      toast.success('Payout withdrawal requested');
     }, 1200);
   };
 

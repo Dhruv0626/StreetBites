@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { AlertProvider } from './context/AlertContext';
 
 // Route Guards & Layouts
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -214,7 +215,9 @@ const router = createBrowserRouter([
 const App: React.FC = () => (
   <AuthProvider>
     <CartProvider>
-      <RouterProvider router={router} />
+      <AlertProvider>
+        <RouterProvider router={router} />
+      </AlertProvider>
     </CartProvider>
   </AuthProvider>
 );

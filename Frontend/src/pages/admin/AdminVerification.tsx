@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService';
 import { adminService } from '../../services/adminService';
+import { useAlert } from '../../context/AlertContext';
 
 export const AdminVerification: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   // Top-level Section Switcher: 'kyc' | 'foodItems'
   const [activeSection, setActiveSection] = useState<'kyc' | 'foodItems'>('foodItems');
 
@@ -118,7 +120,14 @@ export const AdminVerification: React.FC = () => {
 
   // Handle KYC Status update
   const handleUpdateKycStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
-    if (!window.confirm(`Are you sure you want to mark this application as ${newStatus.toUpperCase()}?`)) return;
+    const isApproved = newStatus === 'approved';
+    const confirmed = await showConfirm({
+      title: isApproved ? 'Approve Application' : 'Reject Application',
+      message: `Are you sure you want to mark this KYC application as ${newStatus.toUpperCase()}?`,
+      confirmText: isApproved ? 'Approve' : 'Reject',
+      type: isApproved ? 'success' : 'danger',
+    });
+    if (!confirmed) return;
 
     setIsProcessingKyc(true);
     try {
@@ -127,13 +136,13 @@ export const AdminVerification: React.FC = () => {
         setApplications(prev => prev.filter(a => a.id !== id));
         setSelectedAppId(null);
         setCurrentDocIndex(0);
-        alert(`Application successfully ${newStatus}!`);
+        toast.success(`Application successfully ${newStatus}!`);
         fetchApplications();
       } else {
-        alert(res.message || 'Failed to update verification status');
+        showAlert(res.message || 'Failed to update verification status', 'error');
       }
     } catch (err: any) {
-      alert(err?.message || 'Error updating verification status');
+      showAlert(err?.message || 'Error updating verification status', 'error');
     } finally {
       setIsProcessingKyc(false);
     }
@@ -164,14 +173,15 @@ export const AdminVerification: React.FC = () => {
 
         setActionSuccessMsg(`"${selectedFood?.name || 'Food item'}" marked as ${statusLabel}`);
         setTimeout(() => setActionSuccessMsg(null), 5000);
+        toast.success(`Food item status set to ${newStatus}`);
 
         // Background refetch to ensure database sync
         fetchFoodItems();
       } else {
-        alert(res.message || 'Failed to update food item status');
+        showAlert(res.message || 'Failed to update food item status', 'error');
       }
     } catch (err: any) {
-      alert(err?.message || 'Error updating food item status');
+      showAlert(err?.message || 'Error updating food item status', 'error');
     } finally {
       setIsProcessingFood(false);
     }

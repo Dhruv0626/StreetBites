@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Search, Tag, Plus, Trash2, Power, X, Percent, Edit2, Loader2, AlertCircle } from 'lucide-react';
 import { offerService, type OfferData } from '../../services/offerService';
 import { CustomSelect } from '../../components/CustomSelect';
+import { useAlert } from '../../context/AlertContext';
 
 export const AdminOffers: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   const [offers, setOffers] = useState<OfferData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -69,22 +71,30 @@ export const AdminOffers: React.FC = () => {
         setOffers(prev =>
           prev.map(o => (o._id === id || o.id === id ? { ...o, is_active: !o.is_active } : o))
         );
+        toast.success('Offer status updated');
       }
     } catch (err: any) {
-      alert(err?.message || 'Failed to toggle offer status');
+      showAlert(err?.message || 'Failed to toggle offer status', 'error');
     }
   };
 
   const deleteOffer = async (id: string) => {
-    if (window.confirm('Are you sure you want to permanently delete this offer?')) {
-      try {
-        const res = await offerService.deleteOffer(id);
-        if (res.success) {
-          setOffers(prev => prev.filter(o => o._id !== id && o.id !== id));
-        }
-      } catch (err: any) {
-        alert(err?.message || 'Failed to delete offer');
+    const confirmed = await showConfirm({
+      title: 'Delete Promotion Offer',
+      message: 'Are you sure you want to permanently remove this offer from the platform?',
+      confirmText: 'Delete',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await offerService.deleteOffer(id);
+      if (res.success) {
+        setOffers(prev => prev.filter(o => o._id !== id && o.id !== id));
+        toast.success('Offer removed successfully');
       }
+    } catch (err: any) {
+      showAlert(err?.message || 'Failed to delete offer', 'error');
     }
   };
 
@@ -152,8 +162,9 @@ export const AdminOffers: React.FC = () => {
             prev.map(o => (o._id === editingOfferId || o.id === editingOfferId ? updatedItem : o))
           );
           setIsModalOpen(false);
+          toast.success('Offer updated successfully!');
         } else {
-          alert(res.message || 'Failed to update offer');
+          showAlert(res.message || 'Failed to update offer', 'error');
         }
       } else {
         const res = await offerService.createOffer(payload);
@@ -161,12 +172,13 @@ export const AdminOffers: React.FC = () => {
           const newItem: OfferData = (res.data as any)?.data || res.data;
           setOffers(prev => [newItem, ...prev]);
           setIsModalOpen(false);
+          toast.success('New promotion offer created!');
         } else {
-          alert(res.message || 'Failed to create offer');
+          showAlert(res.message || 'Failed to create offer', 'error');
         }
       }
     } catch (err: any) {
-      alert(err?.message || 'Error saving offer');
+      showAlert(err?.message || 'Error saving offer', 'error');
     } finally {
       setIsSaving(false);
     }

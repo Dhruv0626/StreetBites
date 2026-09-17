@@ -6,6 +6,7 @@ import {
 import { TomTomMap } from '../../components/map/TomTomMap';
 import { clusterService, type ClusterData } from '../../services/clusterService';
 import { Skeleton } from '../../components/Skeleton';
+import { useAlert } from '../../context/AlertContext';
 
 // Safe helper to extract [lat, lng] from various GeoJSON / object formats
 const getClusterCoords = (cluster: any): { lat: number; lng: number } => {
@@ -34,6 +35,7 @@ const getClusterCoords = (cluster: any): { lat: number; lng: number } => {
 const isOnlineStall = (s: any): boolean => Boolean(s?.is_accepting_orders ?? s?.isOnline);
 
 export const AdminClusters: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   const [clusters, setClusters] = useState<ClusterData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -243,19 +245,25 @@ export const AdminClusters: React.FC = () => {
 
   const handleDeleteCluster = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this cluster from the database?")) {
-      try {
-        const res = await clusterService.deleteCluster(id);
-        if (res.success) {
-          setSuccessMessage('Cluster deleted successfully.');
-          await loadClusters();
-          if (expandedClusterId === id) setExpandedClusterId(null);
-        } else {
-          setErrorMessage(res.message || 'Failed to delete cluster.');
-        }
-      } catch (err: any) {
-        setErrorMessage(err.message || 'Error deleting cluster.');
+    const confirmed = await showConfirm({
+      title: 'Delete Khau Galli Cluster',
+      message: 'Are you sure you want to permanently remove this cluster from the database? All stalls assigned to this cluster will be affected.',
+      confirmText: 'Delete Cluster',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await clusterService.deleteCluster(id);
+      if (res.success) {
+        toast.success('Cluster deleted successfully.');
+        await loadClusters();
+        if (expandedClusterId === id) setExpandedClusterId(null);
+      } else {
+        showAlert(res.message || 'Failed to delete cluster.', 'error');
       }
+    } catch (err: any) {
+      showAlert(err.message || 'Error deleting cluster.', 'error');
     }
   };
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Search, User as UserIcon, Store, Bike, Trash2, Ban, Shield, Loader2, AlertCircle } from 'lucide-react';
 import { authService } from '../../services/authService';
+import { useAlert } from '../../context/AlertContext';
 
 export const AdminUsers: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   const [activeTab, setActiveTab] = useState<'customers' | 'vendors' | 'riders' | 'admins'>('customers');
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<any[]>([]);
@@ -47,8 +49,15 @@ export const AdminUsers: React.FC = () => {
   };
 
   const handleSuspend = async (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'suspended' ? 'ACTIVE' : 'SUSPENDED';
-    if (!window.confirm(`Are you sure you want to ${currentStatus === 'suspended' ? 'unsuspend' : 'suspend'} this user?`)) return;
+    const isSuspending = currentStatus !== 'suspended';
+    const newStatus = isSuspending ? 'SUSPENDED' : 'ACTIVE';
+    const confirmed = await showConfirm({
+      title: isSuspending ? 'Suspend User Account' : 'Reactivate User Account',
+      message: `Are you sure you want to ${isSuspending ? 'suspend' : 'unsuspend'} this user account?`,
+      confirmText: isSuspending ? 'Suspend' : 'Reactivate',
+      type: isSuspending ? 'danger' : 'info',
+    });
+    if (!confirmed) return;
 
     try {
       const res = await authService.updateUserStatus(id, newStatus);
@@ -56,25 +65,34 @@ export const AdminUsers: React.FC = () => {
         setUsers(prev =>
           prev.map(u => (u.id === id || u._id === id ? { ...u, status: newStatus.toLowerCase() } : u))
         );
+        toast.success(`User successfully ${newStatus.toLowerCase()}!`);
       } else {
-        alert(res.message || 'Failed to update user status');
+        showAlert(res.message || 'Failed to update user status', 'error');
       }
     } catch (err: any) {
-      alert(err?.message || 'Error updating user status');
+      showAlert(err?.message || 'Error updating user status', 'error');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to permanently delete this user from database?')) return;
+    const confirmed = await showConfirm({
+      title: 'Delete User Account',
+      message: 'Are you sure you want to permanently delete this user from the database? This action cannot be undone.',
+      confirmText: 'Delete User',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       const res = await authService.deleteUser(id);
       if (res.success) {
         setUsers(prev => prev.filter(u => u.id !== id && u._id !== id));
+        toast.success('User permanently deleted.');
       } else {
-        alert(res.message || 'Failed to delete user');
+        showAlert(res.message || 'Failed to delete user', 'error');
       }
     } catch (err: any) {
-      alert(err?.message || 'Error deleting user');
+      showAlert(err?.message || 'Error deleting user', 'error');
     }
   };
 

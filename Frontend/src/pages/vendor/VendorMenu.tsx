@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Menu as MenuIcon, Plus, Search, MoreVertical, X, Upload, Loader2, AlertCircle, CheckCircle2, Image as ImageIcon} from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { vendorMenuService, type VendorMenuItem } from '../../services/vendorMenuService';
 import { Skeleton } from '../../components/Skeleton';
 import { CustomSelect } from '../../components/CustomSelect';
+import { useAlert } from '../../context/AlertContext';
 
 export const VendorMenuPage: React.FC = () => {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState<string[]>(['All']);
+  const { showAlert, showConfirm, toast } = useAlert();
+  const [allMasterCategories, setAllMasterCategories] = useState<string[]>([]);
   const [menuItems, setMenuItems] = useState<VendorMenuItem[]>([]);
   const [stallInfo, setStallInfo] = useState<any>(null);
 
@@ -48,7 +50,7 @@ export const VendorMenuPage: React.FC = () => {
       const res = await vendorMenuService.getVendorMenu();
       if (res.success && res.data) {
         setStallInfo(res.data.stall);
-        setCategories(res.data.categories || ['All']);
+        setAllMasterCategories((res.data as any).allMasterCategories || res.data.categories || []);
         setMenuItems(res.data.menuItems || []);
       } else {
         setErrorMessage(res.message || 'Failed to load menu items from database.');
@@ -59,6 +61,32 @@ export const VendorMenuPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Only show food item categories that have at least one variety in this vendor stall (+ 'All')
+  const displayCategories = useMemo(() => {
+    const categorySet = new Set<string>();
+    menuItems.forEach((item) => {
+      if (item.category && item.category !== 'All') {
+        categorySet.add(item.category);
+      }
+    });
+    return ['All', ...Array.from(categorySet)];
+  }, [menuItems]);
+
+  // If the active filter category no longer exists in stall varieties, reset to 'All'
+  useEffect(() => {
+    if (!displayCategories.includes(activeCategory)) {
+      setActiveCategory('All');
+    }
+  }, [displayCategories, activeCategory]);
+
+  // Categories available when creating a new variety item
+  const availableCategoriesForAdding = useMemo(() => {
+    const set = new Set<string>();
+    displayCategories.filter(c => c !== 'All').forEach(c => set.add(c));
+    allMasterCategories.forEach(c => set.add(c));
+    return Array.from(set);
+  }, [displayCategories, allMasterCategories]);
 
   useEffect(() => {
     loadMenu();
@@ -104,7 +132,10 @@ export const VendorMenuPage: React.FC = () => {
       const file = e.target.files[0];
       const MAX_SIZE = 1 * 1024 * 1024; // 1 MB limit
       if (file.size >= MAX_SIZE) {
-        alert(`Image size must be less than 1MB. Selected file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please choose a smaller image.`);
+        showAlert(
+          `Image size must be less than 1MB. Selected file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please choose a smaller image.`,
+          'warning'
+        );
         e.target.value = '';
         return;
       }
@@ -125,7 +156,10 @@ export const VendorMenuPage: React.FC = () => {
       const file = e.target.files[0];
       const MAX_SIZE = 1 * 1024 * 1024; // 1 MB limit
       if (file.size >= MAX_SIZE) {
-        alert(`Image size must be less than 1MB. Selected file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please choose a smaller image.`);
+        showAlert(
+          `Image size must be less than 1MB. Selected file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please choose a smaller image.`,
+          'warning'
+        );
         e.target.value = '';
         return;
       }
@@ -192,7 +226,7 @@ export const VendorMenuPage: React.FC = () => {
     }
 
     const customerPriceNum = newItem.price ? parseFloat(newItem.price) : Math.round(basePriceNum * 1.10);
-    const selectedCategory = newItem.category || categories.find(c => c !== 'All') || 'General';
+    const selectedCategory = newItem.category || availableCategoriesForAdding[0] || 'General';
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -210,9 +244,6 @@ export const VendorMenuPage: React.FC = () => {
       if (res.success && res.data) {
         setSuccessMessage(`Food item variety "${res.data.name}" saved in database!`);
         setMenuItems(prev => [res.data, ...prev.filter(i => i.id !== res.data.id)]);
-        if (selectedCategory && !categories.includes(selectedCategory)) {
-          setCategories(prev => [...prev, selectedCategory]);
-        }
         setNewItem({ name: '', description: '', category: '', base_price: '', price: '', imageUrl: '' });
         setShowItemModal(false);
         loadMenu();
@@ -251,21 +282,26 @@ export const VendorMenuPage: React.FC = () => {
 
   // Delete item from stall in MongoDB
   const handleDeleteItem = async (itemId: string) => {
-    if (!window.confirm("Are you sure you want to remove this food item variety from your menu?")) return;
+    const confirmed = await showConfirm({
+      title: 'Remove Food Item',
+      message: 'Are you sure you want to permanently remove this food item variety from your menu?',
+      confirmText: 'Remove Item',
+      type: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       const res = await vendorMenuService.deleteMenuItem(itemId);
       if (res.success) {
         setMenuItems(prev => prev.filter(i => i.id !== itemId));
-        setSuccessMessage("Food item deleted from your menu.");
+        toast.success('Food item deleted from your menu.');
       } else {
-        setErrorMessage(res.message || "Failed to delete item.");
+        showAlert(res.message || 'Failed to delete item.', 'error');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Error deleting item.");
+      showAlert(err.message || 'Error deleting item.', 'error');
     } finally {
       setActiveDropdownMenu(null);
-      setTimeout(() => setSuccessMessage(null), 4000);
     }
   };
 
@@ -337,7 +373,7 @@ export const VendorMenuPage: React.FC = () => {
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none w-full">
-          {categories.map(cat => (
+          {displayCategories.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -629,12 +665,12 @@ export const VendorMenuPage: React.FC = () => {
                     Category *
                   </label>
                   <CustomSelect
-                    value={newItem.category || (categories.find(c => c !== 'All') || '')}
+                    value={newItem.category || (availableCategoriesForAdding[0] || '')}
                     onChange={(val) => setNewItem({ ...newItem, category: val })}
                     options={
-                      categories.filter(c => c !== 'All').length === 0
+                      availableCategoriesForAdding.length === 0
                         ? ["No food items yet (Click 'Add Food Item' first)"]
-                        : categories.filter(c => c !== 'All')
+                        : availableCategoriesForAdding
                     }
                     placeholder="Select category"
                   />

@@ -3,9 +3,11 @@ import { useNavigate, Link } from 'react-router';
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import SidePanelImg from '../../assets/images/hero_market.jpg';
+import { useAlert } from '../../context/AlertContext';
 
 export const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
+  const { showAlert, toast } = useAlert();
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -14,10 +16,10 @@ export const ResetPassword: React.FC = () => {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (password === confirmPassword) {
-      // API call to reset password
+      toast.success('Password updated successfully');
       navigate('/signin');
     } else {
-      alert("Passwords do not match");
+      showAlert('Passwords do not match. Please verify and try again.', 'error');
     }
   };
 

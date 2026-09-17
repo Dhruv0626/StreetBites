@@ -3,8 +3,10 @@ import { Bell, Lock, Globe, Trash2, Smartphone, Mail, ChevronRight } from 'lucid
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { CustomSelect } from '../../components/CustomSelect';
+import { useAlert } from '../../context/AlertContext';
 
 export const VendorSettingsPage: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   const { logout } = useAuth();
   const [activeSection, setActiveSection] = useState('notifications');
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -195,9 +197,15 @@ export const VendorSettingsPage: React.FC = () => {
                   <p className="text-xs text-stone-500 max-w-xs mt-1">Permanently remove your stall, menu, and all data from StreetBites.</p>
                 </div>
                 <button
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) {
-                      alert('Account deletion initiated.');
+                  onClick={async () => {
+                    const confirmed = await showConfirm({
+                      title: 'Delete Vendor Account',
+                      message: 'Are you sure you want to permanently delete your stall and vendor account? All active listings and historical records will be permanently removed.',
+                      confirmText: 'Delete Account',
+                      type: 'danger',
+                    });
+                    if (confirmed) {
+                      toast.info('Account deletion request initiated.');
                     }
                   }}
                   className="flex items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold py-2 px-4 rounded-xl transition-colors text-xs cursor-pointer"

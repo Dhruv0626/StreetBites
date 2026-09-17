@@ -176,6 +176,15 @@ export const getVendorMenu = async (req: AuthRequest, res: Response): Promise<vo
     const availableItems = formattedMenuItems.filter((i: any) => i.available).length;
     const pendingReviews = formattedMenuItems.filter((i: any) => i.status === "Review_pending").length;
 
+    // Strict requirement: Only return food item categories for which this vendor stall has at least 1 variety
+    const activeStallCategorySet = new Set<string>();
+    formattedMenuItems.forEach((item: any) => {
+      if (item.category && item.category !== "All") {
+        activeStallCategorySet.add(item.category);
+      }
+    });
+    const stallActiveCategories: string[] = ["All", ...Array.from(activeStallCategorySet)];
+
     res.status(200).json({
       success: true,
       data: {
@@ -188,7 +197,8 @@ export const getVendorMenu = async (req: AuthRequest, res: Response): Promise<vo
           is_accepting_orders: stall.is_accepting_orders,
           cluster: stall.cluster_id
         },
-        categories: itemCategories,
+        categories: stallActiveCategories,
+        allMasterCategories: masterCategoryNames,
         menuItems: formattedMenuItems,
         stats: { totalItems, availableItems, pendingReviews }
       }

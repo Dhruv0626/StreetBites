@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Search, AlertCircle, MessageSquare, CheckCircle2, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { CustomSelect } from '../../components/CustomSelect';
+import { useAlert } from '../../context/AlertContext';
 
 export const AdminComplaints: React.FC = () => {
+  const { showAlert, showConfirm, toast } = useAlert();
   const [complaints, setComplaints] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All Roles');
@@ -48,7 +50,13 @@ export const AdminComplaints: React.FC = () => {
 
   const handleResolve = async (id: string, mongoId?: string) => {
     const targetId = mongoId || id.replace('TKT-', '');
-    if (!window.confirm("Mark this ticket as resolved in the database?")) return;
+    const confirmed = await showConfirm({
+      title: 'Resolve Ticket',
+      message: 'Mark this complaint ticket as resolved in the database?',
+      confirmText: 'Mark Resolved',
+      type: 'success',
+    });
+    if (!confirmed) return;
 
     setIsProcessing(true);
     try {
@@ -58,11 +66,12 @@ export const AdminComplaints: React.FC = () => {
         if (selectedComplaint && (selectedComplaint.id === id || selectedComplaint._id === targetId)) {
           setSelectedComplaint((prev: any) => ({ ...prev, status: 'Resolved' }));
         }
+        toast.success('Complaint ticket resolved');
       } else {
-        alert(res.message || 'Failed to update complaint status');
+        showAlert(res.message || 'Failed to update complaint status', 'error');
       }
     } catch (err: any) {
-      alert(err?.message || 'Error updating status');
+      showAlert(err?.message || 'Error updating status', 'error');
     } finally {
       setIsProcessing(false);
     }
