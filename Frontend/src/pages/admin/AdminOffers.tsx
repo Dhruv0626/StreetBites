@@ -180,7 +180,7 @@ export const AdminOffers: React.FC = () => {
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Offers & Promotions</h1>
           <p className="text-sm text-stone-500 mt-1">Manage platform coupons, targeted discounts, and cluster promo rules stored in the database.</p>
         </div>
-        <button 
+        <button
           onClick={openCreateModal}
           className="bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-sm shrink-0 cursor-pointer"
         >
@@ -219,11 +219,11 @@ export const AdminOffers: React.FC = () => {
         <div className="p-4 border-b border-[#EFEBE4] flex flex-col sm:flex-row gap-4 justify-between items-center">
           <form onSubmit={handleSearchSubmit} className="relative max-w-md w-full">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search offers and press Enter..." 
+              placeholder="Search offers and press Enter..."
               className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-[#EFEBE4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D94A38]/20 focus:border-[#D94A38]"
             />
           </form>
@@ -298,33 +298,31 @@ export const AdminOffers: React.FC = () => {
                         <span className="font-semibold text-stone-800">₹{offer.min_order_amount || 0}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                          offer.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-stone-100 text-stone-500 border border-stone-200'
-                        }`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${offer.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-stone-100 text-stone-500 border border-stone-200'
+                          }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${offer.is_active ? 'bg-emerald-500' : 'bg-stone-400'}`} />
                           {offer.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end items-center gap-2">
-                          <button 
+                          <button
                             onClick={() => openEditModal(offer)}
                             className="p-2 rounded-xl text-stone-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer border border-stone-200"
                             title="Edit Offer"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button 
-                            onClick={() => toggleOfferStatus(offerId)} 
-                            className={`p-2 rounded-xl transition-colors cursor-pointer border ${
-                              offer.is_active ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
-                            }`}
+                          <button
+                            onClick={() => toggleOfferStatus(offerId)}
+                            className={`p-2 rounded-xl transition-colors cursor-pointer border ${offer.is_active ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                              }`}
                             title={offer.is_active ? "Deactivate Offer" : "Activate Offer"}
                           >
                             <Power className="w-4 h-4" />
                           </button>
-                          <button 
-                            onClick={() => deleteOffer(offerId)} 
+                          <button
+                            onClick={() => deleteOffer(offerId)}
                             className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-xl transition-colors cursor-pointer border border-red-200"
                             title="Delete Offer"
                           >
@@ -362,7 +360,7 @@ export const AdminOffers: React.FC = () => {
                   Save coupon codes, discount amounts, and caps directly to the Offer schema.
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-stone-400 hover:text-stone-700 p-1.5 rounded-xl hover:bg-stone-100 transition-colors cursor-pointer"
               >
@@ -376,8 +374,8 @@ export const AdminOffers: React.FC = () => {
                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                   Offer Title / Coupon Code *
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   placeholder="e.g. 50% OFF UPTO ₹100 or FESTIVALSPECIAL"
                   value={formData.title}
@@ -390,7 +388,7 @@ export const AdminOffers: React.FC = () => {
                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                   Terms & Description *
                 </label>
-                <textarea 
+                <textarea
                   rows={2}
                   required
                   placeholder="e.g. Valid on all orders above ₹149 from selected cluster stalls"
@@ -410,22 +408,20 @@ export const AdminOffers: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, discountType: 'PERCENTAGE' })}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        formData.discountType === 'PERCENTAGE'
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${formData.discountType === 'PERCENTAGE'
                           ? 'bg-[#FCE8E6] border-[#D94A38] text-[#D94A38]'
                           : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
+                        }`}
                     >
                       <Percent className="w-3.5 h-3.5" /> Percentage %
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, discountType: 'FLAT' })}
-                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        formData.discountType === 'FLAT'
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${formData.discountType === 'FLAT'
                           ? 'bg-[#FCE8E6] border-[#D94A38] text-[#D94A38]'
                           : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
+                        }`}
                     >
                       Flat ₹ OFF
                     </button>
@@ -436,8 +432,8 @@ export const AdminOffers: React.FC = () => {
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                     {formData.discountType === 'PERCENTAGE' ? 'Discount Percentage (%) *' : 'Flat Discount Value (₹) *'}
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     required
                     min="1"
                     placeholder={formData.discountType === 'PERCENTAGE' ? 'e.g. 50' : 'e.g. 75'}
@@ -454,8 +450,8 @@ export const AdminOffers: React.FC = () => {
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                     Max Discount Cap (₹) *
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     required
                     min="0"
                     placeholder="e.g. 120"
@@ -469,8 +465,8 @@ export const AdminOffers: React.FC = () => {
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                     Min Cart Order (₹) *
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     required
                     min="0"
                     placeholder="e.g. 199"
