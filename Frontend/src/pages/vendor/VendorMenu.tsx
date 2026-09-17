@@ -3,6 +3,7 @@ import { Menu as MenuIcon, Plus, Search, MoreVertical, X, Upload, Loader2, Alert
 import { useNavigate } from 'react-router';
 import { vendorMenuService, type VendorMenuItem } from '../../services/vendorMenuService';
 import { Skeleton } from '../../components/Skeleton';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const VendorMenuPage: React.FC = () => {
   const navigate = useNavigate();
@@ -627,17 +628,16 @@ export const VendorMenuPage: React.FC = () => {
                   <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
                     Category *
                   </label>
-                  <select
+                  <CustomSelect
                     value={newItem.category || (categories.find(c => c !== 'All') || '')}
-                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                    className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-3 py-2.5 text-xs font-bold text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors cursor-pointer"
-                  >
-                    {categories.filter(c => c !== 'All').length === 0 ? (
-                      <option value="">No food items yet (Click 'Add Food Item' first)</option>
-                    ) : (
-                      categories.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)
-                    )}
-                  </select>
+                    onChange={(val) => setNewItem({ ...newItem, category: val })}
+                    options={
+                      categories.filter(c => c !== 'All').length === 0
+                        ? ["No food items yet (Click 'Add Food Item' first)"]
+                        : categories.filter(c => c !== 'All')
+                    }
+                    placeholder="Select category"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">

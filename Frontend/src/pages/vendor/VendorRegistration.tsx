@@ -20,6 +20,40 @@ import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
 import { clusterService, type ClusterData } from '../../services/clusterService';
 import { downloadVendorRegistrationPdf } from '../../utils/pdfGenerator';
+import { CustomSelect } from '../../components/CustomSelect';
+
+const STALL_CATEGORIES = [
+  "Fast Food & Dosa",
+  "Street Food & Sandwiches",
+  "Chaat & Pani Puri",
+  "Pav Bhaji & Tawa Pulao",
+  "Rolls & Tawa Fry",
+  "Rolls & Quick Bites",
+  "Biryani & Mughlai",
+  "Veg Biryani & Pulao",
+  "South Indian & Fast Food",
+  "South Indian & Dosa",
+  "Kathiyawadi & Punjabi Thali",
+  "Traditional Gujarati",
+  "Traditional Gujarati & Farsan",
+  "Traditional Gujarati Pizza",
+  "Punjabi & Thali",
+  "North Indian & Rolls",
+  "Indo-Chinese",
+  "Chinese & Momos",
+  "Pizza & Burgers",
+  "Fusion Fast Food",
+  "Mexican & Continental",
+  "Desserts & Beverages",
+  "Desserts & Sweets",
+  "Kulfi, Falooda & Ice Cream",
+  "Beverages & Juices",
+  "Shakes, Mocktails & Cold Cocoa",
+  "Tea & Snacks",
+  "Bakery & Desserts",
+  "Healthy Salads & Diet Bowls",
+  "Waffles & Pancake Bites",
+];
 
 interface VendorData {
   ownerName: string;
@@ -410,31 +444,13 @@ export const VendorRegistration: React.FC = () => {
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1 font-sans">
                 Stall Category <span className="text-[#D94A38]">*</span>
               </label>
-              <div className="relative">
-                <select
-                  name="stall_category"
-                  value={formData.stall_category}
-                  onChange={handleInputChange}
-                  className="w-full bg-white border border-[#E7E2D9] rounded-xl px-4 py-3 text-stone-800 text-sm focus:outline-none focus:border-[#D94A38] appearance-none font-sans font-medium cursor-pointer"
-                >
-                  <option value="Fast Food & Dosa">Fast Food & Dosa</option>
-                  <option value="Street Food & Sandwiches">Street Food & Sandwiches</option>
-                  <option value="Chaat & Pani Puri">Chaat & Pani Puri</option>
-                  <option value="Desserts & Sweets">Desserts & Sweets</option>
-                  <option value="Beverages & Juices">Beverages & Juices</option>
-                  <option value="Chinese & Momos">Chinese & Momos</option>
-                  <option value="Pizza & Burgers">Pizza & Burgers</option>
-                  <option value="South Indian">South Indian</option>
-                  <option value="North Indian & Rolls">North Indian & Rolls</option>
-                  <option value="Tea & Snacks">Tea & Snacks</option>
-                  <option value="Bakery & Desserts">Bakery & Desserts</option>
-                  <option value="Traditional Gujarati">Traditional Gujarati</option>
-                  <option value="Punjabi & Thali">Punjabi & Thali</option>
-                </select>
-                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 font-bold text-xs">
-                  ▼
-                </div>
-              </div>
+              <CustomSelect
+                name="stall_category"
+                value={formData.stall_category}
+                onChange={(val) => setFormData(prev => ({ ...prev, stall_category: val }))}
+                options={STALL_CATEGORIES}
+                placeholder="Select a category"
+              />
               <span className="text-[11px] text-stone-400 mt-1 block font-sans">Primary food category for customer search & recommendations.</span>
             </div>
 
@@ -493,30 +509,21 @@ export const VendorRegistration: React.FC = () => {
           <div className="space-y-5 animate-fadeIn font-sans">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5 font-sans">Select Primary Ahmedabad Khau Galli (Cluster)</label>
-              <div className="relative">
-                <select
-                  name="cluster"
-                  value={formData.cluster}
-                  onChange={handleInputChange}
-                  disabled={isLoadingClusters}
-                  className="w-full bg-white border border-[#E7E2D9] rounded-xl px-4 py-3.5 text-stone-800 text-sm focus:outline-none focus:border-[#D94A38] appearance-none font-sans font-medium disabled:bg-stone-50"
-                >
-                  {isLoadingClusters ? (
-                    <option value="">Loading clusters from database...</option>
-                  ) : clusters.length > 0 ? (
-                    clusters.map(c => (
-                      <option key={c.id || c.name} value={c.name}>
-                        {c.name} {c.city ? `(${c.city})` : ''}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="Manek Chowk Night Food Market">Manek Chowk Night Food Market</option>
-                  )}
-                </select>
-                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 font-bold text-xs">
-                  ▼
-                </div>
-              </div>
+              <CustomSelect
+                name="cluster"
+                value={formData.cluster}
+                onChange={(val) => setFormData(prev => ({ ...prev, cluster: val }))}
+                disabled={isLoadingClusters}
+                placeholder={isLoadingClusters ? "Loading clusters from database..." : "Select a Khau Galli"}
+                options={
+                  clusters.length > 0
+                    ? clusters.map(c => ({
+                        value: c.name,
+                        label: `${c.name}${c.city ? ` (${c.city})` : ''}`,
+                      }))
+                    : ["Manek Chowk Night Food Market"]
+                }
+              />
               <span className="text-[11px] text-stone-400 mt-1 block font-sans">
                 {isLoadingClusters ? 'Fetching active geofenced clusters from database...' : 'Your stall must be physically located within this geofenced Ahmedabad cluster.'}
               </span>

@@ -180,4 +180,81 @@ body,
   }
 }
 
+/* ==========================================================================
+   Global Select & Dropdown Option Theming (Brand Accent: #D94A38)
+   ========================================================================== */
+::selection {
+  background-color: #D94A38 !important;
+  color: #FFFFFF !important;
+}
 
+::-moz-selection {
+  background-color: #D94A38 !important;
+  color: #FFFFFF !important;
+}
+
+select {
+  accent-color: #D94A38 !important;
+  color-scheme: light;
+}
+
+select:focus {
+  border-color: #D94A38 !important;
+  outline: none;
+}
+
+select option {
+  background-color: #FFFFFF;
+  color: #1C1917;
+  padding: 10px 14px;
+}
+
+select option:checked,
+select option[selected],
+select option:hover,
+select option:focus,
+select option:active {
+  background: #D94A38 linear-gradient(0deg, #D94A38 0%, #D94A38 100%) !important;
+  background-color: #D94A38 !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
+select:focus > option:checked {
+  background: #D94A38 linear-gradient(0deg, #D94A38 0%, #D94A38 100%) !important;
+  background-color: #D94A38 !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   Dropdown Vertical Overflow Scrollbar (Brand Theme)
+   ========================================================================== */
+.custom-dropdown-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: #D94A38 #F5F0E8 !important;
+  -ms-overflow-style: auto !important;
+  overflow-y: auto !important;
+}
+
+.custom-dropdown-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.custom-dropdown-scrollbar::-webkit-scrollbar-track {
+  background: #FAF7F2 !important;
+  border-radius: 9999px !important;
+  margin: 4px 0 !important;
+}
+
+.custom-dropdown-scrollbar::-webkit-scrollbar-thumb {
+  background: #D94A38 !important;
+  border-radius: 9999px !important;
+  border: 1px solid #FAF7F2 !important;
+}
+
+.custom-dropdown-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #C43D2E !important;
+}

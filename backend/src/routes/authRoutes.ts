@@ -17,21 +17,22 @@ import {
   deleteUser,
 } from "../controllers/authController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
+import { authRateLimiter } from "../middlewares/rateLimiter.ts";
 
 const router: any = express.Router();
 
-// Public Authentication Routes
-router.post("/register", register);
-router.post("/login", login);
+// Public Authentication Routes (Protected with Strict Auth Rate Limiter against Brute-Force & DDoS)
+router.post("/register", authRateLimiter, register);
+router.post("/login", authRateLimiter, login);
 router.post("/refresh-token", refreshAccessToken);
 
 // Google OAuth2 Routes
-router.post("/google", googleAuth);
+router.post("/google", authRateLimiter, googleAuth);
 router.get("/google/callback", googleCallback);
 router.get("/google/url", getGoogleAuthUrl);
 
 // Facebook OAuth Routes
-router.post("/facebook", facebookAuth);
+router.post("/facebook", authRateLimiter, facebookAuth);
 router.get("/facebook/callback", facebookCallback);
 router.get("/facebook/url", getFacebookAuthUrl);
 

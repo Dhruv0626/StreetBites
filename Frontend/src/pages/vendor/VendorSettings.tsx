@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Bell, Lock, Globe, Trash2, Smartphone, Mail, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const VendorSettingsPage: React.FC = () => {
   const { logout } = useAuth();
@@ -9,6 +10,7 @@ export const VendorSettingsPage: React.FC = () => {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
+  const [language, setLanguage] = useState('English');
 
   const navigate = useNavigate();
   return (
@@ -154,11 +156,13 @@ export const VendorSettingsPage: React.FC = () => {
                   <h3 className="text-sm font-bold text-stone-900">Language</h3>
                   <p className="text-xs text-stone-500 max-w-xs mt-1">Select your preferred app language.</p>
                 </div>
-                <select className="bg-stone-50 border border-[#E7E2D9] rounded-lg px-3 py-2 text-sm font-bold text-stone-700 outline-none">
-                  <option>English</option>
-                  <option>Hindi</option>
-                  <option>Gujarati</option>
-                </select>
+                <div className="w-36">
+                  <CustomSelect
+                    value={language}
+                    onChange={(val) => setLanguage(val)}
+                    options={['English', 'Hindi', 'Gujarati']}
+                  />
+                </div>
               </div>
             </section>
           )}

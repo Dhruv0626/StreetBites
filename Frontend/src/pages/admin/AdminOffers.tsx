@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Tag, Plus, Trash2, Power, X, Percent, Edit2, Loader2, AlertCircle } from 'lucide-react';
 import { offerService, type OfferData } from '../../services/offerService';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const AdminOffers: React.FC = () => {
   const [offers, setOffers] = useState<OfferData[]>([]);
@@ -227,17 +228,17 @@ export const AdminOffers: React.FC = () => {
             />
           </form>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <select 
+          <div className="flex items-center gap-2 w-full sm:w-56">
+            <CustomSelect
               value={filterAudience}
-              onChange={(e) => setFilterAudience(e.target.value)}
-              className="bg-stone-50 border border-[#EFEBE4] text-sm font-semibold rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#D94A38]/20 text-stone-700"
-            >
-              <option value="All">All Audiences</option>
-              <option value="ALL">Global (ALL)</option>
-              <option value="NEW_USERS">New Users Only</option>
-              <option value="CLUSTER_SPECIFIC">Cluster Specific</option>
-            </select>
+              onChange={(val) => setFilterAudience(val)}
+              options={[
+                { value: "All", label: "All Audiences" },
+                { value: "ALL", label: "Global (ALL)" },
+                { value: "NEW_USERS", label: "New Users Only" },
+                { value: "CLUSTER_SPECIFIC", label: "Cluster Specific" },
+              ]}
+            />
           </div>
         </div>
 
@@ -485,15 +486,15 @@ export const AdminOffers: React.FC = () => {
                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
                   Target Audience Scope
                 </label>
-                <select
+                <CustomSelect
                   value={formData.target_audience}
-                  onChange={(e) => setFormData({ ...formData, target_audience: e.target.value as any })}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-stone-900 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
-                >
-                  <option value="ALL">Global (ALL Users & Stalls)</option>
-                  <option value="NEW_USERS">New Users Only</option>
-                  <option value="CLUSTER_SPECIFIC">Cluster Specific</option>
-                </select>
+                  onChange={(val) => setFormData({ ...formData, target_audience: val as any })}
+                  options={[
+                    { value: "ALL", label: "Global (ALL Users & Stalls)" },
+                    { value: "NEW_USERS", label: "New Users Only" },
+                    { value: "CLUSTER_SPECIFIC", label: "Cluster Specific" },
+                  ]}
+                />
               </div>
 
               {/* Modal Footer */}

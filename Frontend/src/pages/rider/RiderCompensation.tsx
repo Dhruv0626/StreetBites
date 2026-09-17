@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { FileText, Clock, CheckCircle2, XCircle, Plus } from 'lucide-react';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const RiderCompensationPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [claimType, setClaimType] = useState('Long wait at stall ( 15 mins)');
   const claims = [
     { id: 'C-881', date: 'Aug 14, 2026', type: 'Long wait at stall', order: 'MO-77190', amount: '₹30', status: 'approved' },
     { id: 'C-880', date: 'Aug 12, 2026', type: 'Customer cancelled', order: 'MO-77112', amount: '₹40', status: 'pending' },
@@ -94,11 +96,15 @@ export const RiderCompensationPage: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-stone-700 mb-2">Claim Type</label>
-                <select className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-700 focus:outline-none focus:border-[#D94A38] bg-white">
-                  <option>Long wait at stall ( 15 mins)</option>
-                  <option>Customer cancelled after pickup</option>
-                   <option>Other</option>
-                </select>
+                <CustomSelect
+                  value={claimType}
+                  onChange={(val) => setClaimType(val)}
+                  options={[
+                    'Long wait at stall ( 15 mins)',
+                    'Customer cancelled after pickup',
+                    'Other'
+                  ]}
+                />
               </div>
               
               <div>

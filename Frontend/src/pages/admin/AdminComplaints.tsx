@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, AlertCircle, MessageSquare, CheckCircle2, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { adminService } from '../../services/adminService';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const AdminComplaints: React.FC = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
@@ -152,27 +153,21 @@ export const AdminComplaints: React.FC = () => {
               className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-[#EFEBE4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20 focus:border-[#E54B3C]"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <select 
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="bg-stone-50 border border-[#EFEBE4] text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20"
-            >
-              <option value="All Roles">All Roles</option>
-              <option value="Customer">Customer</option>
-              <option value="Vendor">Vendor</option>
-              <option value="Rider">Rider</option>
-            </select>
-            <select 
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-stone-50 border border-[#EFEBE4] text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20"
-            >
-              <option value="All Statuses">All Statuses</option>
-              <option value="Status: Open">Status: Open</option>
-              <option value="Status: In Progress">Status: In Progress</option>
-              <option value="Status: Resolved">Status: Resolved</option>
-            </select>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="w-36">
+              <CustomSelect
+                value={roleFilter}
+                onChange={(val) => setRoleFilter(val)}
+                options={['All Roles', 'Customer', 'Vendor', 'Rider']}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={statusFilter}
+                onChange={(val) => setStatusFilter(val)}
+                options={['All Statuses', 'Status: Open', 'Status: In Progress', 'Status: Resolved']}
+              />
+            </div>
           </div>
         </div>
 

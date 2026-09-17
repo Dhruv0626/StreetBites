@@ -14,17 +14,18 @@ import {
   updateVerificationStatus,
 } from "../controllers/onboardingController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
+import { sensitiveActionLimiter } from "../middlewares/rateLimiter.ts";
 
 const router = Router();
 
 // Rider CRUD Endpoints
-router.post("/rider", registerRiderDetails);
+router.post("/rider", sensitiveActionLimiter, registerRiderDetails);
 router.get("/rider", getRiderDetails);
 router.put("/rider", updateRiderDetails);
 router.delete("/rider", deleteRiderDetails);
 
 // Vendor CRUD Endpoints
-router.post("/vendor", registerVendorDetails);
+router.post("/vendor", sensitiveActionLimiter, registerVendorDetails);
 router.get("/vendor", getVendorDetails);
 router.put("/vendor", updateVendorDetails);
 router.put("/vendor/toggle-status", toggleVendorOnlineStatus);

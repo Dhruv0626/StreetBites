@@ -14,9 +14,14 @@ import clusterRoutes from "./src/routes/clusterRoutes.ts";
 import favoriteRoutes from "./src/routes/favoriteRoutes.ts";
 import vendorMenuRoutes from "./src/routes/vendorMenuRoutes.ts";
 
+import { globalRateLimiter } from "./src/middlewares/rateLimiter.ts";
+
 // Initialize Express
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Enable Trust Proxy for accurate client IP resolution behind load balancers/proxies
+app.set("trust proxy", 1);
 
 // Connect to Database
 connectDB();
@@ -31,6 +36,9 @@ app.use(
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// DDoS & Spam Protection: Apply Global Rate Limiting to all /api routes
+app.use("/api", globalRateLimiter);
 
 // Health check endpoint
 app.get("/api/health", (_req: Request, res: Response) => {
