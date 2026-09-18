@@ -199,9 +199,9 @@ export const Home: React.FC = () => {
               <p className="text-sm text-stone-400 mt-1">Vendors will appear here as soon as stalls are onboarded.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex gap-6 overflow-x-auto pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
               {stalls.map((stall) => (
-                <div key={stall.id} className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-[#EFEBE4] group cursor-pointer hover:shadow-lg transition-shadow relative" onClick={() => navigate(`/stall/${stall.id}`)}>
+                <div key={stall.id} className="w-[280px] sm:w-[300px] shrink-0 bg-white rounded-3xl overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.04)] border border-[#EFEBE4] group cursor-pointer hover:shadow-lg transition-shadow relative" onClick={() => navigate(`/stall/${stall.id}`)}>
 
                   {/* Heart Button */}
                   <button

@@ -13,7 +13,6 @@ import AdminLayout from './components/layout/AdminLayout';
 import VendorLayout from './components/layout/VendorLayout';
 import RiderLayout from './components/layout/RiderLayout';
 import {
-  Skeleton,
   HomeSkeleton,
   StallDetailSkeleton,
   AllClustersSkeleton,
@@ -116,7 +115,7 @@ const router = createBrowserRouter([
         children: [
           // Public browsing for Customers & Guests
           { path: 'home', element: withSuspense(Home, {}, <HomeSkeleton />) },
-          { path: 'stalls/:stallId?', element: withSuspense(StallsNearMe, {}, <StallDetailSkeleton />) },  
+          { path: 'stalls/:stallId?', element: withSuspense(StallsNearMe, {}, <StallDetailSkeleton />) },
           { path: 'stall/:stallId', element: withSuspense(StallDetail, {}, <StallDetailSkeleton />) },
           { path: 'search', element: withSuspense(Search, {}, <SearchSkeleton />) },
           { path: 'category/:categoryName', element: withSuspense(CategoryDetail, {}, <AllStallsSkeleton />) },

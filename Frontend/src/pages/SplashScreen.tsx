@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import dabeliImg from '../assets/images/dish_dabeli.jpg';
 import vadapavImg from '../assets/images/dish_vadapav.jpg';
 import pavbhajiImg from '../assets/images/dish_pavbhaji.png';
-import nightMarketImg from '../assets/images/night_market.png';
+import nightMarketImg from '../assets/images/hero_market.jpg';
 import logoImg from '../assets/Logo/Logo.png';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -76,13 +76,13 @@ const SplashScreen: React.FC = () => {
       const pct = Math.min((elapsed / DURATION) * 100, 100);
       setProgress(pct);
 
-       if (elapsed >= DURATION - 600) {
-         setPhase('exit');
-       }
-       if (elapsed >= DURATION) {
-         sessionStorage.setItem('fromSplash', 'true');
-         navigate('/home');
-         return;
+      if (elapsed >= DURATION - 600) {
+        setPhase('exit');
+      }
+      if (elapsed >= DURATION) {
+        sessionStorage.setItem('fromSplash', 'true');
+        navigate('/home');
+        return;
       }
       requestAnimationFrame(tick);
     };

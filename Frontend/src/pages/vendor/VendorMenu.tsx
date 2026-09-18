@@ -177,7 +177,7 @@ export const VendorMenuPage: React.FC = () => {
   // Add Master Food Item / Category in MongoDB
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
-      alert("Please enter a category name");
+      showAlert("Please enter a category name", "warning");
       return;
     }
 
@@ -191,8 +191,8 @@ export const VendorMenuPage: React.FC = () => {
 
       if (res.success && res.data) {
         setSuccessMessage(`Food item "${res.data.name}" added and stored in database successfully!`);
-        if (!categories.includes(res.data.name)) {
-          setCategories(prev => [...prev, res.data.name]);
+        if (!allMasterCategories.includes(res.data.name)) {
+          setAllMasterCategories(prev => [...prev, res.data.name]);
         }
         if ((res.data as any).menuItem) {
           setMenuItems(prev => [(res.data as any).menuItem, ...prev]);
@@ -215,13 +215,13 @@ export const VendorMenuPage: React.FC = () => {
   // Add Variety of Food Item to Stall's menu_items array in MongoDB
   const handleAddItem = async () => {
     if (!newItem.name.trim()) {
-      alert("Please enter the variety food item name.");
+      showAlert("Please enter the variety food item name.", "warning");
       return;
     }
 
     const basePriceNum = parseFloat(newItem.base_price);
     if (isNaN(basePriceNum) || basePriceNum <= 0) {
-      alert("Please enter a valid base price greater than 0.");
+      showAlert("Please enter a valid base price greater than 0.", "warning");
       return;
     }
 
@@ -697,15 +697,6 @@ export const VendorMenuPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Customer Selling Price Preview */}
-              {newItem.base_price && (
-                <div className="bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl p-3 flex items-center justify-between text-xs">
-                  <span className="text-stone-500 font-medium">Customer App Price (Base + 10% Service Factor):</span>
-                  <span className="font-mono font-black text-stone-900 text-sm">
-                    ₹{newItem.price || Math.round(parseFloat(newItem.base_price) * 1.10)}
-                  </span>
-                </div>
-              )}
 
               {/* Image Upload for Variety Food Item */}
               <div>
