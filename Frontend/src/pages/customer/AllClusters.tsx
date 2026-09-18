@@ -103,7 +103,7 @@ export const AllClusters: React.FC = () => {
             </div>
             <h1 className="text-4xl md:text-5xl font-black text-[#1C1917]">Trending Khau Gallis</h1>
             <p className="text-sm md:text-base text-[#5C5954] font-medium mt-1">
-              Explore Ahmedabad's 5 authentic food clusters with live stall ordering.
+              Explore Ahmedabad's authentic Khau Gallis with live stall ordering.
             </p>
           </div>
 
@@ -140,7 +140,7 @@ export const AllClusters: React.FC = () => {
           </div>
         ) : clusters.length === 0 ? (
           <div className="text-center py-20 text-stone-400 text-sm font-medium">
-            No clusters found in database.
+            No Khau Gallis found in database.
           </div>
         ) : viewMode === 'map' ? (
           /* Live Interactive Map View */
@@ -156,7 +156,7 @@ export const AllClusters: React.FC = () => {
                   title: c.name,
                   description: `${c.city || 'Ahmedabad'} • ${c.stalls?.length || 0} Registered Stalls (${c.stalls?.filter(s => s.status !== 'CLOSED' && s.is_accepting_orders).length || 0} Open Now)`,
                   type: 'cluster',
-                  onClick: () => navigate(`/stalls?clusterId=${c.id}`),
+                  onClick: () => navigate(`/stalls?khauGalliId=${c.id}`),
                 }))}
               />
               <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-lg border border-stone-200 pointer-events-none flex items-center gap-2.5">
@@ -169,11 +169,11 @@ export const AllClusters: React.FC = () => {
           /* Standard Cards Grid View */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch animate-fadeIn">
             {clusters.map((cluster) => (
-              <div key={cluster.id} onClick={() => navigate(`/stalls?clusterId=${cluster.id}`)} className="cursor-pointer h-full flex flex-col">
+              <div key={cluster.id} onClick={() => navigate(`/stalls?khauGalliId=${cluster.id}`)} className="cursor-pointer h-full flex flex-col">
                 <ClusterCard
                   cluster={cluster}
                   isMobileFeatured={false}
-                  onClick={() => navigate(`/stalls?clusterId=${cluster.id}`)}
+                  onClick={() => navigate(`/stalls?khauGalliId=${cluster.id}`)}
                 />
               </div>
             ))}

@@ -12,7 +12,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import type { CartItem } from '../../types';
-import { GlobalSkeleton } from '../../components';
+import { OrdersSkeleton } from '../../components';
 import buttonLoader from '../../assets/Loader/button_loading.gif';
 import TomTomMap from '../../components/map/TomTomMap';
 
@@ -227,11 +227,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   );
 
   if (isLoading) {
-    return (
-      <div className="w-full min-h-[75vh] flex items-center justify-center bg-white font-sans">
-        <GlobalSkeleton message="Preparing your Khau Galli" />
-      </div>
-    );
+    return <OrdersSkeleton />;
   }
 
   return (

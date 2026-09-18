@@ -3,6 +3,7 @@ import { Search as SearchIcon, ArrowLeft, Star, Store, UtensilsCrossed } from 'l
 import { useNavigate, useSearchParams } from 'react-router';
 import { type Stall, type Dish } from '../../data/mockData';
 import { clusterService } from '../../services/clusterService';
+import { SearchSkeleton, StallCardSkeleton } from '../../components';
 
 export const Search: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ export const Search: React.FC = () => {
   const [allStalls, setAllStalls] = useState<Stall[]>([]);
   const [matchingStalls, setMatchingStalls] = useState<Stall[]>([]);
   const [matchingDishes, setMatchingDishes] = useState<{ stall: Stall, dish: Dish }[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const loadData = async () => {
@@ -56,6 +58,8 @@ export const Search: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to load stalls for search:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -138,7 +142,23 @@ export const Search: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {query.trim() === '' ? (
+        {isLoading ? (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="space-y-3">
+              <div className="skeleton w-32 h-4 rounded-md" />
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="skeleton w-24 h-8 rounded-full" />
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <StallCardSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        ) : query.trim() === '' ? (
           <>
             {Array.from(new Set(allStalls.flatMap(s => s.categories).filter(c => c && c.toLowerCase() !== 'street food'))).length > 0 && (
               <div className="mb-8">

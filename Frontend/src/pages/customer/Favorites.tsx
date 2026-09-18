@@ -3,11 +3,13 @@ import { ArrowLeft, Heart, Search, Star, Store } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
+import { StallCardSkeleton } from '../../components';
 
 export const Favorites: React.FC = () => {
   const navigate = useNavigate();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const [allStalls, setAllStalls] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const loadStalls = async () => {
@@ -20,7 +22,7 @@ export const Favorites: React.FC = () => {
               name: s.name,
               rating: Number(s.rating ?? 0.0),
               stall_category: s.stall_category || 'Street Food',
-              cluster: c.name || 'Food Cluster',
+              cluster: c.name || 'Khau Galli',
               open_till: s.open_till || '',
               image_url: s.image_url || '',
               is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
@@ -30,6 +32,8 @@ export const Favorites: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to load stalls for favorites:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -52,7 +56,15 @@ export const Favorites: React.FC = () => {
         <div className="w-8 h-8 opacity-0" />
       </div>
 
-      {favoriteStalls.length === 0 ? (
+      {isLoading ? (
+        <div className="px-4 sm:px-6 lg:px-8 pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-fadeIn">
+            {[1, 2, 3, 4].map((i) => (
+              <StallCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      ) : favoriteStalls.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 animate-fadeIn">
           <div className="w-24 h-24 bg-pink-50 rounded-full flex items-center justify-center mb-6 shadow-3xs border border-pink-100">
             <Heart className="w-10 h-10 text-pink-400 stroke-[2]" />

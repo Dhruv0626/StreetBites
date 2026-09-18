@@ -17,6 +17,7 @@ import {
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
+import { StallDetailSkeleton } from '../../components';
 import type { Stall, Dish } from '../../data/mockData';
 
 interface StallsNearMeProps {
@@ -92,7 +93,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
           const rawClusters = res.data;
           setClusters(rawClusters);
 
-          const clusterParam = searchParams.get('clusterId') || searchParams.get('cluster');
+          const clusterParam = searchParams.get('khauGalliId') || searchParams.get('khauGalli') || searchParams.get('clusterId') || searchParams.get('cluster');
 
           // 1. Resolve which cluster to select
           let targetCluster = rawClusters[0];
@@ -147,7 +148,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
 
   const handleClusterSelect = (clusterId: string) => {
     setActiveClusterId(clusterId);
-    setSearchParams({ clusterId });
+    setSearchParams({ khauGalliId: clusterId });
     const selected = clusters.find(c => String(c.id) === String(clusterId));
     if (selected) {
       const clusterStalls = mapClusterStalls(selected);
@@ -198,14 +199,14 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
     if (window.history.length > 1 && window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else {
-      navigate('/all-clusters');
+      navigate('/all-khaugallis');
     }
   };
 
   if (isLoading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-        <div className="text-stone-500 font-medium text-sm animate-pulse">Loading cluster stalls...</div>
+        <div className="text-stone-500 font-medium text-sm animate-pulse">Loading stalls...</div>
       </div>
     );
   }
@@ -227,7 +228,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
             Home
           </button>
           <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-          <button onClick={() => navigate('/all-clusters')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium shrink-0">
+          <button onClick={() => navigate('/all-khaugallis')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium shrink-0">
             {activeCluster?.name || 'Khau Galli'}
           </button>
           {currentStall && (
@@ -243,7 +244,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
       <div className="mb-6 bg-white p-3 rounded-2xl border border-[#EAE4DA] shadow-3xs">
         <div className="flex items-center gap-2 mb-2 px-1 text-xs font-bold text-stone-500 uppercase tracking-wider">
           <MapPin className="w-3.5 h-3.5 text-[#D94A38]" />
-          <span>Select Khau Galli / Cluster:</span>
+          <span>Select Khau Galli :</span>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
           {clusters.map((c) => {
@@ -270,14 +271,16 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
       </div>
 
       {/* ─── STALL VIEW ─── */}
-      {stallsList.length === 0 || !currentStall ? (
+      {isLoading ? (
+        <StallDetailSkeleton />
+      ) : stallsList.length === 0 || !currentStall ? (
         <div className="w-full max-w-lg mx-auto px-4 py-16 text-center bg-white rounded-3xl border border-[#EAE4DA] shadow-sm my-6">
           <div className="w-16 h-16 bg-[#FCE8E6] text-[#D94A38] rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">
             <Store className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-[#1C1917] mb-2">No Stalls in {activeCluster?.name || 'This Cluster'}</h2>
+          <h2 className="text-xl font-bold text-[#1C1917] mb-2">No Stalls in {activeCluster?.name || 'This Khau Galli'}</h2>
           <p className="text-xs text-stone-500 mb-6 leading-relaxed max-w-sm mx-auto">
-            No vendor stalls are currently onboarded in this specific cluster. Switch clusters above to explore active street food stalls in other areas.
+            No vendor stalls are currently onboarded in this specific Khau Galli. Switch Khau Gallis above to explore active street food stalls in other areas.
           </p>
           <button
             onClick={() => {
@@ -371,7 +374,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                   )}
                   <div className="h-6 w-px bg-[#EAE4DA]" />
                   <div>
-                    <span className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold">Cluster Location</span>
+                    <span className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold">Khau Galli Location</span>
                     <span className="text-xs font-bold text-[#D94A38]">{currentStall.cluster}</span>
                   </div>
                 </div>
@@ -401,7 +404,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
 
             {/* Desktop 3-Column Workspace (Categories Sidebar on left, Dishes grid in center, Cart on right) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-16 items-start">
-              
+
               {/* 1. LEFT COLUMN: Categories Sidebar & Strict Isolation Notice */}
               <div className="lg:col-span-3 space-y-4 sticky top-24">
                 {/* Categories Card */}
@@ -420,19 +423,17 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                         <button
                           key={category}
                           onClick={() => setActiveCategory(category)}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                            isActive
-                              ? 'bg-[#1C1917] text-white shadow-xs'
-                              : 'text-[#5C5954] hover:text-[#1C1917] hover:bg-[#FAF7F2]'
-                          }`}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${isActive
+                            ? 'bg-[#1C1917] text-white shadow-xs'
+                            : 'text-[#5C5954] hover:text-[#1C1917] hover:bg-[#FAF7F2]'
+                            }`}
                         >
                           <span className="truncate pr-2">{category}</span>
                           <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${
-                              isActive
-                                ? 'bg-stone-800 text-stone-300'
-                                : 'bg-stone-100 text-[#8E8B85]'
-                            }`}
+                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${isActive
+                              ? 'bg-stone-800 text-stone-300'
+                              : 'bg-stone-100 text-[#8E8B85]'
+                              }`}
                           >
                             {formattedCount}
                           </span>
@@ -467,7 +468,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                     </div>
                     <h2 className="text-2xl font-bold text-[#1C1917] mb-2">Stall is Currently closed</h2>
                     <p className="text-sm text-stone-500 max-w-md mx-auto leading-relaxed">
-                      This stall is currently not accepting orders. Please check back later or explore other open stalls in {activeCluster?.name || 'this cluster'}.
+                      This stall is currently not accepting orders. Please check back later or explore other open stalls in {activeCluster?.name || 'this Khau Galli'}.
                     </p>
                   </div>
                 ) : (
@@ -503,9 +504,8 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                                     <img
                                       src={dish.image_url}
                                       alt={dish.name}
-                                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-                                        !dish.is_available ? 'grayscale opacity-60' : ''
-                                      }`}
+                                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!dish.is_available ? 'grayscale opacity-60' : ''
+                                        }`}
                                     />
                                   ) : (
                                     <UtensilsCrossed className="w-8 h-8 text-stone-400" />
@@ -750,7 +750,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                 </div>
                 <h2 className="text-lg font-bold text-[#1C1917] mb-1">Stall is Currently closed</h2>
                 <p className="text-xs text-stone-500 leading-relaxed max-w-xs mx-auto">
-                  This stall is not accepting orders at the moment. Please check other stalls in {activeCluster?.name || 'this cluster'}.
+                  This stall is not accepting orders at the moment. Please check other stalls in {activeCluster?.name || 'this Khau Galli'}.
                 </p>
               </div>
             ) : (

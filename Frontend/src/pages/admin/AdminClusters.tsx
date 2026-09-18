@@ -185,7 +185,7 @@ export const AdminClusters: React.FC = () => {
   const handleSaveCluster = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert("Please enter a cluster name");
+      alert("Please enter a Khau Galli name");
       return;
     }
 
@@ -203,13 +203,13 @@ export const AdminClusters: React.FC = () => {
         });
 
         if (res.success && res.data) {
-          setSuccessMessage('Cluster updated successfully in MongoDB!');
+          setSuccessMessage('Khau Galli updated successfully in MongoDB!');
           const updatedData = res.data;
           setClusters(prev => prev.map(c => c.id === editingClusterId ? { ...c, ...updatedData, stalls: c.stalls } : c));
           setIsModalOpen(false);
           loadClusters();
         } else {
-          setErrorMessage(res.message || 'Failed to update cluster.');
+          setErrorMessage(res.message || 'Failed to update Khau Galli.');
         }
       } else {
         const res = await clusterService.createCluster({
@@ -220,7 +220,7 @@ export const AdminClusters: React.FC = () => {
         });
 
         if (res.success && res.data) {
-          setSuccessMessage('Cluster created successfully in MongoDB!');
+          setSuccessMessage('Khau Galli created successfully in MongoDB!');
           const data = res.data;
           const created: ClusterData = {
             ...data,
@@ -232,11 +232,11 @@ export const AdminClusters: React.FC = () => {
           setIsModalOpen(false);
           loadClusters();
         } else {
-          setErrorMessage(res.message || 'Failed to create cluster.');
+          setErrorMessage(res.message || 'Failed to create Khau Galli.');
         }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error saving cluster to database.');
+      setErrorMessage(err.message || 'Error saving Khau Galli to database.');
     } finally {
       setIsSaving(false);
       setTimeout(() => setSuccessMessage(null), 4000);
@@ -246,9 +246,9 @@ export const AdminClusters: React.FC = () => {
   const handleDeleteCluster = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmed = await showConfirm({
-      title: 'Delete Khau Galli Cluster',
-      message: 'Are you sure you want to permanently remove this cluster from the database? All stalls assigned to this cluster will be affected.',
-      confirmText: 'Delete Cluster',
+      title: 'Delete Khau Galli',
+      message: 'Are you sure you want to permanently remove this Khau Galli from the database? All stalls assigned to this Khau Galli will be affected.',
+      confirmText: 'Delete Khau Galli',
       type: 'danger',
     });
     if (!confirmed) return;
@@ -256,14 +256,14 @@ export const AdminClusters: React.FC = () => {
     try {
       const res = await clusterService.deleteCluster(id);
       if (res.success) {
-        toast.success('Cluster deleted successfully.');
+        toast.success('Khau Galli deleted successfully.');
         await loadClusters();
         if (expandedClusterId === id) setExpandedClusterId(null);
       } else {
-        showAlert(res.message || 'Failed to delete cluster.', 'error');
+        showAlert(res.message || 'Failed to delete Khau Galli.', 'error');
       }
     } catch (err: any) {
-      showAlert(err.message || 'Error deleting cluster.', 'error');
+      showAlert(err.message || 'Error deleting Khau Galli.', 'error');
     }
   };
 
@@ -281,23 +281,23 @@ export const AdminClusters: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Cluster Management</h1>
+          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Khau Galli Management</h1>
           <p className="text-sm text-stone-500 mt-1">
-            Manage food clusters (Khau Gallis) and monitor nested stall live operational statuses.
+            Manage Khau Gallis and monitor nested stall live operational statuses.
           </p>
         </div>
         <button
           onClick={openAddModal}
           className="flex items-center gap-2 bg-[#D94A38] hover:bg-[#C43D2E] text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md cursor-pointer shrink-0"
         >
-          <Plus className="w-4 h-4" /> Add New Cluster
+          <Plus className="w-4 h-4" /> Add New Khau Galli
         </button>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
-          <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Total Clusters</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Total Khau Gallis</span>
           <div className="text-2xl font-black text-stone-900 mt-1">{clusters.length}</div>
         </div>
         <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
@@ -318,7 +318,7 @@ export const AdminClusters: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search clusters "
+            placeholder="Search Khau Gallis"
             className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-[#EFEBE4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#D94A38]/20 focus:border-[#D94A38]"
           />
         </div>
@@ -356,14 +356,14 @@ export const AdminClusters: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                  Ahmedabad Khau Galli Food Clusters Map
+                  Ahmedabad Khau Gallis Map
                   <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     {clusters.length} Food Hubs Active
                   </span>
                 </h2>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Live pinpoint locations of Ahmedabad's iconic street food clusters. Click any pin to jump to its stall management.
+                  Live pinpoint locations of Ahmedabad's iconic Khau Gallis. Click any pin to jump to its stall management.
                 </p>
               </div>
             </div>
@@ -493,14 +493,14 @@ export const AdminClusters: React.FC = () => {
                       <button
                         onClick={(e) => openEditModal(cluster, e)}
                         className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer"
-                        title="Edit Cluster"
+                        title="Edit Khau Galli"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={(e) => handleDeleteCluster(clusterId, e)}
                         className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                        title="Delete Cluster"
+                        title="Delete Khau Galli"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -530,7 +530,7 @@ export const AdminClusters: React.FC = () => {
 
                     {(!cluster.stalls || cluster.stalls.length === 0) ? (
                       <div className="bg-white border border-dashed border-stone-200 rounded-2xl p-8 text-center text-stone-400 text-sm">
-                        No stalls currently registered in this cluster.
+                        No stalls currently registered in this Khau Galli.
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -598,7 +598,7 @@ export const AdminClusters: React.FC = () => {
 
           {filteredClusters.length === 0 && (
             <div className="bg-white border border-[#EFEBE4] rounded-3xl p-12 text-center text-stone-500">
-              No clusters match your search criteria.
+              No Khau Gallis match your search criteria.
             </div>
           )}
         </div>
@@ -612,7 +612,7 @@ export const AdminClusters: React.FC = () => {
             <div className="p-6 border-b border-[#EFEBE4] flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-xl font-bold text-stone-900">
-                  {editingClusterId ? 'Edit Food Cluster' : 'Add New Food Cluster'}
+                  {editingClusterId ? 'Edit Khau Galli' : 'Add New Khau Galli'}
                 </h2>
                 <p className="text-xs text-stone-500 mt-0.5">
                   Set the Khau Galli name, city, and pinpoint physical location on the TomTom map.
@@ -631,7 +631,7 @@ export const AdminClusters: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                    Cluster / Khau Galli Name *
+                    Khau Galli Name *
                   </label>
                   <input
                     type="text"
@@ -663,7 +663,7 @@ export const AdminClusters: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Crosshair className="w-3.5 h-3.5 text-[#D94A38]" />
-                    Pinpoint Cluster Location on TomTom Map
+                    Pinpoint Khau Galli Location on TomTom Map
                   </label>
                   <span className="text-[11px] font-mono text-stone-500 bg-stone-100 px-2 py-0.5 rounded">
                     Lat: {formData.lat}, Lng: {formData.lng}
@@ -688,7 +688,7 @@ export const AdminClusters: React.FC = () => {
                     ]}
                   />
                   <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg text-[10px] font-medium text-stone-600 shadow-xs pointer-events-none">
-                    💡 Click anywhere on the map to place the cluster pin
+                    💡 Click anywhere on the map to place the Khau Galli pin
                   </div>
                 </div>
 
@@ -718,7 +718,7 @@ export const AdminClusters: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
-                  Cluster Cover Image
+                  Khau Galli Cover Image
                 </label>
 
                 {formData.imageUrl ? (
@@ -754,7 +754,7 @@ export const AdminClusters: React.FC = () => {
                       <Upload className="w-5 h-5" />
                     </div>
                     <span className="text-xs font-bold text-stone-700 group-hover:text-[#D94A38] transition-colors">
-                      Click to upload cluster cover image
+                      Click to upload Khau Galli cover image
                     </span>
                     <span className="text-[11px] text-stone-400 mt-0.5">
                       PNG, JPG, JPEG, WEBP up to 5MB
@@ -784,7 +784,7 @@ export const AdminClusters: React.FC = () => {
                   className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-[#D94A38] hover:bg-[#C43D2E] transition-all shadow-sm cursor-pointer disabled:opacity-75 flex items-center gap-2"
                 >
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{editingClusterId ? 'Update Cluster' : 'Create Cluster'}</span>
+                  <span>{editingClusterId ? 'Update Khau Galli' : 'Create Khau Galli'}</span>
                 </button>
               </div>
             </form>

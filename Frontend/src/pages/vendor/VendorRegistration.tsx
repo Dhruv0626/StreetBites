@@ -508,13 +508,13 @@ export const VendorRegistration: React.FC = () => {
         return (
           <div className="space-y-5 animate-fadeIn font-sans">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5 font-sans">Select Primary Ahmedabad Khau Galli (Cluster)</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5 font-sans">Select Primary Ahmedabad Khau Galli</label>
               <CustomSelect
                 name="cluster"
                 value={formData.cluster}
                 onChange={(val) => setFormData(prev => ({ ...prev, cluster: val }))}
                 disabled={isLoadingClusters}
-                placeholder={isLoadingClusters ? "Loading clusters from database..." : "Select a Khau Galli"}
+                placeholder={isLoadingClusters ? "Loading Khau Gallis from database..." : "Select a Khau Galli"}
                 options={
                   clusters.length > 0
                     ? clusters.map(c => ({
@@ -525,7 +525,7 @@ export const VendorRegistration: React.FC = () => {
                 }
               />
               <span className="text-[11px] text-stone-400 mt-1 block font-sans">
-                {isLoadingClusters ? 'Fetching active geofenced clusters from database...' : 'Your stall must be physically located within this geofenced Ahmedabad cluster.'}
+                {isLoadingClusters ? 'Fetching active geofenced Khau Gallis from database...' : 'Your stall must be physically located within this geofenced Ahmedabad Khau Galli.'}
               </span>
             </div>
 
@@ -534,9 +534,9 @@ export const VendorRegistration: React.FC = () => {
                 <MapPin className="w-5 h-5 text-[#D94A38]" />
               </div>
               <div>
-                <h5 className="text-xs font-bold text-stone-800 uppercase tracking-wide">Automatic Cluster Geofencing & Multi-Stall Routing</h5>
+                <h5 className="text-xs font-bold text-stone-800 uppercase tracking-wide">Automatic Khau Galli Geofencing & Multi-Stall Routing</h5>
                 <p className="text-[11px] text-stone-500 leading-relaxed mt-0.5 font-sans">
-                  Based on your cluster selection, you are designated to <strong className="text-stone-700">{formData.cluster}</strong>. Orders from this cluster will route to your dashboard automatically.
+                  Based on your Khau Galli selection, you are designated to <strong className="text-stone-700">{formData.cluster}</strong>. Orders from this Khau Galli will route to your dashboard automatically.
                 </p>
               </div>
             </div>
@@ -651,7 +651,7 @@ export const VendorRegistration: React.FC = () => {
               </div>
 
               <div className="border-t border-stone-200 pt-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#D94A38] mb-2">03. Ahmedabad Cluster Zone</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#D94A38] mb-2">03. Ahmedabad Khau Galli Zone</h4>
                 <div className="grid grid-cols-2 gap-2 text-stone-600">
                   <div><span className="font-semibold text-stone-800">Khau Galli:</span> {formData.cluster || "-"}</div>
                 </div>
@@ -738,7 +738,7 @@ export const VendorRegistration: React.FC = () => {
   const steps = [
     { num: '01', title: 'Owner', complete: isOwnerStepComplete },
     { num: '02', title: 'Stall', complete: isStallStepComplete },
-    { num: '03', title: 'Cluster', complete: isClusterStepComplete },
+    { num: '03', title: 'Khau Galli', complete: isClusterStepComplete },
     { num: '04', title: 'Payout', complete: isPayoutStepComplete },
     { num: '05', title: 'Review', complete: false }
   ];
@@ -994,7 +994,7 @@ export const VendorRegistration: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     {getChecklistIcon(isClusterStepComplete ? 'done' : currentStep === 3 ? 'active' : 'pending')}
-                    <span className={isClusterStepComplete ? 'line-through text-stone-400 font-sans' : 'font-sans'}>Ahmedabad cluster zone assignment</span>
+                    <span className={isClusterStepComplete ? 'line-through text-stone-400 font-sans' : 'font-sans'}>Ahmedabad Khau Galli zone assignment</span>
                   </div>
                   <div className="flex items-center gap-3">
                     {getChecklistIcon(isPayoutStepComplete ? 'done' : currentStep === 4 ? 'active' : 'pending')}
@@ -1011,7 +1011,7 @@ export const VendorRegistration: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-[#1B5E20] uppercase tracking-wide">Strict menu isolation</h4>
                   <p className="text-[11px] text-[#2E7D32] leading-relaxed mt-1">
-                    Your menu is mapped strictly by <code className="bg-[#D1F0D7] px-1 py-0.5 rounded font-mono font-semibold text-[10px]">vendorId</code>. Even in a shared cluster, items never leak into another stall's page.
+                    Your menu is mapped strictly by <code className="bg-[#D1F0D7] px-1 py-0.5 rounded font-mono font-semibold text-[10px]">vendorId</code>. Even in a shared Khau Galli, items never leak into another stall's page.
                   </p>
                 </div>
               </div>

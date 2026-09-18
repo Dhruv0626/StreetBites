@@ -24,7 +24,8 @@ import {
   AdminPageSkeleton,
   VendorPageSkeleton,
   RiderPageSkeleton,
-  PageSkeleton
+  AuthPageSkeleton,
+  RegistrationPageSkeleton,
 } from './components/Skeleton';
 
 // Public pages (Lazy loaded)
@@ -84,7 +85,7 @@ const RiderRulesPage = lazy(() => import('./pages/rider/RiderRules').then(m => (
 import './App.css';
 
 // Helper component to wrap lazy elements in Suspense with page-specific skeleton fallback
-const withSuspense = (Component: React.ComponentType<any>, props: any = {}, fallback: React.ReactNode = <PageSkeleton />) => (
+const withSuspense = (Component: React.ComponentType<any>, props: any = {}, fallback: React.ReactNode = null) => (
   <Suspense fallback={fallback}>
     <Component {...props} />
   </Suspense>
@@ -95,13 +96,13 @@ const router = createBrowserRouter([
   {
     element: <PublicOnlyRoute />,
     children: [
-      { path: '/', element: withSuspense(SplashScreen) },
-      { path: '/signin', element: withSuspense(SignIn) },
-      { path: '/signup', element: withSuspense(Signup) },
-      { path: '/forgot-password', element: withSuspense(ForgotPassword) },
-      { path: '/reset-password', element: withSuspense(ResetPassword) },
-      { path: '/admin/signin', element: withSuspense(AdminSignIn) },
-      { path: '/admin/signup', element: withSuspense(AdminRegister) },
+      { path: '/', element: withSuspense(SplashScreen, {}, null) },
+      { path: '/signin', element: withSuspense(SignIn, {}, <AuthPageSkeleton />) },
+      { path: '/signup', element: withSuspense(Signup, {}, <AuthPageSkeleton />) },
+      { path: '/forgot-password', element: withSuspense(ForgotPassword, {}, <AuthPageSkeleton />) },
+      { path: '/reset-password', element: withSuspense(ResetPassword, {}, <AuthPageSkeleton />) },
+      { path: '/admin/signin', element: withSuspense(AdminSignIn, {}, <AuthPageSkeleton />) },
+      { path: '/admin/signup', element: withSuspense(AdminRegister, {}, <AuthPageSkeleton />) },
     ],
   },
 
@@ -119,7 +120,8 @@ const router = createBrowserRouter([
           { path: 'stall/:stallId', element: withSuspense(StallDetail, {}, <StallDetailSkeleton />) },
           { path: 'search', element: withSuspense(Search, {}, <SearchSkeleton />) },
           { path: 'category/:categoryName', element: withSuspense(CategoryDetail, {}, <AllStallsSkeleton />) },
-          { path: 'all-clusters', element: withSuspense(AllClusters, {}, <AllClustersSkeleton />) },
+          { path: 'all-khaugallis', element: withSuspense(AllClusters, {}, <AllClustersSkeleton />) },
+          { path: 'all-clusters', element: <Navigate to="/all-khaugallis" replace /> },
           { path: 'all-stalls', element: withSuspense(AllStalls, {}, <AllStallsSkeleton />) },
 
           // Customer-only authenticated pages
@@ -143,7 +145,7 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute allowedRoles={['VENDOR']} unauthRedirect="/signin" />,
     children: [
-      { path: '/vendor/registration', element: withSuspense(VendorRegistration) },
+      { path: '/vendor/registration', element: withSuspense(VendorRegistration, {}, <RegistrationPageSkeleton />) },
       {
         path: '/vendor/Dashboard',
         element: <VendorLayout />,
@@ -165,7 +167,7 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute allowedRoles={['RIDER']} unauthRedirect="/signin" />,
     children: [
-      { path: '/rider/registration', element: withSuspense(RiderRegistration) },
+      { path: '/rider/registration', element: withSuspense(RiderRegistration, {}, <RegistrationPageSkeleton />) },
       {
         path: '/rider/Dashboard',
         element: <RiderLayout />,
@@ -194,7 +196,8 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="overview" replace /> },
           { path: 'overview', element: withSuspense(AdminOverview, {}, <AdminPageSkeleton />) },
-          { path: 'clusters', element: withSuspense(AdminClusters, {}, <AdminPageSkeleton />) },
+          { path: 'khau-gallis', element: withSuspense(AdminClusters, {}, <AdminPageSkeleton />) },
+          { path: 'clusters', element: <Navigate to="/admin/Dashboard/khau-gallis" replace /> },
           { path: 'users', element: withSuspense(AdminUsers, {}, <AdminPageSkeleton />) },
           { path: 'verifications', element: withSuspense(AdminVerification, {}, <AdminPageSkeleton />) },
           { path: 'orders', element: withSuspense(AdminOrders, {}, <AdminPageSkeleton />) },

@@ -3,6 +3,7 @@ import { Search, AlertCircle, MessageSquare, CheckCircle2, Clock, Loader2, Refre
 import { adminService } from '../../services/adminService';
 import { CustomSelect } from '../../components/CustomSelect';
 import { useAlert } from '../../context/AlertContext';
+import { TableRowsSkeleton } from '../../components/Skeleton';
 
 export const AdminComplaints: React.FC = () => {
   const { showAlert, showConfirm, toast } = useAlert();
@@ -194,12 +195,7 @@ export const AdminComplaints: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#EFEBE4]">
               {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400 text-xs font-medium">
-                    <Loader2 className="w-5 h-5 animate-spin text-[#D94A38] mx-auto mb-2" />
-                    Loading database complaints...
-                  </td>
-                </tr>
+                <TableRowsSkeleton columns={5} rows={5} />
               ) : (
                 <>
                   {filteredComplaints.map((complaint) => (

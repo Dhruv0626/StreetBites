@@ -81,7 +81,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
             <span className="text-[#1C1917] font-semibold">Checkout</span>
           </div>
           <span className="text-[10px] font-bold text-[#8E8B85] tracking-wider uppercase bg-[#FAF7F2] border border-[#EAE4DA] px-3 py-1 rounded-full">
-            CLUSTER · {clusterName.toUpperCase().replace(' ', '_')}
+            KHAU GALLI · {clusterName.toUpperCase().replace(' ', '_')}
           </span>
         </div>
 

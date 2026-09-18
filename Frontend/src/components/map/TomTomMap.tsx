@@ -370,7 +370,7 @@ function getMarkerElementClass(type?: string): string {
 
 function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
   const safeId = (id || 'pin').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const safeTitle = escapeHtml(title || 'Food Cluster');
+  const safeTitle = escapeHtml(title || 'Khau Galli');
 
   // Attractive, Rich & Meaningful Cluster / Khau Galli Food Hub Pin
   if (type === 'cluster') {

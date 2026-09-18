@@ -403,7 +403,7 @@ export const AdminOffers: React.FC = () => {
                 <textarea
                   rows={2}
                   required
-                  placeholder="e.g. Valid on all orders above ₹149 from selected cluster stalls"
+                  placeholder="e.g. Valid on all orders above ₹149 from selected Khau Galli stalls"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm text-stone-900 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
@@ -500,7 +500,7 @@ export const AdminOffers: React.FC = () => {
                   options={[
                     { value: "ALL", label: "Global (ALL Users & Stalls)" },
                     { value: "NEW_USERS", label: "New Users Only" },
-                    { value: "CLUSTER_SPECIFIC", label: "Cluster Specific" },
+                    { value: "CLUSTER_SPECIFIC", label: "Khau Galli Specific" },
                   ]}
                 />
               </div>

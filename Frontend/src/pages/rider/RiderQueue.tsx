@@ -119,7 +119,7 @@ export const RiderQueuePage: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-sm text-stone-700 font-medium">
                 <Store className="w-4 h-4 text-stone-400" />
-                <span>Pickup: {order.cluster}</span>
+                <span>Pickup (Khau Galli): {order.cluster}</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-stone-700 font-medium">
                 <MapPin className="w-4 h-4 text-stone-400" />

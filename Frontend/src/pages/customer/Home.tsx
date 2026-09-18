@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HeroBanner, ClusterCard, ClusterCardSkeleton } from '../../components';
+import { HeroBanner, ClusterCard, ClusterCardSkeleton, StallCardSkeleton, FoodCategoriesSkeleton } from '../../components';
 import { ArrowRight, Star, Heart, UtensilsCrossed } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useFavorites } from '../../hooks/useFavorites';
@@ -96,17 +96,30 @@ export const Home: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
 
         {/* Hero Section */}
-        <HeroBanner />
+        <HeroBanner
+          clusters={clusters}
+          stalls={stalls}
+          isLoading={isLoadingClusters}
+        />
 
         {/* What's on your mind? (3D Food Items on Plates - Full Fit) */}
-        {distinctFoodItems.length > 0 && (
+        {isLoadingClusters ? (
           <section>
             <div className="flex items-center justify-between gap-3 mb-5">
               <h2 className="text-xl sm:text-2xl font-bold text-[#1C1917] tracking-tight">
                 What's on your mind?
               </h2>
             </div>
-            <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-6 pt-2 px-2 no-scrollbar -mx-2">
+            <FoodCategoriesSkeleton />
+          </section>
+        ) : distinctFoodItems.length > 0 ? (
+          <section>
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#1C1917] tracking-tight">
+                What's on your mind?
+              </h2>
+            </div>
+            <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-6 pt-4 px-2 no-scrollbar -mx-2">
               {distinctFoodItems.map((food, idx) => (
                 <div
                   key={idx}
@@ -139,7 +152,7 @@ export const Home: React.FC = () => {
               ))}
             </div>
           </section>
-        )}
+        ) : null}
 
         {/* Top Clusters / Brands */}
         <section>
@@ -148,7 +161,7 @@ export const Home: React.FC = () => {
               Trending Khau Gallis
             </h2>
             <button
-              onClick={() => navigate('/all-clusters')}
+              onClick={() => navigate('/all-khaugallis')}
               className="text-xs sm:text-sm font-bold text-[#D94A38] hover:text-[#C43D2E] flex items-center gap-1 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
             >
               <span>See all</span>
@@ -163,14 +176,14 @@ export const Home: React.FC = () => {
                 </div>
               ))
             ) : clusters.length === 0 ? (
-              <div className="text-xs text-stone-400 py-4 font-medium font-sans">No active clusters found.</div>
+              <div className="text-xs text-stone-400 py-4 font-medium font-sans">No active Khau Gallis found.</div>
             ) : (
               clusters.map((cluster) => (
-                <div key={cluster.id} className="w-[300px] shrink-0 flex flex-col h-full" onClick={() => navigate(`/stalls?clusterId=${cluster.id}`)}>
+                <div key={cluster.id} className="w-[300px] shrink-0 flex flex-col h-full" onClick={() => navigate(`/stalls?khauGalliId=${cluster.id}`)}>
                   <ClusterCard
                     cluster={cluster}
                     isMobileFeatured={false}
-                    onClick={() => navigate(`/stalls?clusterId=${cluster.id}`)}
+                    onClick={() => navigate(`/stalls?khauGalliId=${cluster.id}`)}
                   />
                 </div>
               ))
@@ -193,7 +206,15 @@ export const Home: React.FC = () => {
             </button>
           </div>
 
-          {stalls.length === 0 ? (
+          {isLoadingClusters ? (
+            <div className="flex gap-6 overflow-x-auto pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="w-[280px] sm:w-[300px] shrink-0">
+                  <StallCardSkeleton />
+                </div>
+              ))}
+            </div>
+          ) : stalls.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 border border-[#EFEBE4] text-center text-stone-500">
               <p className="text-base font-bold text-stone-700">No stalls available yet</p>
               <p className="text-sm text-stone-400 mt-1">Vendors will appear here as soon as stalls are onboarded.</p>

@@ -348,7 +348,7 @@ export const downloadVendorRegistrationPdf = (data: VendorPdfData): void => {
 
   curY -= 18;
   doc.drawField('Email Address:', data.email, 48, curY, 110, 140);
-  doc.drawField('Khau Galli / Cluster:', data.cluster || 'Ahmedabad Cluster', 300, curY, 95, 140);
+  doc.drawField('Khau Galli:', data.cluster || 'Ahmedabad Khau Galli', 300, curY, 95, 140);
 
   curY -= 18;
   doc.fillRect(36, curY - 3, 523, 16, 0.98, 0.98, 0.98);
@@ -550,7 +550,7 @@ export const downloadRiderRegistrationPdf = (data: RiderPdfData): void => {
   curY -= 18;
   doc.fillRect(36, curY - 3, 523, 16, 0.98, 0.98, 0.98);
   doc.drawField('Vehicle Make / Model:', data.vehicleModel || 'Motorcycle / Scooter', 48, curY, 110, 140);
-  doc.drawField('Dispatch Role:', 'Hyperlocal Cluster Delivery Partner', 300, curY, 110, 140);
+  doc.drawField('Dispatch Role:', 'Hyperlocal Khau Galli Delivery Partner', 300, curY, 110, 140);
 
   // 4. Section 2: KYC & License Documents Checklist
   curY -= 28;

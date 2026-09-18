@@ -70,7 +70,7 @@ export const Cart: React.FC = () => {
             <ShoppingBag className="w-16 h-16 stroke-[1.2] text-[#DCD6CC] mx-auto mb-4" />
             <h2 className=" text-2xl font-bold text-[#1C1917] mb-2">Your cart is empty</h2>
             <p className="text-sm text-[#8E8B85] mb-6 leading-relaxed">
-              Add delicious food from different stalls in this cluster and pay only one consolidated delivery fee!
+              Add delicious food from different stalls in this Khau Galli and pay only one consolidated delivery fee!
             </p>
             <button
               onClick={() => navigate('/stalls')}
@@ -88,17 +88,17 @@ export const Cart: React.FC = () => {
                 Your cart, <span className="text-[#D94A38] font-semibold">forked cleanly.</span>
               </h1>
 
-              {/* Alert: Cluster Locked */}
+              {/* Alert: Khau Galli Locked */}
               <div className="bg-[#E6F4EA] border border-[#A7E1BA] rounded-2xl p-4 flex gap-3.5 shadow-3xs">
                 <div className="w-6 h-6 rounded-full bg-[#137333] text-white flex items-center justify-center shrink-0 mt-0.5">
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-[#137333] mb-1">
-                    Cluster locked — Manek Chowk
+                    Khau Galli locked — Manek Chowk
                   </h4>
                   <p className="text-[11px] text-[#2E7D32] leading-relaxed">
-                    All stalls share this cluster's geofence. The <strong>Order-Forking Engine</strong> will split checkout into {vendorIds.length} vendor suborders, then route one rider through every pickup.
+                    All stalls share this Khau Galli's geofence. The <strong>Order-Forking Engine</strong> will split checkout into {vendorIds.length} vendor suborders, then route one rider through every pickup.
                   </p>
                 </div>
               </div>
@@ -310,14 +310,14 @@ export const Cart: React.FC = () => {
               </p>
             </div>
 
-            {/* Cluster Locked Alert */}
+            {/* Khau Galli Locked Alert */}
             <div className="bg-[#E6F4EA] border border-[#A7E1BA] rounded-xl p-3 flex gap-2.5">
               <div className="w-4 h-4 rounded-full bg-[#137333] text-white flex items-center justify-center shrink-0 mt-0.5">
                 <Check className="w-2.5 h-2.5 stroke-[3]" />
               </div>
               <p className="text-[10px] text-[#2E7D32] leading-snug">
-                <strong>Cluster locked — Manek Chowk</strong><br />
-                All stalls in your cart share <code className="bg-[#D0ECD7] font-semibold px-0.5 rounded">cluster: ManekChowk</code>. You'll pay one delivery fee for all stall pickups.
+                <strong>Khau Galli locked — Manek Chowk</strong><br />
+                All stalls in your cart share <code className="bg-[#D0ECD7] font-semibold px-0.5 rounded">Khau Galli: Manek Chowk</code>. You'll pay one delivery fee for all stall pickups.
               </p>
             </div>
 

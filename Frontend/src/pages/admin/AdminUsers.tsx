@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, User as UserIcon, Store, Bike, Trash2, Ban, Shield, Loader2, AlertCircle } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAlert } from '../../context/AlertContext';
+import { TableRowsSkeleton } from '../../components/Skeleton';
 
 export const AdminUsers: React.FC = () => {
   const { showAlert, showConfirm, toast } = useAlert();
@@ -153,23 +154,26 @@ export const AdminUsers: React.FC = () => {
       {/* Data Table */}
       <div className="bg-white border border-[#EFEBE4] rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-12 flex flex-col items-center justify-center text-stone-400 gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-[#D94A38]" />
-              <span className="text-xs font-bold">Loading users from database...</span>
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="bg-stone-50 border-b border-[#EFEBE4]">
-                  <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">User ID</th>
-                  <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Name & Contact</th>
-                  <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Account Status</th>
-                  <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Joined Date</th>
-                  <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider text-right">Actions</th>
+          <table className="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr className="bg-stone-50 border-b border-[#EFEBE4]">
+                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">User ID</th>
+                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Name & Contact</th>
+                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Account Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Joined Date</th>
+                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EFEBE4]">
+              {isLoading ? (
+                <TableRowsSkeleton columns={5} rows={5} />
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400 text-xs font-medium">
+                    No {activeTab} found in database.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EFEBE4]">
+              ) : (
                 {users.map(user => {
                   const userId = String(user.id || user._id || '');
                   return (

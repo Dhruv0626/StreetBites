@@ -3,6 +3,7 @@ import { ArrowLeft, Star, Heart } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
+import { StallCardSkeleton } from '../../components';
 
 export const AllStalls: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export const AllStalls: React.FC = () => {
               name: s.name,
               rating: s.rating || 0,
               stall_category: s.stall_category || 'Street Food',
-              cluster: c.name || 'Food Cluster',
+              cluster: c.name || 'Khau Galli',
               open_till: s.open_till || '',
               image_url: s.image_url || '',
               is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
@@ -61,7 +62,11 @@ export const AllStalls: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-12 text-stone-500 font-medium">Loading stalls...</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <StallCardSkeleton key={i} />
+            ))}
+          </div>
         ) : stalls.length === 0 ? (
           <div className="bg-white rounded-3xl p-12 border border-[#EFEBE4] text-center max-w-md mx-auto">
             <p className="text-lg font-bold text-stone-700">No stalls available yet</p>

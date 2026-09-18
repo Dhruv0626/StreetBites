@@ -382,7 +382,121 @@ export const RiderPageSkeleton: React.FC = () => (
   </div>
 );
 
-// Universal Fallback
-export const PageSkeleton = HomeSkeleton;
+// ─── 14. TABLE ROWS SKELETON (Admin tables, lists) ───
+export const TableRowsSkeleton: React.FC<{ columns?: number; rows?: number }> = ({
+  columns = 5,
+  rows = 5,
+}) => (
+  <>
+    {Array.from({ length: rows }).map((_, rIdx) => (
+      <tr key={rIdx} className="border-b border-[#EFEBE4] animate-fadeIn">
+        {Array.from({ length: columns }).map((_, cIdx) => (
+          <td key={cIdx} className="px-6 py-4">
+            <div
+              className={`skeleton h-4 rounded-md ${
+                cIdx === 0
+                  ? 'w-28 sm:w-36'
+                  : cIdx === columns - 1
+                  ? 'w-16 ml-auto'
+                  : cIdx % 2 === 0
+                  ? 'w-20'
+                  : 'w-24'
+              }`}
+            />
+            {cIdx === 0 && <div className="skeleton h-3 w-20 rounded mt-1.5" />}
+          </td>
+        ))}
+      </tr>
+    ))}
+  </>
+);
+
+// ─── 15. FOOD CATEGORIES 3D SKELETON ("What's on your mind?") ───
+export const FoodCategoriesSkeleton: React.FC = () => (
+  <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-6 pt-2 px-2 no-scrollbar -mx-2 animate-fadeIn">
+    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+      <div key={i} className="flex flex-col items-center gap-2.5 shrink-0 select-none">
+        <div className="skeleton w-22 h-22 sm:w-26 sm:h-26 rounded-full shadow-inner" />
+        <div className="skeleton w-16 sm:w-20 h-3.5 rounded-md mt-1" />
+      </div>
+    ))}
+  </div>
+);
+
+// ─── 16. QUEUE ITEM SKELETON (Deliveries, KYC applications, Food queue) ───
+export const QueueItemSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) => (
+  <div className="space-y-3 animate-fadeIn">
+    {Array.from({ length: count }).map((_, idx) => (
+      <div
+        key={idx}
+        className="p-4 rounded-2xl border border-[#EFEBE4] bg-white flex items-start gap-3.5 shadow-2xs"
+      >
+        <div className="skeleton w-12 h-12 rounded-xl shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="flex justify-between items-center">
+            <div className="skeleton w-28 h-4 rounded-md" />
+            <div className="skeleton w-14 h-5 rounded-full" />
+          </div>
+          <div className="skeleton w-40 h-3 rounded" />
+          <div className="skeleton w-20 h-3 rounded" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ─── 17. AUTH / SIGNIN / SIGNUP FORM SKELETON ───
+export const AuthPageSkeleton: React.FC = () => (
+  <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center p-4 animate-fadeIn">
+    <div className="w-full max-w-md bg-white rounded-3xl border border-[#EAE4DA] p-8 shadow-sm space-y-6">
+      <div className="flex flex-col items-center gap-2">
+        <div className="skeleton w-16 h-16 rounded-2xl" />
+        <div className="skeleton w-40 h-6 rounded-md mt-2" />
+        <div className="skeleton w-52 h-4 rounded" />
+      </div>
+      <div className="space-y-4 pt-2">
+        <div className="space-y-1.5">
+          <div className="skeleton w-16 h-3.5 rounded" />
+          <div className="skeleton w-full h-11 rounded-xl" />
+        </div>
+        <div className="space-y-1.5">
+          <div className="skeleton w-20 h-3.5 rounded" />
+          <div className="skeleton w-full h-11 rounded-xl" />
+        </div>
+        <div className="skeleton w-full h-12 rounded-xl mt-4" />
+      </div>
+    </div>
+  </div>
+);
+
+// ─── 18. VENDOR & RIDER REGISTRATION MULTI-STEP SKELETON ───
+export const RegistrationPageSkeleton: React.FC = () => (
+  <div className="min-h-screen bg-[#FAF7F2] py-10 px-4 animate-fadeIn">
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-2">
+        <div className="skeleton w-64 h-8 rounded-xl" />
+        <div className="skeleton w-96 h-4 rounded" />
+      </div>
+      <div className="bg-white rounded-3xl border border-[#EAE4DA] p-8 space-y-6 shadow-sm">
+        <div className="flex gap-4 border-b border-[#F5F0E8] pb-4">
+          <div className="skeleton w-28 h-8 rounded-xl" />
+          <div className="skeleton w-28 h-8 rounded-xl" />
+          <div className="skeleton w-28 h-8 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="skeleton w-full h-12 rounded-xl" />
+          <div className="skeleton w-full h-12 rounded-xl" />
+          <div className="skeleton w-full h-12 rounded-xl" />
+          <div className="skeleton w-full h-12 rounded-xl" />
+        </div>
+        <div className="skeleton w-full h-32 rounded-2xl" />
+        <div className="flex justify-end pt-2">
+          <div className="skeleton w-36 h-11 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 export default Skeleton;
+

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { adminService } from '../../services/adminService';
+import { TableRowsSkeleton } from '../../components/Skeleton';
 
 export const AdminTransactions: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'payouts' | 'refunds'>('payouts');
@@ -249,12 +250,7 @@ export const AdminTransactions: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#EFEBE4]">
               {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-stone-400 text-xs font-medium">
-                    <Loader2 className="w-5 h-5 animate-spin text-[#D94A38] mx-auto mb-2" />
-                    Loading database transactions...
-                  </td>
-                </tr>
+                <TableRowsSkeleton columns={6} rows={5} />
               ) : activeTab === 'payouts' ? (
                 <>
                   {filteredPayouts.map(tx => (

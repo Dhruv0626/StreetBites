@@ -4,6 +4,7 @@ import TomTomMap from '../../components/map/TomTomMap';
 import { type MapMarker, type LngLatTuple } from '../../types/map';
 import { AHMEDABAD_CENTER } from '../../config/tomtom';
 import { adminService } from '../../services/adminService';
+import { QueueItemSkeleton } from '../../components/Skeleton';
 
 interface OrderItem {
   id: string;
@@ -151,10 +152,7 @@ export const AdminOrders: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto space-y-3 hide-scrollbar pr-2">
             {isLoading ? (
-              <div className="p-8 flex flex-col items-center justify-center text-stone-400 gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-[#D94A38]" />
-                <span className="text-xs font-bold">Loading live deliveries...</span>
-              </div>
+              <QueueItemSkeleton count={4} />
             ) : filteredOrders.length === 0 ? (
               <div className="text-center text-stone-500 py-10 text-xs font-medium">No live orders in queue.</div>
             ) : (

@@ -248,7 +248,7 @@ export const VendorProfilePage: React.FC = () => {
                 <span className="font-bold text-stone-800">{category}</span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
-                <span className="text-stone-500">Assigned Cluster</span>
+                <span className="text-stone-500">Assigned Khau Galli</span>
                 <span className="font-bold text-stone-800">{clusterName}</span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-stone-100">

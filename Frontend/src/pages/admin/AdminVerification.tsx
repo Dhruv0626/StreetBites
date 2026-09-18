@@ -21,6 +21,7 @@ import {
 import { onboardingService } from '../../services/onboardingService';
 import { adminService } from '../../services/adminService';
 import { useAlert } from '../../context/AlertContext';
+import { QueueItemSkeleton } from '../../components/Skeleton';
 
 export const AdminVerification: React.FC = () => {
   const { showAlert, showConfirm, toast } = useAlert();
@@ -368,7 +369,7 @@ export const AdminVerification: React.FC = () => {
                 type="text"
                 value={foodSearch}
                 onChange={e => setFoodSearch(e.target.value)}
-                placeholder="Search food item, stall, or cluster..."
+                placeholder="Search food item, stall, or Khau Galli..."
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-2 text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-[#D94A38] transition-colors"
               />
             </div>
@@ -407,10 +408,7 @@ export const AdminVerification: React.FC = () => {
 
               <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 hide-scrollbar">
                 {isLoadingFood ? (
-                  <div className="p-8 flex flex-col items-center justify-center text-stone-400 gap-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#D94A38]" />
-                    <span className="text-xs font-bold">Loading dishes...</span>
-                  </div>
+                  <QueueItemSkeleton count={4} />
                 ) : filteredFoodItems.length === 0 ? (
                   <div className="text-center text-stone-400 py-16 text-xs font-medium">
                     No food items match the current filter.
@@ -699,10 +697,7 @@ export const AdminVerification: React.FC = () => {
 
               <div className="tour-approval-queue flex-1 overflow-y-auto space-y-3 hide-scrollbar">
                 {isLoadingKyc ? (
-                  <div className="p-8 flex flex-col items-center justify-center text-stone-400 gap-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#D94A38]" />
-                    <span className="text-xs font-bold">Loading applications...</span>
-                  </div>
+                  <QueueItemSkeleton count={4} />
                 ) : applications.length === 0 ? (
                   <div className="text-center text-stone-500 py-16 text-xs font-medium">
                     No {activeTab} applications found in database.
@@ -818,8 +813,8 @@ export const AdminVerification: React.FC = () => {
                   <div className="bg-stone-50 border border-stone-200/70 rounded-xl px-3.5 py-2 mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] font-sans">
                     <div className="flex flex-wrap items-center gap-4 text-stone-600">
                       <div>
-                        <span className="text-stone-400 font-semibold">Cluster: </span>
-                        <strong className="text-stone-800 font-bold">{currentApplication.details?.cluster || 'Ahmedabad Cluster'}</strong>
+                        <span className="text-stone-400 font-semibold">Khau Galli: </span>
+                        <strong className="text-stone-800 font-bold">{currentApplication.details?.cluster || 'Ahmedabad Khau Galli'}</strong>
                       </div>
                       {currentApplication.type === 'vendor' ? (
                         <>

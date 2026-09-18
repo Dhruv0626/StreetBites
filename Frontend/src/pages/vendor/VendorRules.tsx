@@ -42,7 +42,7 @@ export const VendorRulesPage: React.FC = () => {
         },
         {
           title: 'Street Vending Act & Municipal Compliance',
-          content: 'Vendors operating in designated Khau Gallis or urban clusters must adhere to local municipal corporation regulations, designated stall boundaries, and local zoning laws.'
+          content: 'Vendors operating in designated Khau Gallis must adhere to local municipal corporation regulations, designated stall boundaries, and local zoning laws.'
         }
       ]
     },
@@ -78,7 +78,7 @@ export const VendorRulesPage: React.FC = () => {
       id: 'sla',
       category: '3. Order Fulfillment & Preparation SLAs',
       icon: <Clock className="w-5 h-5 text-[#D94A38]" />,
-      summary: 'Turnaround times, multi-stall cluster dispatch coordination, and pickup protocols.',
+      summary: 'Turnaround times, multi-stall Khau Galli dispatch coordination, and pickup protocols.',
       rules: [
         {
           title: 'Instant Order Acknowledgment (< 90 Seconds)',
@@ -86,14 +86,14 @@ export const VendorRulesPage: React.FC = () => {
         },
         {
           title: 'Standard Preparation Time SLA (10–15 Minutes)',
-          content: 'Food preparation should be completed within the standard 10–15 minute window. Unreasonable delays degrade stall visibility and lower cluster dispatch efficiency.'
+          content: 'Food preparation should be completed within the standard 10–15 minute window. Unreasonable delays degrade stall visibility and lower Khau Galli dispatch efficiency.'
         },
         {
           title: 'Accurate "Ready for Pickup" Handover',
           content: 'Vendors must tap "Ready for Pickup" only after the food is completely cooked, packed, sealed, and placed in the pickup staging zone—never prematurely while still on the flame.'
         },
         {
-          title: 'Cluster Delivery Synchronization',
+          title: 'Khau Galli Delivery Synchronization',
           content: 'StreetBites delivers combined orders from multiple stalls in the same Khau Galli. A delay by one stall holds up the entire order and rider dispatch for other partner vendors.'
         },
         {
@@ -170,7 +170,7 @@ export const VendorRulesPage: React.FC = () => {
         },
         {
           title: 'Emergency Downtime Notification',
-          content: 'In case of sudden ingredient shortages, gas depletion, or weather disruptions, vendors must toggle offline immediately and alert their cluster coordinator.'
+          content: 'In case of sudden ingredient shortages, gas depletion, or weather disruptions, vendors must toggle offline immediately and alert their Khau Galli coordinator.'
         }
       ]
     },
@@ -448,7 +448,7 @@ export const VendorRulesPage: React.FC = () => {
           <div>
             <h4 className="text-sm font-bold text-[#1C1917]">Need Policy Clarification or Have a Dispute?</h4>
             <p className="text-xs text-[#8E8B85] mt-0.5">
-              Contact your designated Khau Galli cluster coordinator or reach StreetBites Partner Support 24/7.
+              Contact your designated Khau Galli coordinator or reach StreetBites Partner Support 24/7.
             </p>
           </div>
         </div>

@@ -32,7 +32,7 @@ export const CustomerFooter: React.FC = () => {
 
           {/* Clusters Column */}
           <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-[#1C1917]">Popular Clusters</h3>
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#1C1917]">Popular Khau Gallis</h3>
             <ul className="space-y-3">
               {[
                 'Manek Chowk',

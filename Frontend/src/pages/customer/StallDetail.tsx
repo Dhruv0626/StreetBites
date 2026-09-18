@@ -72,7 +72,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                 id: String(match.id || match._id || ''),
                 name: match.name || 'Stall',
                 stall_category: match.stall_category || 'Street Food',
-                cluster: c.name || 'Food Cluster',
+                cluster: c.name || 'Khau Galli',
                 rating: Number(match.rating) || 0,
                 open_till: match.open_till || '',
                 since: match.since || '1998',
@@ -186,7 +186,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
           <div className="flex items-center gap-2 text-xs text-[#8E8B85]">
             <button onClick={() => navigate('/home')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium">Home</button>
             <ChevronRight className="w-3.5 h-3.5" />
-            <button onClick={() => navigate('/all-clusters')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium">{currentStall.cluster || 'Clusters'}</button>
+            <button onClick={() => navigate('/all-khaugallis')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0 font-medium">{currentStall.cluster || 'Khau Gallis'}</button>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="text-[#1C1917] font-semibold">{currentStall.name}</span>
           </div>
@@ -237,7 +237,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
             {/* Quick Specs */}
             <div className="flex items-center gap-8 text-xs font-semibold uppercase tracking-wider text-[#1C1917] pt-4 border-t border-[#F5F0E8]">
               <div>
-                <span className="text-[10px] text-[#8E8B85] block font-bold mb-1">CLUSTER</span>
+                <span className="text-[10px] text-[#8E8B85] block font-bold mb-1">KHAU GALLI</span>
                 <span className="text-sm font-bold">{currentStall.cluster}</span>
               </div>
               {currentStall.open_till && (

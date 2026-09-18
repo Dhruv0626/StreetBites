@@ -3,6 +3,7 @@ import { ArrowLeft, Star, SlidersHorizontal, Heart } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
+import { StallCardSkeleton } from '../../components';
 
 export const CategoryDetail: React.FC = () => {
   const { categoryName } = useParams<{ categoryName: string }>();
@@ -81,12 +82,20 @@ export const CategoryDetail: React.FC = () => {
 
         {/* Results Title */}
         <h2 className="text-2xl font-black text-[#1C1917] tracking-tight mt-6">
-          {isLoading ? 'Loading stalls...' : `${stalls.length} Stall${stalls.length === 1 ? '' : 's'} to explore`}
+          {isLoading ? (
+            <span className="skeleton inline-block w-48 h-7 rounded-md" />
+          ) : (
+            `${stalls.length} Stall${stalls.length === 1 ? '' : 's'} to explore`
+          )}
         </h2>
 
         {/* Stalls Grid */}
         {isLoading ? (
-          <div className="text-center py-12 text-stone-400 font-medium">Loading category stalls...</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <StallCardSkeleton key={i} />
+            ))}
+          </div>
         ) : stalls.length === 0 ? (
           <div className="bg-white rounded-3xl p-10 border border-[#EFEBE4] text-center max-w-md mx-auto">
             <p className="text-base font-bold text-stone-700">No stalls found for {title}</p>

@@ -43,7 +43,7 @@ export const AdminLayout: React.FC = () => {
 
   const navItems = [
     { label: 'Overview', icon: PieChart, path: '/admin/Dashboard/overview' },
-    { label: 'Clusters', icon: MapPin, path: '/admin/Dashboard/clusters' },
+    { label: 'Khau Gallis', icon: MapPin, path: '/admin/Dashboard/khau-gallis' },
     { label: 'Users', icon: Users, path: '/admin/Dashboard/users' },
     {
       label: 'Approvals',
