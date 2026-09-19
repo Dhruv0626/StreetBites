@@ -555,7 +555,17 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                                     </button>
                                     <span className="w-4 text-center">{qty}</span>
                                     <button
-                                      onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })}
+                                      onClick={() => addToCart({
+                                        id: dish.id,
+                                        name: dish.name,
+                                        price: dish.price,
+                                        vendorId: currentStall.id,
+                                        vendorName: currentStall.name,
+                                        stallName: currentStall.name,
+                                        image: dish.image_url,
+                                        khauGalliId: activeClusterId || (activeCluster?.id ? String(activeCluster.id) : ''),
+                                        khauGalliName: activeCluster?.name || currentStall.cluster || 'Khau Galli',
+                                      })}
                                       className="hover:opacity-80 transition-opacity cursor-pointer font-bold bg-transparent border-0 p-0 text-white"
                                     >
                                       +
@@ -563,7 +573,17 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                                   </div>
                                 ) : (
                                   <button
-                                    onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })}
+                                    onClick={() => addToCart({
+                                      id: dish.id,
+                                      name: dish.name,
+                                      price: dish.price,
+                                      vendorId: currentStall.id,
+                                      vendorName: currentStall.name,
+                                      stallName: currentStall.name,
+                                      image: dish.image_url,
+                                      khauGalliId: activeClusterId || (activeCluster?.id ? String(activeCluster.id) : ''),
+                                      khauGalliName: activeCluster?.name || currentStall.cluster || 'Khau Galli',
+                                    })}
                                     className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] hover:border-[#D94A38] text-xs font-bold px-4 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                                   >
                                     <Plus className="w-3.5 h-3.5" />
@@ -838,10 +858,30 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                               <div className="flex items-center gap-2 bg-[#D94A38] text-white border border-[#D94A38] rounded-xl px-2.5 py-1 text-xs font-bold shadow-xs">
                                 <button onClick={() => removeFromCart(dish.id, currentStall.id)} className="text-white bg-transparent border-0 p-0 cursor-pointer">-</button>
                                 <span className="w-4 text-center">{qty}</span>
-                                <button onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })} className="text-white bg-transparent border-0 p-0 cursor-pointer">+</button>
+                                <button onClick={() => addToCart({
+                                  id: dish.id,
+                                  name: dish.name,
+                                  price: dish.price,
+                                  vendorId: currentStall.id,
+                                  vendorName: currentStall.name,
+                                  stallName: currentStall.name,
+                                  image: dish.image_url,
+                                  khauGalliId: activeClusterId || (activeCluster?.id ? String(activeCluster.id) : ''),
+                                  khauGalliName: activeCluster?.name || currentStall.cluster || 'Khau Galli',
+                                })} className="text-white bg-transparent border-0 p-0 cursor-pointer">+</button>
                               </div>
                             ) : (
-                              <button onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })} className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] text-xs font-bold px-4 py-1.5 rounded-xl shadow-3xs flex items-center gap-1 transition-all cursor-pointer">
+                              <button onClick={() => addToCart({
+                                id: dish.id,
+                                name: dish.name,
+                                price: dish.price,
+                                vendorId: currentStall.id,
+                                vendorName: currentStall.name,
+                                stallName: currentStall.name,
+                                image: dish.image_url,
+                                khauGalliId: activeClusterId || (activeCluster?.id ? String(activeCluster.id) : ''),
+                                khauGalliName: activeCluster?.name || currentStall.cluster || 'Khau Galli',
+                              })} className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] text-xs font-bold px-4 py-1.5 rounded-xl shadow-3xs flex items-center gap-1 transition-all cursor-pointer">
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Add</span>
                               </button>

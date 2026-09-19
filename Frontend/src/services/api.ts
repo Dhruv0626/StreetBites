@@ -47,8 +47,10 @@ export async function apiRequest<T = any>(
   const { requiresAuth = true, headers = {}, ...customConfig } = options;
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
 
+  const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("streetbites_customer_id") : null;
   const configHeaders: Record<string, string> = {
     "Content-Type": "application/json",
+    ...(storedCustomerId ? { "x-customer-id": storedCustomerId } : {}),
     ...(headers as Record<string, string>),
   };
 
@@ -102,6 +104,7 @@ export async function apiRequest<T = any>(
       return {
         success: false,
         message: resJson.message || `Request failed with status ${response.status}`,
+        ...resJson,
       };
     }
 

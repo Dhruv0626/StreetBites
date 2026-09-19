@@ -73,6 +73,9 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                 name: match.name || 'Stall',
                 stall_category: match.stall_category || 'Street Food',
                 cluster: c.name || 'Khau Galli',
+                clusterId: String(c.id || c._id || ''),
+                khauGalliId: String(c.id || c._id || ''),
+                khauGalliName: c.name || 'Khau Galli',
                 rating: Number(match.rating) || 0,
                 open_till: match.open_till || '',
                 since: match.since || '1998',
@@ -273,7 +276,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
 
         {/* Content Layout: 3-column split (Categories on left 3 cols, Dishes in middle 6 cols, Cart on right 3 cols) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-16 items-start">
-          
+
           {/* 1. LEFT COLUMN: Categories Sidebar & Strict Isolation Notice */}
           <div className="lg:col-span-3 space-y-4 sticky top-24">
             {/* Categories Card */}
@@ -292,19 +295,17 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                     <button
                       key={category}
                       onClick={() => setActiveCategory(category)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                        isActive
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${isActive
                           ? 'bg-[#1C1917] text-white shadow-xs'
                           : 'text-[#5C5954] hover:text-[#1C1917] hover:bg-[#FAF7F2]'
-                      }`}
+                        }`}
                     >
                       <span className="truncate pr-2">{category}</span>
                       <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${
-                          isActive
+                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${isActive
                             ? 'bg-stone-800 text-stone-300'
                             : 'bg-stone-100 text-[#8E8B85]'
-                        }`}
+                          }`}
                       >
                         {formattedCount}
                       </span>
@@ -375,9 +376,8 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                                 <img
                                   src={dish.image_url}
                                   alt={dish.name}
-                                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-                                    !dish.is_available ? 'grayscale opacity-60' : ''
-                                  }`}
+                                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!dish.is_available ? 'grayscale opacity-60' : ''
+                                    }`}
                                 />
                               ) : (
                                 <UtensilsCrossed className="w-8 h-8 text-stone-400" />
@@ -427,7 +427,17 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                                 </button>
                                 <span className="w-4 text-center">{qty}</span>
                                 <button
-                                  onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })}
+                                  onClick={() => addToCart({
+                                    id: dish.id,
+                                    name: dish.name,
+                                    price: dish.price,
+                                    vendorId: currentStall.id,
+                                    vendorName: currentStall.name,
+                                    stallName: currentStall.name,
+                                    image: dish.image_url,
+                                    khauGalliId: currentStall.khauGalliId || currentStall.clusterId || '',
+                                    khauGalliName: currentStall.khauGalliName || currentStall.cluster || 'Khau Galli',
+                                  })}
                                   className="hover:opacity-80 transition-opacity cursor-pointer font-bold bg-transparent border-0 p-0 text-white"
                                 >
                                   +
@@ -435,7 +445,17 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                               </div>
                             ) : (
                               <button
-                                onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })}
+                                onClick={() => addToCart({
+                                  id: dish.id,
+                                  name: dish.name,
+                                  price: dish.price,
+                                  vendorId: currentStall.id,
+                                  vendorName: currentStall.name,
+                                  stallName: currentStall.name,
+                                  image: dish.image_url,
+                                  khauGalliId: currentStall.khauGalliId || currentStall.clusterId || '',
+                                  khauGalliName: currentStall.khauGalliName || currentStall.cluster || 'Khau Galli',
+                                })}
                                 className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] hover:border-[#D94A38] text-xs font-bold px-4 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs flex items-center gap-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -591,11 +611,10 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                     <button
                       key={idx}
                       onClick={() => setActiveCategory(cat)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                        isActive
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${isActive
                           ? 'bg-[#1C1917] text-white shadow-xs'
                           : 'bg-white text-stone-700 border border-[#EAE4DA]'
-                      }`}
+                        }`}
                     >
                       <span>{cat}</span>
                       <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-stone-800 text-stone-300' : 'bg-stone-100 text-stone-500'}`}>
@@ -664,10 +683,30 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                           <div className="flex items-center gap-2 bg-[#D94A38] text-white border border-[#D94A38] rounded-xl px-2.5 py-1 text-xs font-bold shadow-xs">
                             <button onClick={() => removeFromCart(dish.id, currentStall.id)} className="text-white bg-transparent border-0 p-0 cursor-pointer">-</button>
                             <span className="w-4 text-center">{qty}</span>
-                            <button onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })} className="text-white bg-transparent border-0 p-0 cursor-pointer">+</button>
+                            <button onClick={() => addToCart({
+                              id: dish.id,
+                              name: dish.name,
+                              price: dish.price,
+                              vendorId: currentStall.id,
+                              vendorName: currentStall.name,
+                              stallName: currentStall.name,
+                              image: dish.image_url,
+                              khauGalliId: currentStall.khauGalliId || currentStall.clusterId || '',
+                              khauGalliName: currentStall.khauGalliName || currentStall.cluster || 'Khau Galli',
+                            })} className="text-white bg-transparent border-0 p-0 cursor-pointer">+</button>
                           </div>
                         ) : (
-                          <button onClick={() => addToCart({ id: dish.id, name: dish.name, price: dish.price, vendorId: currentStall.id, vendorName: currentStall.name, image: dish.image_url })} className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] text-xs font-bold px-4 py-1.5 rounded-xl shadow-3xs flex items-center gap-1 transition-all cursor-pointer">
+                          <button onClick={() => addToCart({
+                            id: dish.id,
+                            name: dish.name,
+                            price: dish.price,
+                            vendorId: currentStall.id,
+                            vendorName: currentStall.name,
+                            stallName: currentStall.name,
+                            image: dish.image_url,
+                            khauGalliId: currentStall.khauGalliId || currentStall.clusterId || '',
+                            khauGalliName: currentStall.khauGalliName || currentStall.cluster || 'Khau Galli',
+                          })} className="bg-[#FAF7F2] hover:bg-[#D94A38] text-[#1C1917] hover:text-white border border-[#EAE4DA] text-xs font-bold px-4 py-1.5 rounded-xl shadow-3xs flex items-center gap-1 transition-all cursor-pointer">
                             <Plus className="w-3.5 h-3.5" />
                             <span>Add</span>
                           </button>

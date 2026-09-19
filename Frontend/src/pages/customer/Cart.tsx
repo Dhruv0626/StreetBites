@@ -21,7 +21,8 @@ const VENDOR_META: Record<string, { label: string; prepTime: string; since: stri
 
 export const Cart: React.FC = () => {
   const navigate = useNavigate();
-  const { cartItems, addToCart, removeFromCart } = useCart();
+  const { cartItems, addToCart, removeFromCart, activeKhauGalli } = useCart();
+  const currentKhauGalliName = activeKhauGalli?.name || cartItems[0]?.khauGalliName || 'Khau Galli';
   const totalItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
@@ -54,7 +55,7 @@ export const Cart: React.FC = () => {
           <div className="flex items-center gap-2 text-xs text-[#8E8B85]">
             <button onClick={() => navigate('/home')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0">Discover</button>
             <ChevronRight className="w-3.5 h-3.5" />
-            <button onClick={() => navigate('/stalls')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0">Manek Chowk</button>
+            <button onClick={() => navigate('/stalls')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0">{currentKhauGalliName}</button>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="text-[#1C1917] font-semibold">Consolidated cart</span>
           </div>
@@ -95,10 +96,10 @@ export const Cart: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-[#137333] mb-1">
-                    Khau Galli locked — Manek Chowk
+                    Khau Galli locked — {currentKhauGalliName}
                   </h4>
                   <p className="text-[11px] text-[#2E7D32] leading-relaxed">
-                    All stalls share this Khau Galli's geofence. The <strong>Order-Forking Engine</strong> will split checkout into {vendorIds.length} vendor suborders, then route one rider through every pickup.
+                    All stalls share this Khau Galli's geofence ({currentKhauGalliName}). The <strong>Order-Forking Engine</strong> will split checkout into {vendorIds.length} vendor suborders, then route one rider through every pickup.
                   </p>
                 </div>
               </div>
@@ -133,35 +134,45 @@ export const Cart: React.FC = () => {
 
                       {/* Vendor Items */}
                       <div className="divide-y divide-[#F5F0E8]">
-                        {group.items.map((item) => (
-                          <div key={item.id} className="py-3 flex justify-between items-center">
-                            <div className="flex items-center gap-2.5 text-xs">
-                              <span className="font-bold text-[#8E8B85] w-6">{item.quantity}x</span>
-                              <span className="font-bold text-[#1C1917]">{item.name}</span>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-md px-1.5 py-0.5">
-                                <button
-                                  onClick={() => removeFromCart(item.id, item.vendorId)}
-                                  className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="font-bold text-[#1C1917] text-xs w-4 text-center">{item.quantity}</span>
-                                <button
-                                  onClick={() => addToCart(item)}
-                                  className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
+                        {group.items.map((item) => {
+                          const itemImg = item.image && item.image.trim() !== '' ? item.image : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&auto=format&fit=crop';
+                          return (
+                            <div key={item.id} className="py-3 flex justify-between items-center gap-3">
+                              <div className="flex items-center gap-3 text-xs flex-1 min-w-0">
+                                <img
+                                  src={itemImg}
+                                  alt={item.name}
+                                  className="w-11 h-11 rounded-xl object-cover border border-[#EAE4DA] shadow-3xs shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <span className="font-bold text-[#1C1917] block truncate">{item.name}</span>
+                                  <span className="text-[10px] text-[#8E8B85]">₹{item.price} each</span>
+                                </div>
                               </div>
-                              <span className="font-bold text-xs text-[#1C1917] min-w-[45px] text-right">
-                                ₹{item.price * item.quantity}
-                              </span>
+
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-md px-1.5 py-0.5">
+                                  <button
+                                    onClick={() => removeFromCart(item.id, item.vendorId)}
+                                    className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="font-bold text-[#1C1917] text-xs w-4 text-center">{item.quantity}</span>
+                                  <button
+                                    onClick={() => addToCart(item)}
+                                    className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <span className="font-bold text-xs text-[#1C1917] min-w-[45px] text-right">
+                                  ₹{item.price * item.quantity}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Suborder Total Footer */}
@@ -183,7 +194,7 @@ export const Cart: React.FC = () => {
                 onClick={() => navigate('/stalls')}
                 className="w-full bg-transparent hover:bg-[#FAF7F2] border border-dashed border-[#8E8B85]/60 hover:border-[#D94A38] text-[#4B5563] hover:text-[#D94A38] font-bold text-xs py-3.5 rounded-2xl transition-all flex items-center justify-center gap-1 cursor-pointer"
               >
-                <span>+ Add more items from Manek Chowk</span>
+                <span>+ Add more items from {currentKhauGalliName}</span>
               </button>
             </div>
 
@@ -316,8 +327,8 @@ export const Cart: React.FC = () => {
                 <Check className="w-2.5 h-2.5 stroke-[3]" />
               </div>
               <p className="text-[10px] text-[#2E7D32] leading-snug">
-                <strong>Khau Galli locked — Manek Chowk</strong><br />
-                All stalls in your cart share <code className="bg-[#D0ECD7] font-semibold px-0.5 rounded">Khau Galli: Manek Chowk</code>. You'll pay one delivery fee for all stall pickups.
+                <strong>Khau Galli locked — {currentKhauGalliName}</strong><br />
+                All stalls in your cart share <code className="bg-[#D0ECD7] font-semibold px-0.5 rounded">Khau Galli: {currentKhauGalliName}</code>. You'll pay one delivery fee for all stall pickups.
               </p>
             </div>
 
@@ -349,35 +360,45 @@ export const Cart: React.FC = () => {
 
                     {/* Items */}
                     <div className="space-y-3">
-                      {group.items.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#8E8B85] text-[10px]">{item.quantity}x</span>
-                            <span className="font-bold text-[#1C1917]">{item.name}</span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-md px-1.5 py-0.5">
-                              <button
-                                onClick={() => removeFromCart(item.id, item.vendorId)}
-                                className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="font-bold text-[#1C1917] text-[10px] w-3 text-center">{item.quantity}</span>
-                              <button
-                                onClick={() => addToCart(item)}
-                                className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                      {group.items.map((item) => {
+                        const itemImg = item.image && item.image.trim() !== '' ? item.image : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&auto=format&fit=crop';
+                        return (
+                          <div key={item.id} className="flex justify-between items-center text-xs gap-2">
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <img
+                                src={itemImg}
+                                alt={item.name}
+                                className="w-10 h-10 rounded-lg object-cover border border-[#EAE4DA] shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <span className="font-bold text-[#1C1917] block truncate">{item.name}</span>
+                                <span className="text-[10px] text-[#8E8B85]">₹{item.price}</span>
+                              </div>
                             </div>
-                            <span className="font-bold text-xs text-[#1C1917] min-w-[32px] text-right">
-                              ₹{item.price * item.quantity}
-                            </span>
+
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex items-center gap-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-md px-1.5 py-0.5">
+                                <button
+                                  onClick={() => removeFromCart(item.id, item.vendorId)}
+                                  className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="font-bold text-[#1C1917] text-[10px] w-3 text-center">{item.quantity}</span>
+                                <button
+                                  onClick={() => addToCart(item)}
+                                  className="text-[#8E8B85] hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <span className="font-bold text-xs text-[#1C1917] min-w-[32px] text-right">
+                                ₹{item.price * item.quantity}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Footer subtotal */}

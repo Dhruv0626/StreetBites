@@ -13,6 +13,7 @@ import adminRoutes from "./src/routes/adminRoutes.ts";
 import clusterRoutes from "./src/routes/clusterRoutes.ts";
 import favoriteRoutes from "./src/routes/favoriteRoutes.ts";
 import vendorMenuRoutes from "./src/routes/vendorMenuRoutes.ts";
+import cartRoutes from "./src/routes/cartRoutes.ts";
 
 import { globalRateLimiter } from "./src/middlewares/rateLimiter.ts";
 
@@ -58,6 +59,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/clusters", clusterRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/vendor/menu", vendorMenuRoutes);
+app.use("/api/cart", cartRoutes);
 
 // Global Error Handler
 app.use(

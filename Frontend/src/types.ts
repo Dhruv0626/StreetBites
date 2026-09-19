@@ -21,6 +21,9 @@ export interface CartItem {
   quantity: number;
   vendorId: string;
   vendorName: string;
+  stallName?: string;
+  khauGalliId?: string;
+  khauGalliName?: string;
   emoji?: string;
   image?: string;
   label?: string;

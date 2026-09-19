@@ -14,6 +14,9 @@ export interface Stall {
   name: string;
   stall_category: string;
   cluster?: string;
+  khauGalliId?: string;
+  khauGalliName?: string;
+  clusterId?: string;
   rating: number;
   open_till?: string;
   since?: string;
