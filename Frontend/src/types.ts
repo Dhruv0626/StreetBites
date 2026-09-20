@@ -26,6 +26,7 @@ export interface CartItem {
   khauGalliName?: string;
   emoji?: string;
   image?: string;
+  stallImage?: string;
   label?: string;
 }
 
@@ -38,3 +39,21 @@ export interface Vendor {
   rating: number;
   isLive: boolean;
 }
+
+export interface AddressItem {
+  id: string;
+  _id?: string;
+  label: "Home" | "Office" | "Other" | string;
+  detail: string;
+  house_no?: string;
+  area?: string;
+  city?: string;
+  pincode?: string;
+  landmark?: string;
+  is_primary: boolean;
+  coordinates: [number, number]; // [lng, lat]
+  lng?: number;
+  lat?: number;
+  createdAt?: string;
+}
+

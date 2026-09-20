@@ -7,9 +7,13 @@ import { Joyride as OriginalJoyride, STATUS } from 'react-joyride';
 const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { useAuth } from '../../context/AuthContext';
+import { useLocationPermission } from '../../hooks/useLocationPermission';
+import { MapPin, Navigation } from 'lucide-react';
 
 export const RiderLayout: React.FC = () => {
   const { user, logout } = useAuth();
+  const { isGranted, requestLocation, isLocating } = useLocationPermission();
+  const [showLocationAlert, setShowLocationAlert] = useState(false);
 
   // If rider has not added registration data yet, navigate to registration form
   if (user && !user.verification_status) {
@@ -20,6 +24,22 @@ export const RiderLayout: React.FC = () => {
   const isVerified = user?.verification_status === 'VERIFIED';
 
   const [isOnline, setIsOnline] = useState(false);
+
+  const handleToggleOnline = async () => {
+    if (!isOnline) {
+      if (!isGranted) {
+        const coords = await requestLocation();
+        if (!coords) {
+          setShowLocationAlert(true);
+          return;
+        }
+      }
+      setShowLocationAlert(false);
+      setIsOnline(true);
+    } else {
+      setIsOnline(false);
+    }
+  };
   const [runTour, setRunTour] = useState(false);
   const [tourKey, setTourKey] = useState(0);
   const navigate = useNavigate();
@@ -277,7 +297,7 @@ export const RiderLayout: React.FC = () => {
             </button>
             {isVerified ? (
               <div
-                onClick={() => setIsOnline(!isOnline)}
+                onClick={handleToggleOnline}
                 className={`tour-go-online flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${isOnline ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-stone-300 text-stone-500 hover:bg-stone-50'}`}
               >
                 <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-stone-500'}`} />
@@ -294,6 +314,34 @@ export const RiderLayout: React.FC = () => {
             )}
           </div>
         </header>
+
+        {/* Location Required Alert Banner for Rider */}
+        {showLocationAlert && !isGranted && (
+          <div className="mx-4 md:mx-6 mt-3 p-3.5 bg-red-50 border border-red-200 text-red-900 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <MapPin className="w-5 h-5 text-[#D94A38] shrink-0" />
+              <div>
+                <span className="font-bold block">Allow Location Permission</span>
+                <span className="text-[11px] text-red-700">
+                  Location access is strictly required to go online, receive order dispatch, and navigate delivery routes.
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const res = await requestLocation();
+                if (res) {
+                  setShowLocationAlert(false);
+                  setIsOnline(true);
+                }
+              }}
+              disabled={isLocating}
+              className="bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold text-xs px-3.5 py-1.5 rounded-xl cursor-pointer border-0 shrink-0 shadow-3xs disabled:opacity-60"
+            >
+              {isLocating ? 'Detecting...' : 'Enable GPS'}
+            </button>
+          </div>
+        )}
 
         {/* Pending Verification Notice Banner */}
         {!isVerified && (

@@ -14,17 +14,21 @@ import {
   Bike,
   Plus,
   Trash2,
+  Navigation,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { useFavorites } from '../../hooks/useFavorites';
-
-interface SavedAddress {
-  id: string;
-  label: string;
-  detail: string;
-  isPrimary?: boolean;
-}
+import {
+  getCustomerAddresses,
+  createCustomerAddress,
+  updateCustomerAddress,
+  deleteCustomerAddress,
+} from '../../services/addressService';
+import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding';
+import type { AddressItem } from '../../types';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
@@ -53,43 +57,46 @@ export const Profile: React.FC = () => {
     }
   }, [user]);
 
-  // Real Saved Addresses State (Persisted per user)
-  const addressStorageKey = `streetbites_addresses_${user?._id || user?.id || 'guest'}`;
-  const [addresses, setAddresses] = useState<SavedAddress[]>(() => {
-    const saved = localStorage.getItem(`streetbites_addresses_${user?._id || user?.id || 'guest'}`);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  });
+  // Real Saved Addresses State (Fetched from MongoDB based on user_id)
+  const [addresses, setAddresses] = useState<AddressItem[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
 
-  useEffect(() => {
-    const key = `streetbites_addresses_${user?._id || user?.id || 'guest'}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setAddresses(JSON.parse(saved));
-      } catch (e) {
-        setAddresses([]);
-      }
-    } else {
+  const loadAddresses = async () => {
+    setIsLoadingAddresses(true);
+    try {
+      const data = await getCustomerAddresses();
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn('Failed to load profile addresses from API:', e);
       setAddresses([]);
+    } finally {
+      setIsLoadingAddresses(false);
     }
-  }, [user]);
-
-  const saveAddressesToStorage = (updated: SavedAddress[]) => {
-    setAddresses(updated);
-    localStorage.setItem(addressStorageKey, JSON.stringify(updated));
   };
 
+  useEffect(() => {
+    loadAddresses();
+  }, [user]);
+
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [editAddressData, setEditAddressData] = useState({ label: '', detail: '' });
+  const [editAddressData, setEditAddressData] = useState({
+    label: 'Home',
+    area: '',
+    house_no: '',
+    landmark: '',
+    city: 'Ahmedabad',
+    pincode: '',
+  });
   const [isAddingAddress, setIsAddingAddress] = useState(false);
-  const [newAddressData, setNewAddressData] = useState({ label: 'Home', detail: '' });
+  const [addressWarning, setAddressWarning] = useState<string | null>(null);
+  const [newAddressData, setNewAddressData] = useState({
+    label: 'Home',
+    area: '',
+    house_no: '',
+    landmark: '',
+    city: 'Ahmedabad',
+    pincode: '',
+  });
 
   // Total Orders calculation from storage / user history
   const [totalOrdersCount, setTotalOrdersCount] = useState<number>(0);
@@ -112,14 +119,14 @@ export const Profile: React.FC = () => {
     }
   }, [isAuthenticated, user]);
 
-  // App Settings State (Saved in Browser Storage)
+  // App Settings State (Saved in Browser Storage - Defaults to Disabled)
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('streetbites_notifications_enabled');
-    return saved !== null ? saved === 'true' : true;
+    return saved === 'true';
   });
   const [locationEnabled, setLocationEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('streetbites_location_enabled');
-    return saved !== null ? saved === 'true' : false;
+    return saved === 'true';
   });
 
   const handleToggleNotifications = () => {
@@ -132,6 +139,14 @@ export const Profile: React.FC = () => {
     const updated = !locationEnabled;
     setLocationEnabled(updated);
     localStorage.setItem('streetbites_location_enabled', String(updated));
+    localStorage.setItem('streetbites_location_permission', updated ? 'granted' : 'denied');
+    if (updated) {
+      localStorage.removeItem('streetbites_location_banner_dismissed');
+      setAddressWarning(null);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(() => {}, () => {});
+      }
+    }
   };
 
   const toggleSection = (section: string) => {
@@ -165,49 +180,177 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const handleSetPrimaryAddress = (id: string) => {
-    const updated = addresses.map((addr) => ({
-      ...addr,
-      isPrimary: addr.id === id,
-    }));
-    saveAddressesToStorage(updated);
+  const handleSetPrimaryAddress = async (id: string) => {
+    await updateCustomerAddress(id, { is_primary: true });
+    await loadAddresses();
   };
 
-  const handleEditAddressClick = (addr: SavedAddress) => {
-    setEditingAddressId(addr.id);
-    setEditAddressData({ label: addr.label, detail: addr.detail });
+  const handleEditAddressClick = (addr: AddressItem) => {
+    setEditingAddressId(addr.id || addr._id || '');
+    setEditAddressData({
+      label: addr.label,
+      area: addr.area || '',
+      house_no: addr.house_no || '',
+      landmark: addr.landmark || '',
+      city: addr.city || 'Ahmedabad',
+      pincode: addr.pincode || '',
+    });
   };
 
-  const handleSaveAddress = () => {
-    if (!editAddressData.detail.trim()) return;
-    const updated = addresses.map((addr) =>
-      addr.id === editingAddressId
-        ? { ...addr, label: editAddressData.label || 'Address', detail: editAddressData.detail.trim() }
-        : addr
-    );
-    saveAddressesToStorage(updated);
-    setEditingAddressId(null);
-  };
+  const handleSaveAddress = async () => {
+    if (!editingAddressId || (!editAddressData.area.trim() && !editAddressData.house_no.trim())) return;
 
-  const handleAddNewAddress = () => {
-    if (!newAddressData.detail.trim()) return;
-    const newAddr: SavedAddress = {
-      id: `addr_${Date.now()}`,
-      label: newAddressData.label || 'Home',
-      detail: newAddressData.detail.trim(),
-      isPrimary: addresses.length === 0,
-    };
-    saveAddressesToStorage([...addresses, newAddr]);
-    setNewAddressData({ label: 'Home', detail: '' });
-    setIsAddingAddress(false);
-  };
-
-  const handleDeleteAddress = (id: string) => {
-    const updated = addresses.filter((addr) => addr.id !== id);
-    if (updated.length > 0 && !updated.some((a) => a.isPrimary)) {
-      updated[0].isPrimary = true;
+    let geocodedLat: number | undefined;
+    let geocodedLng: number | undefined;
+    try {
+      const geo = await geocodeAddressText({
+        area: editAddressData.area.trim(),
+        city: editAddressData.city.trim() || 'Ahmedabad',
+        pincode: editAddressData.pincode.trim(),
+        landmark: editAddressData.landmark.trim(),
+      });
+      if (geo) {
+        geocodedLat = geo.lat;
+        geocodedLng = geo.lng;
+      }
+    } catch {
+      // Backend fallback geocoding will handle it
     }
-    saveAddressesToStorage(updated);
+
+    const fullDetail = [
+      editAddressData.house_no.trim(),
+      editAddressData.landmark.trim(),
+      editAddressData.area.trim(),
+      editAddressData.city.trim(),
+      editAddressData.pincode.trim(),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    await updateCustomerAddress(editingAddressId, {
+      label: editAddressData.label || 'Home',
+      detail: fullDetail,
+      house_no: editAddressData.house_no.trim(),
+      area: editAddressData.area.trim(),
+      city: editAddressData.city.trim() || 'Ahmedabad',
+      pincode: editAddressData.pincode.trim(),
+      landmark: editAddressData.landmark ? editAddressData.landmark.trim() : undefined,
+      lat: geocodedLat,
+      lng: geocodedLng,
+    });
+    setEditingAddressId(null);
+    await loadAddresses();
+  };
+
+  const handleAddNewAddress = async () => {
+    if (!newAddressData.area.trim() && !newAddressData.house_no.trim()) return;
+
+    let geocodedLat: number | undefined;
+    let geocodedLng: number | undefined;
+    try {
+      const geo = await geocodeAddressText({
+        area: newAddressData.area.trim(),
+        city: newAddressData.city.trim() || 'Ahmedabad',
+        pincode: newAddressData.pincode.trim(),
+        landmark: newAddressData.landmark.trim(),
+      });
+      if (geo) {
+        geocodedLat = geo.lat;
+        geocodedLng = geo.lng;
+      }
+    } catch {
+      // Backend fallback geocoding will handle it
+    }
+
+    const fullDetail = [
+      newAddressData.house_no.trim(),
+      newAddressData.landmark.trim(),
+      newAddressData.area.trim(),
+      newAddressData.city.trim(),
+      newAddressData.pincode.trim(),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    await createCustomerAddress({
+      label: newAddressData.label || 'Home',
+      detail: fullDetail,
+      house_no: newAddressData.house_no.trim(),
+      area: newAddressData.area.trim(),
+      city: newAddressData.city.trim() || 'Ahmedabad',
+      pincode: newAddressData.pincode.trim(),
+      landmark: newAddressData.landmark.trim() ? newAddressData.landmark.trim() : undefined,
+      is_primary: addresses.length === 0,
+      lat: geocodedLat,
+      lng: geocodedLng,
+    });
+    setNewAddressData({
+      label: 'Home',
+      area: '',
+      house_no: '',
+      landmark: '',
+      city: 'Ahmedabad',
+      pincode: '',
+    });
+    setIsAddingAddress(false);
+    await loadAddresses();
+  };
+
+  const [isGpsLocatingProfile, setIsGpsLocatingProfile] = useState(false);
+
+  const handleAddGpsAddressProfile = () => {
+    const isEnabled = localStorage.getItem('streetbites_location_enabled') === 'true';
+    if (!isEnabled) {
+      setAddressWarning('Enable the Live location first under App Settings below before using Live GPS.');
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setAddressWarning(null);
+    setIsGpsLocatingProfile(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const detectedLat = position.coords.latitude;
+        const detectedLng = position.coords.longitude;
+        localStorage.setItem('streetbites_location_permission', 'granted');
+        localStorage.setItem('streetbites_location_enabled', 'true');
+
+        // Reverse geocode to get clean Area & City (e.g. "Chandkheda, Ahmedabad")
+        const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
+        const detectedArea = geoInfo.area;
+        const detectedCity = geoInfo.city;
+        const detectedPincode = geoInfo.pincode;
+        const formattedAddress = geoInfo.formattedAddress;
+
+        await createCustomerAddress({
+          label: 'Home',
+          detail: formattedAddress,
+          area: detectedArea,
+          city: detectedCity,
+          pincode: detectedPincode,
+          is_primary: addresses.length === 0,
+          lat: detectedLat,
+          lng: detectedLng,
+        });
+        setIsGpsLocatingProfile(false);
+        setIsAddingAddress(false);
+        await loadAddresses();
+      },
+      (err) => {
+        setIsGpsLocatingProfile(false);
+        console.warn('Geolocation error in profile:', err);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  const handleDeleteAddress = async (id: string) => {
+    await deleteCustomerAddress(id);
+    await loadAddresses();
   };
 
   const handleLogout = async () => {
@@ -522,47 +665,55 @@ export const Profile: React.FC = () => {
 
                   {addresses.length > 0 && (
                     <div className="space-y-3">
-                      {addresses.map((addr) => (
-                        <div
-                          key={addr.id}
-                          className="bg-white p-3.5 rounded-xl border border-[#EAE4DA] flex items-start justify-between gap-3 shadow-3xs"
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-bold text-xs text-[#1C1917]">{addr.label}</span>
-                              {addr.isPrimary && (
-                                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
-                                  Default
-                                </span>
+                      {addresses.map((addr) => {
+                        const addrId = addr.id || addr._id || '';
+                        return (
+                          <div
+                            key={addrId}
+                            className="bg-white p-3.5 rounded-xl border border-[#EAE4DA] flex items-start justify-between gap-3 shadow-3xs"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold text-xs text-[#1C1917]">{addr.label}</span>
+                                {addr.is_primary && (
+                                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                                    Default
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-[#8E8B85] leading-relaxed">{addr.detail}</p>
+                              {addr.landmark && (
+                                <p className="text-[10px] text-stone-500 mt-0.5">
+                                  <span className="font-semibold">Landmark:</span> {addr.landmark}
+                                </p>
                               )}
-                            </div>
-                            <p className="text-[11px] text-[#8E8B85] leading-relaxed">{addr.detail}</p>
-                            <div className="flex gap-3 mt-2">
-                              {!addr.isPrimary && (
+                              <div className="flex gap-3 mt-2">
+                                {!addr.is_primary && (
+                                  <button
+                                    onClick={() => handleSetPrimaryAddress(addrId)}
+                                    className="text-[10px] font-bold text-[#D94A38] hover:underline cursor-pointer"
+                                  >
+                                    Set as Default
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => handleSetPrimaryAddress(addr.id)}
-                                  className="text-[10px] font-bold text-[#D94A38] hover:underline cursor-pointer"
+                                  onClick={() => handleEditAddressClick(addr)}
+                                  className="text-[10px] font-bold text-stone-600 hover:underline cursor-pointer"
                                 >
-                                  Set as Default
+                                  Edit
                                 </button>
-                              )}
-                              <button
-                                onClick={() => handleEditAddressClick(addr)}
-                                className="text-[10px] font-bold text-stone-600 hover:underline cursor-pointer"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAddress(addr.id)}
-                                className="text-[10px] font-bold text-red-500 hover:underline cursor-pointer flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Delete</span>
-                              </button>
+                                <button
+                                  onClick={() => handleDeleteAddress(addrId)}
+                                  className="text-[10px] font-bold text-red-500 hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {!isAddingAddress && (
                         <button
@@ -579,10 +730,41 @@ export const Profile: React.FC = () => {
                   {/* Add New Address Form */}
                   {isAddingAddress && (
                     <div className="bg-white p-4 rounded-xl border border-[#EAE4DA] space-y-3 shadow-sm">
-                      <h4 className="text-xs font-bold text-[#1C1917]">Add New Delivery Address</h4>
+                      {addressWarning && (
+                        <div className="p-3 text-xs bg-amber-50 text-amber-900 border border-amber-300 rounded-xl font-medium flex items-start gap-2.5 shadow-3xs animate-fadeIn">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <strong className="font-bold block text-amber-950 mb-0.5">Enable the Live location first</strong>
+                            <span>{addressWarning}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-[#1C1917]">Add New Delivery Address</h4>
+                        <button
+                          type="button"
+                          onClick={handleAddGpsAddressProfile}
+                          disabled={isGpsLocatingProfile}
+                          className="text-[11px] font-bold text-white bg-[#D94A38] hover:bg-[#C43D2E] px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          {isGpsLocatingProfile ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Saving GPS...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Navigation className="w-3 h-3" />
+                              <span>Use Live GPS</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
-                          Label (e.g. Home, Office, Flat)
+                          Label (e.g. Home, Office, Other)
                         </label>
                         <input
                           type="text"
@@ -592,18 +774,79 @@ export const Profile: React.FC = () => {
                           placeholder="Home"
                         />
                       </div>
+
+                      {/* Area / Locality (Compulsory *) */}
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
-                          Address Details
+                          Area / Locality <span className="text-[#D94A38]">*</span>
                         </label>
-                        <textarea
-                          value={newAddressData.detail}
-                          onChange={(e) => setNewAddressData({ ...newAddressData, detail: e.target.value })}
-                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38] h-16"
-                          placeholder="House / Flat No., Street, Area, City"
+                        <input
+                          type="text"
+                          value={newAddressData.area}
+                          onChange={(e) => setNewAddressData({ ...newAddressData, area: e.target.value })}
+                          className="w-full text-xs font-semibold text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          placeholder="e.g. Vastrapur, Bodakdev, Prahlad Nagar"
                         />
                       </div>
-                      <div className="flex gap-2">
+
+                      {/* House / Flat No (Compulsory *) */}
+                      <div>
+                        <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                          Flat / House / Building Name <span className="text-[#D94A38]">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newAddressData.house_no}
+                          onChange={(e) => setNewAddressData({ ...newAddressData, house_no: e.target.value })}
+                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          placeholder="e.g. Flat 402, Block B, Shivalik Heights"
+                        />
+                      </div>
+
+                      {/* Landmark (Optional - no asterisk, no Optional text) */}
+                      <div>
+                        <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                          Landmark
+                        </label>
+                        <input
+                          type="text"
+                          value={newAddressData.landmark}
+                          onChange={(e) => setNewAddressData({ ...newAddressData, landmark: e.target.value })}
+                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          placeholder="e.g. Near Swaminarayan Temple, Opp Lake"
+                        />
+                      </div>
+
+                      {/* City & Pincode (Optional - no asterisk, no Optional text) */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                            City
+                          </label>
+                          <input
+                            type="text"
+                            value={newAddressData.city}
+                            onChange={(e) => setNewAddressData({ ...newAddressData, city: e.target.value })}
+                            className="w-full text-xs font-semibold text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                            placeholder="Ahmedabad"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                            Pincode
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={newAddressData.pincode}
+                            onChange={(e) => setNewAddressData({ ...newAddressData, pincode: e.target.value.replace(/\D/g, '') })}
+                            className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                            placeholder="380015"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
                         <button
                           onClick={handleAddNewAddress}
                           className="text-xs font-bold text-white bg-[#D94A38] px-4 py-2 rounded-xl hover:bg-[#993427] transition-colors cursor-pointer"
@@ -622,7 +865,8 @@ export const Profile: React.FC = () => {
 
                   {/* Edit Address Form */}
                   {editingAddressId && (
-                    <div className="mt-4 bg-white p-4 rounded-xl border border-[#EAE4DA] space-y-3">
+                    <div className="mt-4 bg-white p-4 rounded-xl border border-[#EAE4DA] space-y-3 shadow-sm">
+                      <h4 className="text-xs font-bold text-[#1C1917]">Edit Delivery Address</h4>
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
                           Address Label
@@ -634,17 +878,76 @@ export const Profile: React.FC = () => {
                           className="w-full text-xs font-bold text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
                         />
                       </div>
+
+                      {/* Area / Locality (Compulsory *) */}
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
-                          Address Details
+                          Area / Locality <span className="text-[#D94A38]">*</span>
                         </label>
-                        <textarea
-                          value={editAddressData.detail}
-                          onChange={(e) => setEditAddressData({ ...editAddressData, detail: e.target.value })}
-                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38] h-16"
+                        <input
+                          type="text"
+                          value={editAddressData.area}
+                          onChange={(e) => setEditAddressData({ ...editAddressData, area: e.target.value })}
+                          className="w-full text-xs font-semibold text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          placeholder="e.g. Vastrapur, Bodakdev, Prahlad Nagar"
                         />
                       </div>
-                      <div className="flex gap-2">
+
+                      {/* House / Flat No (Compulsory *) */}
+                      <div>
+                        <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                          Flat / House / Building Name <span className="text-[#D94A38]">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editAddressData.house_no}
+                          onChange={(e) => setEditAddressData({ ...editAddressData, house_no: e.target.value })}
+                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                        />
+                      </div>
+
+                      {/* Landmark (Optional - no asterisk, no Optional text) */}
+                      <div>
+                        <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                          Landmark
+                        </label>
+                        <input
+                          type="text"
+                          value={editAddressData.landmark}
+                          onChange={(e) => setEditAddressData({ ...editAddressData, landmark: e.target.value })}
+                          className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          placeholder="e.g. Near Swaminarayan Temple"
+                        />
+                      </div>
+
+                      {/* City & Pincode (Optional - no asterisk, no Optional text) */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                            City
+                          </label>
+                          <input
+                            type="text"
+                            value={editAddressData.city}
+                            onChange={(e) => setEditAddressData({ ...editAddressData, city: e.target.value })}
+                            className="w-full text-xs font-semibold text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
+                            Pincode
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={editAddressData.pincode}
+                            onChange={(e) => setEditAddressData({ ...editAddressData, pincode: e.target.value.replace(/\D/g, '') })}
+                            className="w-full text-xs font-medium text-[#1C1917] border border-[#DCD6CC] rounded-lg p-2 outline-none focus:border-[#D94A38]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
                         <button
                           onClick={handleSaveAddress}
                           className="text-xs font-bold text-white bg-[#D94A38] px-4 py-2 rounded-xl hover:bg-[#993427] transition-colors cursor-pointer"

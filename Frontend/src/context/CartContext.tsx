@@ -19,6 +19,7 @@ export const getCustomerSessionId = (): string => {
 interface KhauGalliRef {
   id: string;
   name: string;
+  coordinates?: [number, number]; // [longitude, latitude]
 }
 
 interface AddToCartResult {
@@ -128,6 +129,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               setActiveKhauGalli({
                 id: res.data.khauGalli.id,
                 name: res.data.khauGalli.name,
+                coordinates: res.data.khauGalli.coordinates,
               });
             }
           } else {

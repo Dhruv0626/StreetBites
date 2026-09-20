@@ -22,6 +22,7 @@ export interface CartServerResponse {
     id: string;
     name: string;
     city?: string;
+    coordinates?: [number, number];
   } | null;
   stallsCount: number;
   totalItems: number;

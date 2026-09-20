@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   MapPin,
-  Info,
   ChevronRight,
   CheckCircle2,
   Store,
-  Utensils,
   ShieldCheck,
   Zap,
   CreditCard,
@@ -15,9 +13,19 @@ import {
   Sparkles,
   Navigation,
   Lock,
-  Flame
+  Flame,
+  Plus,
+  Home,
+  Briefcase,
+  UserCheck,
+  Loader2,
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { getCustomerAddresses } from '../../services/addressService';
+import { AddressModal } from '../../components/customer/AddressModal';
+import { calculateDistanceKm, calculateDeliveryFee, calculateETA } from '../../utils/distance';
+import type { AddressItem } from '../../types';
 
 interface CheckoutProps {
   clusterName?: string;
@@ -25,24 +33,29 @@ interface CheckoutProps {
   onConfirmOrder?: (placedItems: any[], paymentMethod: string) => void;
 }
 
-const MOCK_ADDRESSES = [
-  {
-    id: '1',
-    title: 'Home',
-    detail: '123, B Block, Navrangpura, Ahmedabad, Gujarat 380009',
-    isPrimary: true,
-    distance: '3.42 km',
-    eta: '22–28 min'
-  },
-  {
-    id: '2',
-    title: 'Office',
-    detail: '45, SG Highway, Prahlad Nagar, Ahmedabad, Gujarat 380015',
-    isPrimary: false,
-    distance: '8.1 km',
-    eta: '35–45 min'
-  },
-];
+const DEFAULT_COORDINATES: Record<string, [number, number]> = {
+  'manek chowk': [72.5873, 23.0248],
+  'law garden': [72.5574, 23.0272],
+  'vastrapur': [72.5284, 23.036],
+  'prahlad nagar': [72.5085, 23.0076],
+  'chandkheda': [72.5815, 23.1118],
+};
+
+const getKhauGalliCoordinates = (
+  khauGalli: { coordinates?: [number, number]; name?: string } | null,
+  clusterNameFallback: string
+): [number, number] => {
+  if (khauGalli?.coordinates && khauGalli.coordinates.length === 2) {
+    return khauGalli.coordinates;
+  }
+  const name = (khauGalli?.name || clusterNameFallback).toLowerCase();
+  for (const [key, coords] of Object.entries(DEFAULT_COORDINATES)) {
+    if (name.includes(key) || key.includes(name)) {
+      return coords;
+    }
+  }
+  return [72.5873, 23.0248]; // default Manek Chowk coordinates
+};
 
 // Helper to provide attractive fallback street food photos if dish image is empty
 const getFoodFallbackImage = (name: string, stallName: string = ''): string => {
@@ -77,6 +90,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
   onConfirmOrder = () => { },
 }) => {
   const { cartItems, activeKhauGalli } = useCart();
+  const { user } = useAuth();
   const rawKhauGalliName = activeKhauGalli?.name || cartItems[0]?.khauGalliName || clusterName;
   const displayKhauGalliName = rawKhauGalliName.replace(/_/g, ' ');
 
@@ -84,81 +98,229 @@ export const Checkout: React.FC<CheckoutProps> = ({
   const [selectedUpiProvider, setSelectedUpiProvider] = useState<string>('gpay');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
 
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(
-    MOCK_ADDRESSES.find((a) => a.isPrimary)?.id || '1'
-  );
+  // Customer addresses state (fetched exclusively from database based on user_id)
+  const [addresses, setAddresses] = useState<AddressItem[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState<boolean>(true);
   const [isChangingAddress, setIsChangingAddress] = useState(false);
-  const selectedAddress =
-    MOCK_ADDRESSES.find((a) => a.id === selectedAddressId) || MOCK_ADDRESSES[0];
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isCalculatingFee, setIsCalculatingFee] = useState<boolean>(false);
+
+  // Fetch real saved customer addresses from MongoDB on mount or when user changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadAddresses = async () => {
+      setIsLoadingAddresses(true);
+      try {
+        const saved = await getCustomerAddresses();
+        if (isMounted) {
+          if (saved && Array.isArray(saved) && saved.length > 0) {
+            setAddresses(saved);
+            const primary = saved.find((a) => a.is_primary) || saved[0];
+            setSelectedAddressId(primary.id || primary._id || '');
+          } else {
+            setAddresses([]);
+            setSelectedAddressId('');
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching saved addresses from database:', err);
+        if (isMounted) {
+          setAddresses([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingAddresses(false);
+        }
+      }
+    };
+    loadAddresses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  // Selected address object (null if customer has not saved any address yet or none selected)
+  const selectedAddress: AddressItem | null = useMemo(() => {
+    if (!addresses || addresses.length === 0) return null;
+    return (
+      addresses.find((a) => (a.id && a.id === selectedAddressId) || (a._id && a._id === selectedAddressId)) ||
+      addresses.find((a) => a.is_primary) ||
+      addresses[0] ||
+      null
+    );
+  }, [addresses, selectedAddressId]);
+
+  // Active Khau Galli origin coordinates
+  const khauGalliCoords = useMemo(() => {
+    return getKhauGalliCoordinates(activeKhauGalli, displayKhauGalliName);
+  }, [activeKhauGalli, displayKhauGalliName]);
+
+  // Real-time geodesic distance in km between Khau Galli and selected delivery address
+  const currentDistanceKm = useMemo(() => {
+    if (!selectedAddress || !selectedAddress.coordinates) return 0;
+    return calculateDistanceKm(khauGalliCoords, selectedAddress.coordinates);
+  }, [khauGalliCoords, selectedAddress]);
+
+  // Dynamic delivery fee based on calculated distance
+  const deliveryFee: number | null = useMemo(() => {
+    if (cartItems.length === 0 || !selectedAddress) return null;
+    return calculateDeliveryFee(currentDistanceKm, true);
+  }, [currentDistanceKm, cartItems.length, selectedAddress]);
+
+  // Dynamic ETA based on calculated distance
+  const currentETA = useMemo(() => {
+    if (!selectedAddress) return '20–25 min';
+    return calculateETA(currentDistanceKm);
+  }, [currentDistanceKm, selectedAddress]);
+
+  // Trigger brief fee calculation loader for smooth UX feedback when address is picked
+  useEffect(() => {
+    if (selectedAddress) {
+      setIsCalculatingFee(true);
+      const timer = setTimeout(() => {
+        setIsCalculatingFee(false);
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      setIsCalculatingFee(false);
+    }
+  }, [selectedAddress?.id, selectedAddress?._id]);
+
+  // Recipient contact info fetched via customer reference
+  const recipientName = (selectedAddress as any)?.receiver_name || user?.name || 'Customer';
+  const recipientPhone = (selectedAddress as any)?.phone_number || user?.phone_number || '';
 
   const itemSubtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const totalItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const uniqueVendorsCount = new Set(cartItems.map((i) => i.vendorId)).size;
-  const deliveryFee = cartItems.length > 0 ? 30 : 0;
   const gstAmount = Math.round(itemSubtotal * 0.05 * 10) / 10;
-  const totalPayable = Math.round((itemSubtotal + deliveryFee + gstAmount) * 10) / 10;
+  const totalPayable = deliveryFee !== null
+    ? Math.round((itemSubtotal + deliveryFee + gstAmount) * 10) / 10
+    : Math.round((itemSubtotal + gstAmount) * 10) / 10;
 
   // Estimated savings vs separate aggregator deliveries
   const estimatedSavings = uniqueVendorsCount > 1 ? (uniqueVendorsCount - 1) * 35 : 0;
 
   const handlePay = () => {
+    if (!selectedAddress) {
+      setIsAddressModalOpen(true);
+      return;
+    }
     onConfirmOrder(
       cartItems,
       paymentMethod === 'upi' ? `UPI (${selectedUpiProvider.toUpperCase()})` : paymentMethod.toUpperCase()
     );
   };
 
+  const handleAddressCreated = (newAddr: AddressItem) => {
+    setAddresses((prev) => [newAddr, ...prev.filter((a) => a.id !== newAddr.id && a._id !== newAddr._id)]);
+    setSelectedAddressId(newAddr.id || newAddr._id || '');
+    setIsChangingAddress(false);
+  };
+
   const renderAddressSelection = () => (
     <div className="space-y-3 mt-4 animate-fadeIn">
-      {MOCK_ADDRESSES.map((addr) => (
-        <label
-          key={addr.id}
-          className={`flex gap-3 items-start p-3.5 rounded-2xl border cursor-pointer transition-all ${
-            selectedAddressId === addr.id
-              ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs'
-              : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
-          }`}
-          onClick={() => {
-            setSelectedAddressId(addr.id);
-            setIsChangingAddress(false);
-          }}
-        >
-          <div
-            className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-              selectedAddressId === addr.id
-                ? 'border-[#D94A38] bg-[#D94A38]'
-                : 'border-[#DCD6CC]'
-            }`}
+      {addresses.length === 0 ? (
+        <div className="text-center py-6 bg-[#FAF7F2] rounded-2xl border border-[#EAE4DA] p-4">
+          <p className="text-xs text-[#8E8B85] mb-2 font-medium">No delivery addresses saved yet in your account.</p>
+          <button
+            type="button"
+            onClick={() => setIsAddressModalOpen(true)}
+            className="py-2.5 px-4 bg-[#D94A38] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 mx-auto cursor-pointer border-0 shadow-xs"
           >
-            {selectedAddressId === addr.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="font-bold text-sm text-[#1C1917]">{addr.title}</span>
-              {addr.isPrimary && (
-                <span className="bg-[#FAF0ED] text-[#D94A38] text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full flex items-center gap-1 border border-[#FCE8E6]">
-                  <CheckCircle2 className="w-2.5 h-2.5" /> Primary
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-[#8E8B85] leading-snug">{addr.detail}</p>
-            <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-[#5C5954]">
-              <span className="bg-[#FAF7F2] border border-[#EAE4DA] px-2 py-0.5 rounded-md">
-                {addr.distance}
-              </span>
-              <span className="bg-[#FAF7F2] border border-[#EAE4DA] px-2 py-0.5 rounded-md text-[#2E7D32]">
-                ETA {addr.eta}
-              </span>
-            </div>
-          </div>
-        </label>
-      ))}
-      <button
-        onClick={() => setIsChangingAddress(false)}
-        className="text-xs font-bold text-[#8E8B85] hover:text-[#1C1917] underline mt-2 bg-transparent border-0 cursor-pointer"
-      >
-        Cancel
-      </button>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Delivery Address</span>
+          </button>
+        </div>
+      ) : (
+        addresses.map((addr) => {
+          const addrDist = calculateDistanceKm(khauGalliCoords, addr.coordinates);
+          const addrETA = calculateETA(addrDist);
+          const addrFee = calculateDeliveryFee(addrDist, true);
+          const isSelected = selectedAddressId === addr.id || selectedAddressId === addr._id;
+
+          return (
+            <label
+              key={addr.id || addr._id}
+              className={`flex gap-3 items-start p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                isSelected
+                  ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs'
+                  : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
+              }`}
+              onClick={() => {
+                setSelectedAddressId(addr.id || addr._id || '');
+                setIsChangingAddress(false);
+              }}
+            >
+              <div
+                className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                  isSelected ? 'border-[#D94A38] bg-[#D94A38]' : 'border-[#DCD6CC]'
+                }`}
+              >
+                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-1.5 font-bold text-sm text-[#1C1917]">
+                    {addr.label === 'Home' && <Home className="w-3.5 h-3.5 text-[#D94A38]" />}
+                    {addr.label === 'Office' && <Briefcase className="w-3.5 h-3.5 text-[#D94A38]" />}
+                    {addr.label !== 'Home' && addr.label !== 'Office' && <MapPin className="w-3.5 h-3.5 text-[#D94A38]" />}
+                    <span>{addr.label}</span>
+                  </div>
+                  {addr.is_primary && (
+                    <span className="bg-[#FAF0ED] text-[#D94A38] text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full flex items-center gap-1 border border-[#FCE8E6]">
+                      <CheckCircle2 className="w-2.5 h-2.5" /> Primary
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#8E8B85] leading-snug">{addr.detail}</p>
+
+                {addr.landmark && (
+                  <p className="text-[11px] text-[#5C5954] mt-0.5 flex items-center gap-1">
+                    <span className="text-[#8E8B85]">Landmark:</span>
+                    <span className="font-semibold">{addr.landmark}</span>
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] font-bold text-[#5C5954]">
+                  <span className="bg-[#FAF7F2] border border-[#EAE4DA] px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
+                    {addrDist} km away
+                  </span>
+                  <span className="bg-[#FAF7F2] border border-[#EAE4DA] px-2 py-0.5 rounded-md text-[#2E7D32] flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />
+                    ETA {addrETA}
+                  </span>
+                  <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] px-2 py-0.5 rounded-md">
+                    Delivery ₹{addrFee}
+                  </span>
+                </div>
+              </div>
+            </label>
+          );
+        })
+      )}
+
+      <div className="flex items-center justify-between pt-2">
+        <button
+          type="button"
+          onClick={() => setIsAddressModalOpen(true)}
+          className="py-2.5 px-4 rounded-xl bg-[#FAF0ED] text-[#D94A38] hover:bg-[#FCE8E6] text-xs font-extrabold flex items-center gap-1.5 transition-colors border border-[#FCE8E6] cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Add New Address</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsChangingAddress(false)}
+          className="text-xs font-bold text-[#8E8B85] hover:text-[#1C1917] underline bg-transparent border-0 cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 
@@ -231,29 +393,63 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
               {isChangingAddress ? (
                 renderAddressSelection()
+              ) : !selectedAddress ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-[#FAF7F2]/80 border border-dashed border-[#DCD6CC] rounded-2xl text-center space-y-3 animate-fadeIn">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FAF0ED] border border-[#FCE8E6] flex items-center justify-center text-[#D94A38] shadow-3xs">
+                    <MapPin className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-[#1C1917]">No Delivery Address Added</h4>
+                    <p className="text-xs text-[#8E8B85] max-w-sm mt-0.5">
+                      Please add your delivery address to compute real-time distance from {displayKhauGalliName} and display live delivery charges.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddressModalOpen(true)}
+                    className="py-2.5 px-5 bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-extrabold rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer border-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Delivery Address</span>
+                  </button>
+                </div>
               ) : (
                 <div className="flex gap-4 items-start bg-[#FAF7F2]/60 border border-[#EAE4DA]/70 rounded-2xl p-4 animate-fadeIn">
                   <div className="w-11 h-11 rounded-2xl bg-[#FAF0ED] border border-[#FCE8E6] flex items-center justify-center text-[#D94A38] shrink-0 shadow-3xs">
-                    <MapPin className="w-5 h-5" />
+                    {selectedAddress.label === 'Home' && <Home className="w-5 h-5" />}
+                    {selectedAddress.label === 'Office' && <Briefcase className="w-5 h-5" />}
+                    {selectedAddress.label !== 'Home' && selectedAddress.label !== 'Office' && <MapPin className="w-5 h-5" />}
                   </div>
-                  <div className="space-y-1 flex-1">
+                  <div className="space-y-1.5 flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-[#1C1917]">{selectedAddress.title}</h4>
-                      {selectedAddress.isPrimary && (
+                      <h4 className="text-sm font-bold text-[#1C1917]">{selectedAddress.label}</h4>
+                      {selectedAddress.is_primary && (
                         <span className="bg-[#FAF0ED] text-[#D94A38] text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 border border-[#FCE8E6]">
                           <CheckCircle2 className="w-2.5 h-2.5" /> Primary
                         </span>
                       )}
+                      {(recipientName || recipientPhone) && (
+                        <span className="text-[10px] text-[#5C5954] font-medium bg-white px-2 py-0.5 rounded-md border border-[#EAE4DA] flex items-center gap-1">
+                          <UserCheck className="w-2.5 h-2.5 text-[#2E7D32]" />
+                          <span>{recipientName}{recipientPhone ? ` · ${recipientPhone}` : ''}</span>
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[#8E8B85] leading-relaxed">{selectedAddress.detail}</p>
-                    <div className="flex gap-2 pt-1.5">
+                    {selectedAddress.landmark && (
+                      <p className="text-[11px] text-[#5C5954] flex items-center gap-1">
+                        <span className="text-[#8E8B85]">Landmark:</span>
+                        <span className="font-semibold">{selectedAddress.landmark}</span>
+                      </p>
+                    )}
+                    <div className="flex gap-2 pt-1">
                       <span className="bg-white border border-[#EAE4DA] text-[#4B5563] text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1">
                         <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
-                        {selectedAddress.distance}
+                        {currentDistanceKm} km from {displayKhauGalliName}
                       </span>
                       <span className="bg-[#E6F4EA] border border-[#A7E1BA] text-[#137333] text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
-                        ETA {selectedAddress.eta}
+                        ETA {currentETA}
                       </span>
                     </div>
                   </div>
@@ -531,17 +727,30 @@ export const Checkout: React.FC<CheckoutProps> = ({
               {/* Bill Details */}
               <div className="space-y-2 text-xs text-[#5C5954] pt-3 border-t border-[#F5F0E8] mb-4">
                 <div className="flex justify-between">
-                  <span>Item Total ({uniqueVendorsCount} stalls)</span>
+                  <span>Item Total ({uniqueVendorsCount} {uniqueVendorsCount === 1 ? 'stall' : 'stalls'})</span>
                   <span className="font-semibold text-[#1C1917]">₹{itemSubtotal}</span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center min-h-[24px]">
                   <div className="flex items-center gap-1">
                     <span>Delivery Fee</span>
-                    <span className="text-[9px] font-extrabold text-[#2E7D32] bg-[#E6F4EA] px-1.5 py-0.2 rounded border border-[#A7E1BA]">
-                      Consolidated
-                    </span>
+                    {selectedAddress && (
+                      <span className="text-[9px] font-extrabold text-[#2E7D32] bg-[#E6F4EA] px-1.5 py-0.2 rounded border border-[#A7E1BA]">
+                        Consolidated
+                      </span>
+                    )}
                   </div>
-                  <span className="font-semibold text-[#1C1917]">₹{deliveryFee}</span>
+                  {isCalculatingFee ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#D94A38] font-bold">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Calculating...</span>
+                    </div>
+                  ) : !selectedAddress ? (
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 animate-pulse">
+                      Select an address first
+                    </span>
+                  ) : (
+                    <span className="font-bold text-[#1C1917]">₹{deliveryFee}</span>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <span>Taxes (5% GST)</span>
@@ -553,15 +762,42 @@ export const Checkout: React.FC<CheckoutProps> = ({
               <div className="pt-3 border-t border-[#F5F0E8] space-y-4">
                 <div className="flex justify-between items-baseline font-bold text-[#1C1917]">
                   <span className="text-xs uppercase tracking-wider text-[#8E8B85]">To Pay</span>
-                  <span className="text-2xl font-black text-[#D94A38]">₹{totalPayable}</span>
+                  {isCalculatingFee ? (
+                    <div className="flex items-center gap-1.5 text-lg font-black text-[#D94A38]">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>₹{totalPayable}...</span>
+                    </div>
+                  ) : !selectedAddress ? (
+                    <div className="text-right">
+                      <span className="text-xl font-black text-[#D94A38]">₹{totalPayable}</span>
+                      <span className="text-[10px] font-semibold text-[#8E8B85] block">+ delivery fee</span>
+                    </div>
+                  ) : (
+                    <span className="text-2xl font-black text-[#D94A38]">₹{totalPayable}</span>
+                  )}
                 </div>
 
                 <button
                   onClick={handlePay}
-                  className="w-full bg-gradient-to-r from-[#D94A38] to-[#C43D2E] hover:from-[#C43D2E] hover:to-[#B33527] text-white font-extrabold text-sm py-4 rounded-2xl flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer border-0 active:scale-[0.99]"
+                  disabled={isCalculatingFee}
+                  className="w-full bg-gradient-to-r from-[#D94A38] to-[#C43D2E] hover:from-[#C43D2E] hover:to-[#B33527] text-white font-extrabold text-sm py-4 rounded-2xl flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer border-0 active:scale-[0.99] disabled:opacity-75"
                 >
-                  <Lock className="w-4 h-4" />
-                  <span>Pay ₹{totalPayable} via {paymentMethod.toUpperCase()}</span>
+                  {isCalculatingFee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Computing delivery fee...</span>
+                    </>
+                  ) : !selectedAddress ? (
+                    <>
+                      <MapPin className="w-4 h-4" />
+                      <span>Select Delivery Address to Pay</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Pay ₹{totalPayable} via {paymentMethod.toUpperCase()}</span>
+                    </>
+                  )}
                 </button>
 
                 <div className="flex items-center justify-center gap-2 text-[10px] text-[#8E8B85] font-semibold text-center pt-1">
@@ -605,7 +841,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
               Almost there!
             </h1>
             <p className="text-xs text-[#8E8B85] font-semibold mt-0.5">
-              {totalItemsCount} items · {uniqueVendorsCount} stalls · ETA {selectedAddress.eta}
+              {totalItemsCount} items · {uniqueVendorsCount} stalls · ETA {currentETA}
             </p>
           </div>
 
@@ -627,21 +863,61 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
             {isChangingAddress ? (
               renderAddressSelection()
+            ) : !selectedAddress ? (
+              <div className="flex flex-col items-center justify-center p-5 bg-[#FAF7F2]/80 border border-dashed border-[#DCD6CC] rounded-xl text-center space-y-2.5 animate-fadeIn">
+                <MapPin className="w-6 h-6 text-[#D94A38]" />
+                <div>
+                  <h4 className="text-xs font-bold text-[#1C1917]">No Delivery Address</h4>
+                  <p className="text-[10px] text-[#8E8B85]">Add address to compute route & live delivery fee</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(true)}
+                  className="py-2 px-4 bg-[#D94A38] text-white text-[11px] font-bold rounded-lg flex items-center gap-1.5 cursor-pointer border-0 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Delivery Address</span>
+                </button>
+              </div>
             ) : (
               <div className="flex gap-3 items-start animate-fadeIn">
                 <div className="w-9 h-9 rounded-xl bg-[#FAF0ED] border border-[#FCE8E6] flex items-center justify-center text-[#D94A38] shrink-0">
-                  <MapPin className="w-4 h-4" />
+                  {selectedAddress.label === 'Home' && <Home className="w-4 h-4" />}
+                  {selectedAddress.label === 'Office' && <Briefcase className="w-4 h-4" />}
+                  {selectedAddress.label !== 'Home' && selectedAddress.label !== 'Office' && <MapPin className="w-4 h-4" />}
                 </div>
-                <div className="flex-1 space-y-0.5">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <h4 className="text-xs font-bold text-[#1C1917]">{selectedAddress.title}</h4>
-                    {selectedAddress.isPrimary && (
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="text-xs font-bold text-[#1C1917]">{selectedAddress.label}</h4>
+                    {selectedAddress.is_primary && (
                       <span className="bg-[#FAF0ED] text-[#D94A38] text-[8px] font-black uppercase px-1.5 py-0.2 rounded-sm border border-[#FCE8E6]">
                         Primary
                       </span>
                     )}
+                    {(recipientName || recipientPhone) && (
+                      <span className="text-[9px] text-[#5C5954] font-medium bg-[#FAF7F2] px-1.5 py-0.2 rounded border border-[#EAE4DA] flex items-center gap-1">
+                        <UserCheck className="w-2.5 h-2.5 text-[#2E7D32]" />
+                        <span>{recipientName}</span>
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-[#8E8B85] leading-normal">{selectedAddress.detail}</p>
+                  {selectedAddress.landmark && (
+                    <p className="text-[10px] text-[#5C5954] flex items-center gap-1">
+                      <span className="text-[#8E8B85]">Landmark:</span>
+                      <span className="font-semibold">{selectedAddress.landmark}</span>
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="bg-[#FAF7F2] text-[#4B5563] text-[9px] font-bold px-2 py-0.5 rounded border border-[#EAE4DA] flex items-center gap-1">
+                      <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
+                      {currentDistanceKm} km
+                    </span>
+                    <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-bold px-2 py-0.5 rounded border border-[#A7E1BA] flex items-center gap-1">
+                      <Clock className="w-2.5 h-2.5" />
+                      ETA {currentETA}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -697,12 +973,23 @@ export const Checkout: React.FC<CheckoutProps> = ({
               Bill Summary
             </h3>
             <div className="flex justify-between text-[#8E8B85]">
-              <span>Item Total ({uniqueVendorsCount} stalls)</span>
+              <span>Item Total ({uniqueVendorsCount} {uniqueVendorsCount === 1 ? 'stall' : 'stalls'})</span>
               <span className="font-semibold text-[#1C1917]">₹{itemSubtotal}</span>
             </div>
-            <div className="flex justify-between text-[#8E8B85]">
+            <div className="flex justify-between items-center text-[#8E8B85] min-h-[22px]">
               <span>Delivery Fee</span>
-              <span className="font-semibold text-[#1C1917]">₹{deliveryFee}</span>
+              {isCalculatingFee ? (
+                <div className="flex items-center gap-1.5 text-[11px] text-[#D94A38] font-bold">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Calculating...</span>
+                </div>
+              ) : !selectedAddress ? (
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 animate-pulse">
+                  Select an address first
+                </span>
+              ) : (
+                <span className="font-bold text-[#1C1917]">₹{deliveryFee}</span>
+              )}
             </div>
             <div className="flex justify-between text-[#8E8B85]">
               <span>Taxes (5% GST)</span>
@@ -710,7 +997,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
             </div>
             <div className="flex justify-between pt-2 border-t border-[#F5F0E8] text-[#1C1917] font-bold">
               <span>Total Payable</span>
-              <span className="text-sm font-black text-[#D94A38]">₹{totalPayable}</span>
+              {isCalculatingFee ? (
+                <div className="flex items-center gap-1 text-sm font-black text-[#D94A38]">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>₹{totalPayable}...</span>
+                </div>
+              ) : !selectedAddress ? (
+                <span className="text-sm font-black text-[#D94A38]">
+                  ₹{totalPayable} <span className="text-[9px] font-normal text-[#8E8B85]">+ delivery fee</span>
+                </span>
+              ) : (
+                <span className="text-sm font-black text-[#D94A38]">₹{totalPayable}</span>
+              )}
             </div>
           </div>
 
@@ -790,13 +1088,37 @@ export const Checkout: React.FC<CheckoutProps> = ({
           </div>
           <button
             onClick={handlePay}
-            className="flex-1 py-3.5 bg-gradient-to-r from-[#D94A38] to-[#C43D2E] text-white text-xs font-black rounded-2xl flex items-center justify-center gap-1.5 shadow-sm border-0 cursor-pointer"
+            disabled={isCalculatingFee}
+            className="flex-1 py-3.5 bg-gradient-to-r from-[#D94A38] to-[#C43D2E] text-white text-xs font-black rounded-2xl flex items-center justify-center gap-1.5 shadow-sm border-0 cursor-pointer disabled:opacity-75"
           >
-            <Lock className="w-3.5 h-3.5" />
-            <span>Pay via {paymentMethod === 'upi' ? 'UPI' : 'Cash'}</span>
+            {isCalculatingFee ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Calculating...</span>
+              </>
+            ) : !selectedAddress ? (
+              <>
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Select Address to Pay</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Pay via {paymentMethod === 'upi' ? 'UPI' : 'Cash'}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {/* Add Address Modal */}
+      <AddressModal
+        isOpen={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        onAddressCreated={handleAddressCreated}
+        userName={user?.name}
+        userPhone={user?.phone_number}
+      />
     </div>
   );
 };

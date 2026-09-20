@@ -40,7 +40,9 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
     let isMounted = true;
 
     const fetchStall = async () => {
-      setIsLoading(true);
+      if (!currentStall) {
+        setIsLoading(true);
+      }
       try {
         const res = await clusterService.getClusters();
         if (!isMounted) return;
@@ -148,7 +150,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
     return item ? item.quantity : 0;
   };
 
-  if (isLoading) {
+  if (isLoading && !currentStall) {
     return <StallDetailSkeleton />;
   }
 
@@ -296,15 +298,15 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                       key={category}
                       onClick={() => setActiveCategory(category)}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${isActive
-                          ? 'bg-[#1C1917] text-white shadow-xs'
-                          : 'text-[#5C5954] hover:text-[#1C1917] hover:bg-[#FAF7F2]'
+                        ? 'bg-[#1C1917] text-white shadow-xs'
+                        : 'text-[#5C5954] hover:text-[#1C1917] hover:bg-[#FAF7F2]'
                         }`}
                     >
                       <span className="truncate pr-2">{category}</span>
                       <span
                         className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${isActive
-                            ? 'bg-stone-800 text-stone-300'
-                            : 'bg-stone-100 text-[#8E8B85]'
+                          ? 'bg-stone-800 text-stone-300'
+                          : 'bg-stone-100 text-[#8E8B85]'
                           }`}
                       >
                         {formattedCount}
@@ -386,10 +388,6 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                               {!dish.is_available ? (
                                 <div className="absolute top-2.5 right-2.5 bg-stone-900/90 backdrop-blur-xs text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-xs tracking-wider">
                                   Not Available
-                                </div>
-                              ) : isBestseller ? (
-                                <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[#D94A38] text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-xs border border-red-100 tracking-wider">
-                                  BESTSELLER
                                 </div>
                               ) : null}
                             </div>
@@ -612,8 +610,8 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                       key={idx}
                       onClick={() => setActiveCategory(cat)}
                       className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${isActive
-                          ? 'bg-[#1C1917] text-white shadow-xs'
-                          : 'bg-white text-stone-700 border border-[#EAE4DA]'
+                        ? 'bg-[#1C1917] text-white shadow-xs'
+                        : 'bg-white text-stone-700 border border-[#EAE4DA]'
                         }`}
                     >
                       <span>{cat}</span>
@@ -652,10 +650,6 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                           {!dish.is_available ? (
                             <div className="absolute top-2 right-2 bg-stone-900/90 backdrop-blur-xs text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-md">
                               Not Available
-                            </div>
-                          ) : isBestseller ? (
-                            <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs text-[#D94A38] text-[8px] font-black uppercase px-2 py-0.5 rounded-md border border-red-100">
-                              BESTSELLER
                             </div>
                           ) : null}
                         </div>

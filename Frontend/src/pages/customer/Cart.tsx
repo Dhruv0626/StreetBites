@@ -1,27 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
-  Check,
   Plus,
   Minus,
   ChevronRight,
   Info,
-  ShoppingBag
+  ShoppingBag,
+  Store
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useCart } from '../../context/CartContext';
+import { clusterService } from '../../services/clusterService';
 import type { CartItem } from '../../types';
-
-const VENDOR_META: Record<string, { label: string; prepTime: string; since: string }> = {
-  v_s1_bhavesh: { label: 'S1', prepTime: '~12 min', since: '1962' },
-  v_s2_sandwich: { label: 'S2', prepTime: '~10 min', since: '2012' },
-  v_s3_asharfi: { label: 'S3', prepTime: '~4 min', since: '1954' },
-  v_s4_bhajipav: { label: 'S4', prepTime: '~9 min', since: '1981' }
-};
 
 export const Cart: React.FC = () => {
   const navigate = useNavigate();
   const { cartItems, addToCart, removeFromCart, activeKhauGalli } = useCart();
+  const [stallImages, setStallImages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+    clusterService.getClusters().then((res) => {
+      if (isMounted && res.success && res.data) {
+        const map: Record<string, string> = {};
+        res.data.forEach((cluster) => {
+          (cluster.stalls || []).forEach((stall: any) => {
+            const sid = String(stall.id || stall._id || '');
+            if (stall.image_url) {
+              if (sid) map[sid] = stall.image_url;
+              if (stall.name) {
+                map[stall.name.toLowerCase().trim()] = stall.image_url;
+              }
+            }
+          });
+        });
+        setStallImages(map);
+      }
+    }).catch(console.error);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const currentKhauGalliName = activeKhauGalli?.name || cartItems[0]?.khauGalliName || 'Khau Galli';
   const totalItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const totalCartPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -39,9 +60,8 @@ export const Cart: React.FC = () => {
   }, {});
 
   const vendorIds = Object.keys(vendorGroups);
-  const deliveryFee = cartItems.length > 0 ? (25 + (vendorIds.length > 1 ? (vendorIds.length - 1) * 5 : 0)) : 0;
   const gstAmount = Math.round(totalCartPrice * 0.05 * 10) / 10;
-  const toPayTotal = Math.round((totalCartPrice + deliveryFee + gstAmount) * 10) / 10;
+  const toPayTotal = Math.round((totalCartPrice + gstAmount) * 10) / 10;
 
   // Calculate savings vs. normal aggregators: (number of vendors - 1) * 45
   const aggregatorSavings = vendorIds.length > 1 ? (vendorIds.length - 1) * 45 : 0;
@@ -89,45 +109,37 @@ export const Cart: React.FC = () => {
                 Your cart, <span className="text-[#D94A38] font-semibold">forked cleanly.</span>
               </h1>
 
-              {/* Alert: Khau Galli Locked */}
-              <div className="bg-[#E6F4EA] border border-[#A7E1BA] rounded-2xl p-4 flex gap-3.5 shadow-3xs">
-                <div className="w-6 h-6 rounded-full bg-[#137333] text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#137333] mb-1">
-                    Khau Galli locked — {currentKhauGalliName}
-                  </h4>
-                  <p className="text-[11px] text-[#2E7D32] leading-relaxed">
-                    All stalls share this Khau Galli's geofence ({currentKhauGalliName}). The <strong>Order-Forking Engine</strong> will split checkout into {vendorIds.length} vendor suborders, then route one rider through every pickup.
-                  </p>
-                </div>
-              </div>
-
               {/* List of Suborders */}
               <div className="space-y-6">
                 {vendorIds.map((vendorId, groupIdx) => {
                   const group = vendorGroups[vendorId];
-                  const meta = VENDOR_META[vendorId] || { label: `S${groupIdx + 1}`, prepTime: '~10 min', since: '1990' };
+                  const stallImageUrl = stallImages[vendorId] || stallImages[group.vendorName.toLowerCase().trim()] || group.items.find(it => it.stallImage)?.stallImage || '';
                   const subTotal = group.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
                   return (
                     <div key={vendorId} className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-3xs space-y-4">
                       {/* Vendor Header */}
-                      <div className="flex justify-between items-center pb-4 border-b border-[#F5F0E8]">
+                      <div className="flex justify-between items-center p-3 border-b border-[#FAF7F2] bg-[#faf7f2]">
                         <div className="flex items-center gap-3">
-                          <span className="bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] text-[10px] font-bold px-2.5 py-1 rounded-lg">
-                            {meta.label}
-                          </span>
+                          {stallImageUrl ? (
+                            <img
+                              src={stallImageUrl}
+                              alt={group.vendorName}
+                              className="w-10 h-10 rounded-2xl object-cover border border-[#EAE4DA] shadow-3xs shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-2xl bg-[#FAF7F2] border border-[#EAE4DA] flex items-center justify-center shrink-0 shadow-3xs text-[#D94A38]">
+                              <Store className="w-6 h-6" />
+                            </div>
+                          )}
                           <div>
                             <h3 className="font-bold text-sm text-[#1C1917]">{group.vendorName}</h3>
-                            <p className="text-[10px] text-[#8E8B85] mt-0.5">· {meta.prepTime}</p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] font-bold text-[#8E8B85] uppercase tracking-wider bg-[#FAF7F2] border border-[#EAE4DA] px-2.5 py-1 rounded-md select-none">
-                            SUB-ORDER · 0{groupIdx + 1}
+                            SUB-ORDER · {groupIdx + 1}
                           </span>
                         </div>
                       </div>
@@ -207,20 +219,22 @@ export const Cart: React.FC = () => {
                 </h3>
                 <div className="space-y-2 text-xs text-[#5C5954]">
                   <div className="flex justify-between">
-                    <span>Item subtotal ({vendorIds.length} stalls)</span>
+                    <span>Item subtotal ({vendorIds.length} {vendorIds.length === 1 ? 'stall' : 'stalls'})</span>
                     <span className="font-semibold text-[#1C1917]">₹{totalCartPrice}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Delivery fee</span>
-                    <span className="font-semibold text-[#1C1917]">₹{deliveryFee}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Taxes (5% GST)</span>
                     <span className="font-semibold text-[#1C1917]">₹{gstAmount}</span>
                   </div>
+                  <div className="flex justify-between items-center text-[11px] pt-1">
+                    <span className="text-[#8E8B85]">Delivery fee</span>
+                    <span className="text-[#D94A38] font-bold bg-[#FAF0ED] px-2 py-0.5 rounded-md border border-[#FCE8E6]">
+                      Calculated at checkout
+                    </span>
+                  </div>
 
                   <div className="flex justify-between pt-3 border-t border-[#F5F0E8] text-[#1C1917] font-bold text-sm">
-                    <span>To pay</span>
+                    <span>Total (excl. delivery)</span>
                     <span className="text-lg">₹{toPayTotal}</span>
                   </div>
                 </div>
@@ -321,39 +335,35 @@ export const Cart: React.FC = () => {
               </p>
             </div>
 
-            {/* Khau Galli Locked Alert */}
-            <div className="bg-[#E6F4EA] border border-[#A7E1BA] rounded-xl p-3 flex gap-2.5">
-              <div className="w-4 h-4 rounded-full bg-[#137333] text-white flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-2.5 h-2.5 stroke-[3]" />
-              </div>
-              <p className="text-[10px] text-[#2E7D32] leading-snug">
-                <strong>Khau Galli locked — {currentKhauGalliName}</strong><br />
-                All stalls in your cart share <code className="bg-[#D0ECD7] font-semibold px-0.5 rounded">Khau Galli: {currentKhauGalliName}</code>. You'll pay one delivery fee for all stall pickups.
-              </p>
-            </div>
-
             {/* List of Suborders */}
             <div className="space-y-4">
               {vendorIds.map((vendorId, groupIdx) => {
                 const group = vendorGroups[vendorId];
-                const meta = VENDOR_META[vendorId] || { label: `S${groupIdx + 1}`, prepTime: '~10 min', since: '1990' };
+                const stallImageUrl = stallImages[vendorId] || stallImages[group.vendorName.toLowerCase().trim()] || group.items.find(it => it.stallImage)?.stallImage || '';
                 const subTotal = group.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
                 return (
                   <div key={vendorId} className="bg-white border border-[#EAE4DA] rounded-2xl p-4 shadow-3xs space-y-3.5">
                     {/* Header */}
-                    <div className="flex justify-between items-center pb-3 border-b border-[#FAF7F2]">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] text-[9px] font-bold px-2 py-0.5 rounded">
-                          {meta.label}
-                        </span>
+                    <div className="flex justify-between items-center p-2 border-b border-[#FAF7F2] bg-[#faf7f2]">
+                      <div className="flex items-center gap-2.5">
+                        {stallImageUrl ? (
+                          <img
+                            src={stallImageUrl}
+                            alt={group.vendorName}
+                            className="w-10 h-10 rounded-xl object-cover border border-[#EAE4DA] shadow-3xs shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-[#FAF7F2] border border-[#EAE4DA] flex items-center justify-center shrink-0 shadow-3xs text-[#D94A38]">
+                            <Store className="w-5 h-5" />
+                          </div>
+                        )}
                         <div>
                           <h4 className="font-bold text-xs text-[#1C1917]">{group.vendorName}</h4>
-                          <p className="text-[9px] text-[#8E8B85] mt-0.5">· {meta.prepTime}</p>
                         </div>
                       </div>
 
-                      <span className="text-[8px] font-bold text-[#8E8B85] uppercase tracking-wide bg-[#FAF7F2] px-2 py-0.5 rounded">
+                      <span className="text-[8px] font-bold text-[#8E8B85] uppercase tracking-wide bg-[#FAF7F2] px-2 py-0.5 rounded border border-[#EAE4DA]">
                         Sub-order {groupIdx + 1}
                       </span>
                     </div>
@@ -403,7 +413,9 @@ export const Cart: React.FC = () => {
 
                     {/* Footer subtotal */}
                     <div className="pt-3 border-t border-[#FAF7F2] flex justify-between items-center text-[10px]">
-                      <span className="text-[#8E8B85]">Sub-total → forks to vendor {meta.label}</span>
+                      <span className="text-[#8E8B85]">
+                        Sub-total → forks to <strong className="text-[#1C1917] font-semibold">{group.vendorName}</strong>
+                      </span>
                       <span className="font-bold text-[#D94A38]">₹{subTotal}</span>
                     </div>
                   </div>
@@ -414,16 +426,22 @@ export const Cart: React.FC = () => {
             {/* Calculations List (Mobile) */}
             <div className="bg-white border border-[#EAE4DA] rounded-2xl p-4 text-xs space-y-2">
               <div className="flex justify-between text-[#8E8B85]">
-                <span>Item Subtotal ({vendorIds.length} stalls)</span>
+                <span>Item Subtotal ({vendorIds.length} {vendorIds.length === 1 ? 'stall' : 'stalls'})</span>
                 <span className="font-semibold text-[#1C1917]">₹{totalCartPrice}</span>
-              </div>
-              <div className="flex justify-between text-[#8E8B85]">
-                <span>Delivery Fee</span>
-                <span className="font-semibold text-[#1C1917]">₹{deliveryFee}</span>
               </div>
               <div className="flex justify-between text-[#8E8B85]">
                 <span>Taxes (5% GST)</span>
                 <span className="font-semibold text-[#1C1917]">₹{gstAmount}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px] pt-1">
+                <span className="text-[#8E8B85]">Delivery Fee</span>
+                <span className="text-[#D94A38] font-bold bg-[#FAF0ED] px-2 py-0.5 rounded-md border border-[#FCE8E6]">
+                  Calculated at checkout
+                </span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-[#FAF7F2] text-[#1C1917] font-bold text-sm">
+                <span>Total (excl. delivery)</span>
+                <span className="text-base">₹{toPayTotal}</span>
               </div>
 
               {aggregatorSavings > 0 && (

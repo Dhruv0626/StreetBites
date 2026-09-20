@@ -84,7 +84,10 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
   useEffect(() => {
     let isMounted = true;
     const fetchClustersAndStalls = async () => {
-      setIsLoading(true);
+      // Only show full loading on initial mount when no data is cached
+      if (clusters.length === 0) {
+        setIsLoading(true);
+      }
       try {
         const res = await clusterService.getClusters();
         if (!isMounted) return;
@@ -203,12 +206,8 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center">
-        <div className="text-stone-500 font-medium text-sm animate-pulse">Loading stalls...</div>
-      </div>
-    );
+  if (isLoading && stallsList.length === 0) {
+    return <StallDetailSkeleton />;
   }
 
   return (

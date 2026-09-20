@@ -6,6 +6,7 @@ import { PageTransitionLoader } from '../PageTransitionLoader';
 import CustomerFooter from './CustomerFooter';
 import { useCart } from '../../context/CartContext';
 import { RequirePhoneModal } from '../auth/RequirePhoneModal';
+import { CustomerLocationBanner } from '../common/CustomerLocationBanner';
 
 export const CustomerLayout: React.FC = () => {
   const location = useLocation();
@@ -40,6 +41,9 @@ export const CustomerLayout: React.FC = () => {
 
       {/* Persistent Global Top Navigation */}
       <CustomerHeader />
+
+      {/* Soft Location Permission Prompt */}
+      <CustomerLocationBanner />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0">

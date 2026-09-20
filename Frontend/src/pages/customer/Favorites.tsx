@@ -101,15 +101,23 @@ export const Favorites: React.FC = () => {
                   ) : (
                     <Store className="w-10 h-10 text-stone-400" />
                   )}
-                  {stall.is_accepting_orders && (
-                    <>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"></div>
-                      <div className="absolute bottom-3 left-3 text-white font-extrabold text-xs tracking-wider uppercase bg-emerald-600/90 backdrop-blur-xs px-2.5 py-1 rounded-md flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent pointer-events-none"></div>
+                  <div className="absolute bottom-3 left-3 flex items-center">
+                    {stall.is_accepting_orders ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wider uppercase bg-emerald-600/90 text-white border border-emerald-400/40 backdrop-blur-md shadow-sm">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                        </span>
                         Open Now
-                      </div>
-                    </>
-                  )}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase bg-[#1C1917]/85 text-stone-300 border border-white/15 backdrop-blur-md shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                        Closed
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="p-4">
                   <div className="flex justify-between items-start mb-1">

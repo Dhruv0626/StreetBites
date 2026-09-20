@@ -14,7 +14,6 @@ import {
 import type { CartItem } from '../../types';
 import { OrdersSkeleton } from '../../components';
 import buttonLoader from '../../assets/Loader/button_loading.gif';
-import TomTomMap from '../../components/map/TomTomMap';
 
 
 interface OrdersProps {
@@ -33,7 +32,6 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   const [s4Status, setS4Status] = useState<'preparing' | 'ready' | 'collected'>('preparing');
   const [s1Status, setS1Status] = useState<'ready' | 'collected'>('ready');
   const [s3Status, setS3Status] = useState<'ready' | 'collected'>('ready');
-  const [riderPosition, setRiderPosition] = useState<{ x: number; y: number }>({ x: 50, y: 30 }); // S1 coordinates
   const [riderStatusText, setRiderStatusText] = useState<string>('Kitchens are cooking, rider is on the way.');
   const [etaMinutes, setEtaMinutes] = useState<number>(18);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -44,7 +42,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
     window.scrollTo(0, 0);
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 3500);
+    }, 300);
     return () => clearTimeout(timer);
   }, []);
 
@@ -65,7 +63,6 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       setS4Status('ready');
       setS1Status('collected');
       setS3Status('collected');
-      setRiderPosition({ x: 70, y: 40 });
       setEtaMinutes(14);
     }, 7000);
 
@@ -73,19 +70,16 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       setS4Status('collected');
       setActiveStep(4);
       setRiderStatusText('Rider has collected all sub-orders. Heading your way.');
-      setRiderPosition({ x: 40, y: 65 });
       setEtaMinutes(10);
     }, 14000);
 
     const t3 = setTimeout(() => {
       setActiveStep(5);
-      setRiderPosition({ x: 25, y: 75 });
       setEtaMinutes(5);
     }, 21000);
 
     const t4 = setTimeout(() => {
       setActiveStep(6);
-      setRiderPosition({ x: 20, y: 80 });
       setEtaMinutes(0);
       setRiderStatusText('Your food from StreetBites has been delivered. Enjoy!');
     }, 28000);
@@ -366,19 +360,49 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 </div>
               </div>
 
-              {/* Right Column: Simulated map panel & Rider info */}
+              {/* Right Column: Live Status Tracking & Rider info */}
               <div className="col-span-4 space-y-6">
-                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-4 shadow-2xs space-y-3">
-                  <div className="flex justify-between items-baseline px-1">
-                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917]">Live Delivery Map</h3>
-                    <span className="text-[9px] text-[#8E8B85] font-bold">TomTom Maps SDK</span>
+                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-2xs space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8E8B85]">Order Tracking</span>
+                    <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 select-none">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
+                      LIVE
+                    </span>
                   </div>
-                  <div className="h-64 rounded-2xl overflow-hidden relative">
-                    <TomTomMap
-                      center={[72.5714, 23.0225]}
-                      zoom={13}
-                      className="w-full h-full rounded-2xl overflow-hidden relative"
-                    />
+
+                  <div>
+                    <h3 className="text-xl font-bold text-[#1C1917]">
+                      {activeStep === 6 ? 'Delivered!' : `Arriving in ~${etaMinutes} mins`}
+                    </h3>
+                    <p className="text-xs text-[#8E8B85] mt-1 leading-relaxed">
+                      {riderStatusText}
+                    </p>
+                  </div>
+
+                  {/* Step Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold text-[#8E8B85]">
+                      <span>Stage {activeStep} of 6</span>
+                      <span>{Math.round((activeStep / 6) * 100)}% Complete</span>
+                    </div>
+                    <div className="w-full bg-[#FAF7F2] border border-[#EAE4DA] h-2 rounded-full overflow-hidden p-0.5">
+                      <div
+                        className="bg-[#D94A38] h-full rounded-full transition-all duration-700 ease-out"
+                        style={{ width: `${(activeStep / 6) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Multi-stall sync summary */}
+                  <div className="p-3 bg-[#FAF7F2] rounded-2xl border border-[#EAE4DA] space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#D94A38]" />
+                      <span className="text-xs font-bold text-[#1C1917]">Synchronized Hub Pickup</span>
+                    </div>
+                    <p className="text-[10px] text-[#8E8B85] leading-normal pl-4">
+                      Single rider combining orders across 3 stalls in Manek Chowk Khau Galli into one seamless delivery.
+                    </p>
                   </div>
                 </div>
 
