@@ -30,7 +30,27 @@ export interface UpdateAddressPayload {
 // In-Memory Cache for customer addresses
 let cachedAddresses: AddressItem[] | null = null;
 let lastAddressFetchTime = 0;
-const ADDRESS_CACHE_TTL = 60 * 1000; // 60 seconds
+const addressListeners = new Set<(data: AddressItem[]) => void>();
+
+function notifyAddressListeners(data: AddressItem[]) {
+  addressListeners.forEach((listener) => {
+    try {
+      listener(data);
+    } catch (err) {
+      console.warn("Error in address listener:", err);
+    }
+  });
+}
+
+export function subscribeAddresses(listener: (data: AddressItem[]) => void): () => void {
+  addressListeners.add(listener);
+  if (cachedAddresses) {
+    listener(cachedAddresses);
+  }
+  return () => {
+    addressListeners.delete(listener);
+  };
+}
 
 export function clearAddressCache(): void {
   cachedAddresses = null;
@@ -38,29 +58,40 @@ export function clearAddressCache(): void {
 }
 
 /**
- * Fetch all addresses saved for the current customer
+ * Fetch all addresses saved for the current customer with SWR support
  */
 export async function getCustomerAddresses(forceRefresh = false): Promise<AddressItem[]> {
   const now = Date.now();
-  if (!forceRefresh && cachedAddresses && now - lastAddressFetchTime < ADDRESS_CACHE_TTL) {
+
+  // Background silent fetch
+  const fetchFresh = async () => {
+    try {
+      const res = await apiRequest<AddressItem[]>("/addresses", {
+        method: "GET",
+        requiresAuth: false,
+      });
+      if (res.success && Array.isArray(res.data)) {
+        cachedAddresses = res.data;
+        lastAddressFetchTime = Date.now();
+        notifyAddressListeners(res.data);
+        return res.data;
+      }
+      return [];
+    } catch (err) {
+      console.error("Failed to fetch customer addresses:", err);
+      return cachedAddresses || [];
+    }
+  };
+
+  if (!forceRefresh && cachedAddresses) {
+    // If older than 5s, trigger silent background revalidation
+    if (now - lastAddressFetchTime > 5000) {
+      fetchFresh();
+    }
     return cachedAddresses;
   }
 
-  try {
-    const res = await apiRequest<AddressItem[]>("/addresses", {
-      method: "GET",
-      requiresAuth: false,
-    });
-    if (res.success && Array.isArray(res.data)) {
-      cachedAddresses = res.data;
-      lastAddressFetchTime = now;
-      return res.data;
-    }
-    return [];
-  } catch (err) {
-    console.error("Failed to fetch customer addresses:", err);
-    return [];
-  }
+  return fetchFresh();
 }
 
 /**

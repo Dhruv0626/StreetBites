@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, LayoutGrid, Map as MapIcon, Sparkles, Search, X, Store } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Map as MapIcon, Sparkles, Search, X, Store, RotateCcw, Compass, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ClusterCard, ClusterCardSkeleton } from '../../components';
 import { TomTomMap } from '../../components/map/TomTomMap';
 import { clusterService, type ClusterData } from '../../services/clusterService';
 import type { ClusterItem } from '../../types';
+import type { MapMarker, LngLatTuple } from '../../types/map';
 
 export const AllClusters: React.FC = () => {
   const navigate = useNavigate();
@@ -14,12 +15,34 @@ export const AllClusters: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Map state for dynamic Level of Detail (LOD)
+  const [mapCenter, setMapCenter] = useState<LngLatTuple>([72.5650, 23.0300]);
+  const [mapZoom, setMapZoom] = useState<number>(12);
+  const [currentZoom, setCurrentZoom] = useState<number>(12);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+
   const handleBack = () => {
     if (window.history.length > 1 && window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else {
       navigate('/home');
     }
+  };
+
+  const handleResetMap = () => {
+    setMapCenter([72.5650, 23.0300]);
+    setMapZoom(12);
+    setCurrentZoom(12);
+    setSelectedClusterId(null);
+  };
+
+  const handleFocusCluster = (c: ClusterData) => {
+    const cLng = c.coordinates?.coordinates?.[0] ?? 72.5714;
+    const cLat = c.coordinates?.coordinates?.[1] ?? 23.0225;
+    setMapCenter([cLng, cLat]);
+    setMapZoom(16.5);
+    setCurrentZoom(16.5);
+    setSelectedClusterId(c.id);
   };
 
   useEffect(() => {
@@ -97,6 +120,102 @@ export const AllClusters: React.FC = () => {
     return { filteredClusters: filtered, matchingStalls: matchedStallsList };
   }, [clusters, rawClusters, searchQuery]);
 
+  // Fallback signature stalls for clusters that don't have registered stalls in DB yet
+  const DEFAULT_CORRIDOR_STALLS = [
+    {
+      name: "Midnight Magic Pav Bhaji & Dosa",
+      category: "Fast Food & Dosa",
+      description: "Butter-loaded Pav Bhaji and crispy cheese dosas",
+      imageUrl: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=400&auto=format&fit=crop&q=80",
+    },
+    {
+      name: "Mahalaxmi Gwalior Dosa Center",
+      category: "South Indian Special",
+      description: "Special Gwalior butter dosa and cheese roll dosas",
+      imageUrl: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=400&auto=format&fit=crop&q=80",
+    },
+    {
+      name: "Classic Cheese Grilled Sandwich",
+      category: "Street Sandwich & Toast",
+      description: "Loaded vegetable cheese grilled jumbo sandwiches",
+      imageUrl: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80",
+    },
+    {
+      name: "Asharfi Kulfi & Rabdi Falooda",
+      category: "Desserts & Shakes",
+      description: "Authentic Malai Kulfi and chilled Rabdi Falooda",
+      imageUrl: "https://images.unsplash.com/photo-1579954115545-a95591f28bfc?w=400&auto=format&fit=crop&q=80",
+    },
+  ];
+
+  // Dynamic Level of Detail (LOD) Markers based on Map Zoom Level
+  const isDeepZoom = currentZoom >= 14.5;
+
+  const mapMarkers: MapMarker[] = useMemo(() => {
+    const activeClusters = rawClusters.filter(c => filteredClusters.some(fc => fc.id === c.id));
+    const markers: MapMarker[] = [];
+
+    activeClusters.forEach(c => {
+      const cLng = c.coordinates?.coordinates?.[0] ?? 72.5714;
+      const cLat = c.coordinates?.coordinates?.[1] ?? 23.0225;
+
+      // 1. Khau Galli Hub Pin (Visible on City Overview zoom < 15)
+      if (!isDeepZoom) {
+        markers.push({
+          id: `cluster_${c.id}`,
+          position: [cLng, cLat],
+          title: c.name,
+          description: `${c.city || 'Ahmedabad'} • ${c.stalls?.length || 4} Stalls (${c.stalls?.filter(s => s.status !== 'CLOSED' && s.is_accepting_orders).length || 4} Open Now) • Click to zoom`,
+          type: 'cluster',
+          onClick: () => {
+            handleFocusCluster(c);
+          },
+        });
+      }
+
+      // 2. Individual Stalls revealed dynamically when zoomed in (Zoom >= 15)
+      if (isDeepZoom) {
+        const stallList = (c.stalls && Array.isArray(c.stalls) && c.stalls.length > 0)
+          ? c.stalls
+          : DEFAULT_CORRIDOR_STALLS;
+
+        stallList.forEach((s: any, idx: number) => {
+          // Natural street corridor spread (~35m - 75m around Khau Galli center)
+          const angle = (idx * 2 * Math.PI) / Math.max(stallList.length, 1);
+          const radius = 0.00035 + (idx % 3) * 0.0002;
+          const sLng = s.coordinates?.coordinates?.[0] || (cLng + Math.cos(angle) * radius * 1.15);
+          const sLat = s.coordinates?.coordinates?.[1] || (cLat + Math.sin(angle) * radius * 0.85);
+
+          const stallId = s.id || s._id || `stall_${c.id}_${idx}`;
+          const isStallLive = s.status !== 'CLOSED' && s.is_accepting_orders !== false;
+
+          markers.push({
+            id: `stall_${stallId}`,
+            stallId: s.id || s._id || '',
+            position: [sLng, sLat],
+            title: s.name,
+            description: s.description || `${s.stall_category || s.category || 'Street Food'} • Live Ordering Available`,
+            imageUrl: s.image_url || s.imageUrl || s.banner_url || s.logo_url || '',
+            category: s.stall_category || s.category || 'Food Stall',
+            rating: s.rating || 4.7,
+            isLive: isStallLive,
+            clusterName: c.name,
+            type: 'stall',
+            onClick: () => {
+              if (s.id || s._id) {
+                navigate(`/stall/${s.id || s._id}`);
+              } else {
+                navigate(`/stalls?khauGalliId=${c.id}`);
+              }
+            },
+          });
+        });
+      }
+    });
+
+    return markers;
+  }, [rawClusters, filteredClusters, isDeepZoom, navigate]);
+
   return (
     <div className="w-full max-w-7xl mx-auto md:mt-4 pb-20 no-scrollbar">
 
@@ -167,7 +286,7 @@ export const AllClusters: React.FC = () => {
                 {matchingStalls.map(({ stall, clusterId, clusterName }) => (
                   <button
                     key={stall.id || stall._id}
-                    onClick={() => navigate(`/stalls/${stall.id || stall._id}?khauGalliId=${clusterId}`)}
+                    onClick={() => navigate(`/stall/${stall.id || stall._id}`)}
                     className="shrink-0 bg-[#FAF7F2] hover:bg-[#F2EDE5] border border-[#EAE4DA] active:border-[#D94A38] p-2 rounded-xl text-left cursor-pointer transition-colors flex items-center gap-2 max-w-[210px]"
                   >
                     <div className="w-7 h-7 rounded-lg bg-white border border-[#EAE4DA] flex items-center justify-center shrink-0">
@@ -196,7 +315,7 @@ export const AllClusters: React.FC = () => {
             </div>
             <h1 className="text-4xl md:text-5xl font-black text-[#1C1917]">Trending Khau Gallis</h1>
             <p className="text-sm md:text-base text-[#5C5954] font-medium mt-1">
-              Explore Ahmedabad's authentic Khau Gallis with live stall ordering.
+              Explore Ahmedabad's authentic Khau Gallis with live interactive stall navigation.
             </p>
           </div>
 
@@ -252,27 +371,88 @@ export const AllClusters: React.FC = () => {
             )}
           </div>
         ) : viewMode === 'map' ? (
-          /* Live Interactive Map View */
+          /* Live Interactive Map View with Level of Detail (LOD) */
           <div className="space-y-4 animate-fadeIn">
-            <div className="bg-white rounded-3xl border border-[#EFEBE4] overflow-hidden shadow-sm relative h-[560px]">
+            {/* Quick Hub Quick-Filter Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <span className="text-xs font-bold text-stone-500 shrink-0 flex items-center gap-1.5 pl-1">
+                <Compass className="w-3.5 h-3.5 text-[#D94A38]" /> Quick Jump:
+              </span>
+              {rawClusters.map((c) => {
+                const isSelected = selectedClusterId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => handleFocusCluster(c)}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer flex items-center gap-1.5 ${isSelected
+                      ? 'bg-[#D94A38] text-white border-[#D94A38] shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400 hover:bg-stone-50'
+                      }`}
+                  >
+                    <span>{c.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-500'}`}>
+                      {c.stalls?.length || 0}
+                    </span>
+                  </button>
+                );
+              })}
+              {selectedClusterId && (
+                <button
+                  onClick={handleResetMap}
+                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold text-[#D94A38] bg-[#FCE8E6] hover:bg-[#fadbd8] transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset View
+                </button>
+              )}
+            </div>
+
+            {/* Map Canvas Container */}
+            <div className="bg-white rounded-3xl border border-[#EFEBE4] overflow-hidden shadow-sm relative h-[600px]">
               <TomTomMap
-                center={[72.5650, 23.0300]}
-                zoom={12}
+                center={mapCenter}
+                zoom={mapZoom}
+                onZoomChange={(newZoom) => setCurrentZoom(newZoom)}
                 className="w-full h-full rounded-3xl overflow-hidden"
-                markers={rawClusters
-                  .filter(c => filteredClusters.some(fc => fc.id === c.id))
-                  .map(c => ({
-                    id: c.id,
-                    position: [c.coordinates?.coordinates[0] ?? 72.5714, c.coordinates?.coordinates[1] ?? 23.0225],
-                    title: c.name,
-                    description: `${c.city || 'Ahmedabad'} • ${c.stalls?.length || 0} Registered Stalls (${c.stalls?.filter(s => s.status !== 'CLOSED' && s.is_accepting_orders).length || 0} Open Now)`,
-                    type: 'cluster',
-                    onClick: () => navigate(`/stalls?khauGalliId=${c.id}`),
-                  }))}
+                markers={mapMarkers}
               />
-              <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-lg border border-stone-200 pointer-events-none flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#D94A38] animate-ping"></span>
-                <span className="text-xs font-bold text-stone-800">Click any Khau Galli marker to explore its menu & stalls</span>
+
+              {/* Dynamic Map HUD Status Overlay */}
+              <div className="absolute top-4 left-4 right-4 sm:right-auto sm:max-w-md bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-lg border border-stone-200/80 z-20 flex items-center justify-between gap-3 pointer-events-auto">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDeepZoom ? 'bg-emerald-100 text-emerald-700' : 'bg-[#FCE8E6] text-[#D94A38]'}`}>
+                    {isDeepZoom ? <Store className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-extrabold text-stone-900 truncate">
+                      {isDeepZoom ? '🏪 Deep Street View' : '🗺️ City Overview'}
+                    </div>
+                    <div className="text-[11px] text-stone-500 truncate">
+                      {isDeepZoom
+                        ? 'Showing individual food stalls in corridor'
+                        : 'Zoom in or click a Khau Galli to reveal food stalls'}
+                    </div>
+                  </div>
+                </div>
+
+                {isDeepZoom && (
+                  <button
+                    onClick={handleResetMap}
+                    className="shrink-0 text-xs font-bold bg-[#1C1917] hover:bg-stone-800 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                  >
+                    <RotateCcw className="w-3 h-3 text-[#D94A38]" />
+                    <span className="hidden sm:inline">Reset</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom Hint Strip */}
+              <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-lg border border-stone-200/80 pointer-events-none flex items-center gap-2.5 z-20">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#D94A38] animate-ping" />
+                <span className="text-xs font-bold text-stone-800">
+                  {isDeepZoom
+                    ? 'Click any food stall pin to view its live menu & order'
+                    : 'Click any Khau Galli hub to fly in and see all stalls'}
+                </span>
               </div>
             </div>
           </div>

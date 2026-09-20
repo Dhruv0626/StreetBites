@@ -22,6 +22,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
   className = 'w-full h-[450px] rounded-2xl overflow-hidden shadow-sm border border-[#EFEBE4] relative',
   onMapClick,
   onMapLoaded,
+  onZoomChange,
   showControls = true,
   showMarkers = true,
 }) => {
@@ -136,6 +137,13 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
         }
       });
 
+      // Handle zoom changes to notify parent component for dynamic Level of Detail (only on zoomend to prevent jitter)
+      map.on('zoomend', () => {
+        if (onZoomChange) {
+          onZoomChange(map.getZoom());
+        }
+      });
+
       // Handle load errors
       map.on('error', (e: any) => {
         console.error('TomTom Map Error:', e);
@@ -167,16 +175,38 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     };
   }, [sdkReady, apiKeyValid]);
 
-  // ── 3. Dynamic Center / Zoom Updates ─────────────────────────────────────────
+  // ── 3. Dynamic Center / Zoom Updates (Only when props explicitly change) ────────
+  const lastPropCenterRef = useRef<[number, number]>([center[0], center[1]]);
+  const lastPropZoomRef = useRef<number>(zoom);
+
   useEffect(() => {
-    if (mapInstanceRef.current && center) {
-      mapInstanceRef.current.flyTo({
-        center: center,
-        zoom: zoom,
-        duration: 800,
-      });
+    const map = mapInstanceRef.current;
+    if (!map || !center) return;
+
+    const centerChanged =
+      !lastPropCenterRef.current ||
+      Math.abs(lastPropCenterRef.current[0] - center[0]) > 0.0001 ||
+      Math.abs(lastPropCenterRef.current[1] - center[1]) > 0.0001;
+
+    const zoomChanged =
+      lastPropZoomRef.current === undefined ||
+      Math.abs(lastPropZoomRef.current - zoom) > 0.1;
+
+    if (centerChanged || zoomChanged) {
+      lastPropCenterRef.current = [center[0], center[1]];
+      lastPropZoomRef.current = zoom;
+
+      try {
+        map.flyTo({
+          center: center,
+          zoom: zoom,
+          duration: 800,
+        });
+      } catch (err) {
+        console.warn('TomTom flyTo error:', err);
+      }
     }
-  }, [center, zoom]);
+  }, [center?.[0], center?.[1], zoom]);
 
   // ── 4. Marker Synchronization & Smooth Animation Updates ─────────────────────
   useEffect(() => {
@@ -354,11 +384,12 @@ function getMarkerElementClass(type?: string): string {
   if (type === 'cluster') {
     return 'streetbites-cluster-marker-root cursor-pointer z-30 select-none';
   }
+  if (type === 'stall') {
+    return 'streetbites-stall-marker-root cursor-pointer z-25 select-none';
+  }
 
   const base = 'cursor-pointer transition-transform duration-200 hover:scale-110 flex items-center justify-center shadow-md border-2 border-white';
   switch (type) {
-    case 'stall':
-      return `${base} w-8 h-8 rounded-full bg-gradient-to-tr from-[#D94A38] to-[#FF6B4A] text-white z-20`;
     case 'customer':
       return `${base} w-8 h-8 rounded-full bg-gradient-to-tr from-[#059669] to-[#10B981] text-white z-20`;
     case 'rider':
@@ -411,18 +442,12 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
             <!-- Inner Contrast Shield Circle -->
             <circle cx="22" cy="20" r="14.5" fill="#1C1917" fill-opacity="0.22" stroke="#FFFFFF" stroke-width="1.2" />
 
-            <!-- Khau Galli Food Street Emblem (Striped Canopy Awning + Steam Flames + Hot Stall Counter) -->
-            <!-- Canopy Roof -->
+            <!-- Khau Galli Food Street Emblem -->
             <path d="M12 15.5L14.5 10H29.5L32 15.5H12Z" fill="url(#goldAccent-${safeId})" stroke="#FFFFFF" stroke-width="0.8" stroke-linejoin="round"/>
-            <!-- Canopy Stripes -->
             <path d="M17 10L16 15.5M22 10V15.5M27 10L28 15.5" stroke="#D94A38" stroke-width="0.9" stroke-linecap="round"/>
-            <!-- Canopy Scallop Edges -->
             <path d="M12 15.5C13.2 16.6 14.8 16.6 16 15.5C17.2 16.6 18.8 16.6 20 15.5C21.2 16.6 22.8 16.6 24 15.5C25.2 16.6 26.8 16.6 28 15.5C29.2 16.6 30.8 16.6 32 15.5" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round" fill="none"/>
-            <!-- Stall Counter Box -->
             <path d="M14 17.5V26.5C14 27.3 14.7 28 15.5 28H28.5C29.3 28 30 27.3 30 26.5V17.5" stroke="#FFFFFF" stroke-width="1.3" stroke-linecap="round" fill="rgba(255,255,255,0.15)"/>
-            <!-- Counter Opening / Serving Window -->
             <rect x="17" y="20.5" width="10" height="4.5" rx="1" fill="#FFFFFF" fill-opacity="0.85" />
-            <!-- Sizzling Steam Aromas -->
             <path d="M18.5 8C18.5 8 19.5 6.5 18.8 5.5" stroke="#FFF176" stroke-width="1.2" stroke-linecap="round"/>
             <path d="M22 7.5C22 7.5 23.5 6 22.5 4.5" stroke="#FFFFFF" stroke-width="1.3" stroke-linecap="round"/>
             <path d="M25.5 8C25.5 8 26.5 6.5 25.8 5.5" stroke="#FFF176" stroke-width="1.2" stroke-linecap="round"/>
@@ -435,9 +460,40 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
     `;
   }
 
+  // Dedicated Food Stall Pin with Canopy Logo & Mini Floating Stall Name
+  if (type === 'stall') {
+    return `
+      <div class="streetbites-stall-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+        
+        <!-- Floating Mini Stall Tag -->
+        <div class="stall-name-tag" style="position: absolute; bottom: 44px; white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 6px #22C55E; flex-shrink: 0;"></span>
+          <span style="max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
+        </div>
+
+        <!-- 3D Food Stall Teardrop Pin -->
+        <div class="stall-pin-graphic" style="position: relative; width: 34px; height: 42px; filter: drop-shadow(0 6px 12px rgba(217, 74, 56, 0.45));">
+          <svg width="34" height="42" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="stallGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FF7043" />
+                <stop offset="100%" stop-color="#D94A38" />
+              </linearGradient>
+            </defs>
+            <path d="M22 0C9.85 0 0 9.85 0 22C0 35.8 18.6 51.6 21.2 53.7C21.66 54.1 22.34 54.1 22.8 53.7C25.4 51.6 44 35.8 44 22C44 9.85 34.15 0 22 0Z" fill="url(#stallGrad-${safeId})" stroke="#FFFFFF" stroke-width="2.6" />
+            <circle cx="22" cy="20" r="13" fill="#FFFFFF" fill-opacity="0.25" />
+            
+            <!-- Food Shop Canopy Icon -->
+            <path d="M13 14H31L29 23H15L13 14Z" fill="#FFFFFF" />
+            <path d="M15 23V27H29V23" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" />
+            <rect x="19" y="20" width="6" height="5" fill="#D94A38" rx="0.5" />
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
   switch (type) {
-    case 'stall':
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M10 12v-2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2"/></svg>`;
     case 'customer':
       return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
     case 'rider':
@@ -477,21 +533,52 @@ function createDefaultPopupHtml(marker: MapMarker): string {
     `;
   }
 
+  if (marker.type === 'stall') {
+    const isLive = marker.isLive !== false;
+    return `
+      <div style="font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; padding: 6px 4px; min-width: 220px; max-width: 260px;">
+        ${marker.imageUrl ? `
+          <div style="width: 100%; height: 85px; border-radius: 12px; overflow: hidden; margin-bottom: 8px; border: 1px solid #EFEBE4;">
+            <img src="${escapeHtml(marker.imageUrl)}" alt="${escapeHtml(marker.title)}" style="width: 100%; height: 100%; object-fit: cover;" />
+          </div>
+        ` : ''}
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px;">
+          <span style="font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 9999px; background: #FCE8E6; color: #D94A38;">
+            🏪 ${escapeHtml(marker.category || 'Food Stall')}
+          </span>
+          <span style="font-size: 10px; font-weight: 700; color: ${isLive ? '#047857' : '#6B7280'}; background: ${isLive ? '#D1FAE5' : '#F3F4F6'}; padding: 2px 6px; border-radius: 6px; display: inline-flex; align-items: center; gap: 3px;">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: ${isLive ? '#059669' : '#9CA3AF'};"></span>
+            ${isLive ? 'Open Now' : 'Closed'}
+          </span>
+        </div>
+        <div style="font-weight: 800; font-size: 13px; color: #1C1917; margin-bottom: 2px; line-height: 1.3;">
+          ${escapeHtml(marker.title)}
+        </div>
+        ${marker.clusterName ? `
+          <div style="font-size: 11px; color: #78716C; margin-bottom: 6px;">
+            📍 ${escapeHtml(marker.clusterName)}
+          </div>
+        ` : ''}
+        <div style="margin-top: 6px;">
+          <a href="/stall/${escapeHtml(marker.stallId || marker.id)}" style="display: block; width: 100%; text-align: center; background: #D94A38; color: #FFF; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 10px; text-decoration: none; box-sizing: border-box;">
+            View Menu & Order →
+          </a>
+        </div>
+      </div>
+    `;
+  }
+
   const badgeClass =
-    marker.type === 'stall'
-      ? 'background: #FCE8E6; color: #D94A38;'
-      : marker.type === 'customer'
-        ? 'background: #D1FAE5; color: #047857;'
-        : 'background: #FEF3C7; color: #B45309;';
+    marker.type === 'customer'
+      ? 'background: #D1FAE5; color: #047857;'
+      : 'background: #FEF3C7; color: #B45309;';
 
   const badgeText =
-    marker.type === 'stall'
-      ? '🏪 Food Stall'
-      : marker.type === 'customer'
-        ? '📍 Delivery Destination'
-        : marker.type === 'rider'
-          ? '🛵 Delivery Partner'
-          : 'Location';
+    marker.type === 'customer'
+      ? '📍 Delivery Destination'
+      : marker.type === 'rider'
+        ? '🛵 Delivery Partner'
+        : 'Location';
 
   return `
     <div style="font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; padding: 4px; max-width: 220px;">

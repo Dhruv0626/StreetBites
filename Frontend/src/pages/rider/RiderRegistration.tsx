@@ -24,6 +24,8 @@ interface RiderData {
   year: string;
   vehiclePhoto: string | null;
   vehicleNumberPlateImage: string | null;
+  rcPhoto: string | null;
+  insurancePhoto: string | null;
   bankName: string;
   accountNumber: string;
   ifscCode: string;
@@ -50,6 +52,8 @@ export const RiderRegistration: React.FC = () => {
     year: '',
     vehiclePhoto: null,
     vehicleNumberPlateImage: null,
+    rcPhoto: null,
+    insurancePhoto: null,
     bankName: '',
     accountNumber: '',
     ifscCode: '',
@@ -217,6 +221,8 @@ export const RiderRegistration: React.FC = () => {
           vehicle_model: formData.vehicle_model,
           vehiclePhoto: formData.vehiclePhoto,
           vehicleNumberPlateImage: formData.vehicleNumberPlateImage,
+          rcPhoto: formData.rcPhoto,
+          insurancePhoto: formData.insurancePhoto,
           bankName: formData.bankName,
           accountNumber: formData.accountNumber,
           ifscCode: formData.ifscCode,
@@ -253,6 +259,8 @@ export const RiderRegistration: React.FC = () => {
         hasLicense: Boolean(formData.licensePhoto),
         hasVehiclePhoto: Boolean(formData.vehiclePhoto),
         hasNumberPlatePhoto: Boolean(formData.vehicleNumberPlateImage),
+        hasRc: Boolean(formData.rcPhoto),
+        hasInsurance: Boolean(formData.insurancePhoto),
       });
     } catch (err) {
       console.error('Failed to generate rider registration PDF:', err);
@@ -364,7 +372,7 @@ export const RiderRegistration: React.FC = () => {
           </div>
         );
 
-      case 3: // Vehicle Details
+      case 3: // Vehicle Details & Documents
         return (
           <div className="space-y-4 animate-fadeIn">
             <div>
@@ -382,16 +390,30 @@ export const RiderRegistration: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               {renderUploadCard(
                 'Vehicle Photo',
-                '(.JPG, .JPEG, .PNG up to 1MB) ',
+                '(.JPG, .JPEG, .PNG up to 1MB)',
                 formData.vehiclePhoto,
                 'vehiclePhoto'
               )}
 
               {renderUploadCard(
                 'Number Plate Photo',
-                '(.JPG, .JPEG, .PNG up to 1MB) ',
+                '(.JPG, .JPEG, .PNG up to 1MB)',
                 formData.vehicleNumberPlateImage,
                 'vehicleNumberPlateImage'
+              )}
+
+              {renderUploadCard(
+                'RC Book (Registration Certificate)',
+                '(.JPG, .JPEG, .PNG up to 1MB)',
+                formData.rcPhoto,
+                'rcPhoto'
+              )}
+
+              {renderUploadCard(
+                'Vehicle Insurance Copy',
+                '(.JPG, .JPEG, .PNG up to 1MB)',
+                formData.insurancePhoto,
+                'insurancePhoto'
               )}
             </div>
           </div>
@@ -631,7 +653,7 @@ export const RiderRegistration: React.FC = () => {
                   <div className="flex items-center gap-3">
                     {getChecklistIcon(isVehicleComplete ? 'done' : currentStep === 3 ? 'active' : 'pending')}
                     <span className={isVehicleComplete ? 'line-through text-stone-400 font-sans' : 'font-sans'}>
-                      Vehicle & number plate photos
+                      Vehicle, RC, plate & insurance
                     </span>
                   </div>
                   <div className="flex items-center gap-3">

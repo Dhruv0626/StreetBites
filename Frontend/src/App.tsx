@@ -68,6 +68,7 @@ const VendorMenuPage = lazy(() => import('./pages/vendor/VendorMenu'));
 const VendorAnalyticsPage = lazy(() => import('./pages/vendor/VendorAnalytics').then(m => ({ default: m.VendorAnalyticsPage })));
 const VendorPayoutsPage = lazy(() => import('./pages/vendor/VendorPayouts').then(m => ({ default: m.VendorPayoutsPage })));
 const VendorProfilePage = lazy(() => import('./pages/vendor/VendorProfile').then(m => ({ default: m.VendorProfilePage })));
+const VendorSubmittedKycPage = lazy(() => import('./pages/vendor/VendorSubmittedKyc').then(m => ({ default: m.VendorSubmittedKycPage })));
 const VendorSettingsPage = lazy(() => import('./pages/vendor/VendorSettings').then(m => ({ default: m.VendorSettingsPage })));
 const VendorRulesPage = lazy(() => import('./pages/vendor/VendorRules').then(m => ({ default: m.VendorRulesPage })));
 
@@ -156,6 +157,7 @@ const router = createBrowserRouter([
           { path: 'analytics', element: withSuspense(VendorAnalyticsPage, {}, <VendorPageSkeleton />) },
           { path: 'payouts', element: withSuspense(VendorPayoutsPage, {}, <VendorPageSkeleton />) },
           { path: 'profile', element: withSuspense(VendorProfilePage, {}, <ProfileSkeleton />) },
+          { path: 'kyc', element: withSuspense(VendorSubmittedKycPage, {}, <ProfileSkeleton />) },
           { path: 'settings', element: withSuspense(VendorSettingsPage, {}, <ProfileSkeleton />) },
           { path: 'rules', element: withSuspense(VendorRulesPage, {}, <VendorPageSkeleton />) },
         ],

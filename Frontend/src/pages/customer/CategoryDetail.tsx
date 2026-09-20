@@ -15,41 +15,63 @@ export const CategoryDetail: React.FC = () => {
   const title = categoryName || 'Category';
 
   useEffect(() => {
+    let isMounted = true;
+
+    const processCategoryStalls = (clustersData: any[]) => {
+      if (!isMounted || !Array.isArray(clustersData)) return;
+      const lowerCat = title.toLowerCase();
+      const matchedStalls = clustersData.flatMap((c: any) =>
+        (c.stalls || [])
+          .filter(
+            (s: any) =>
+              (s.stall_category || '').toLowerCase().includes(lowerCat) ||
+              (s.menu_items || []).some((m: any) => (m.name || '').toLowerCase().includes(lowerCat))
+          )
+          .map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            rating: s.rating || 0.0,
+            time: '20-25 mins',
+            type: s.stall_category || 'Street Food',
+            price: '₹150 for two',
+            image:
+              s.image_url ||
+              'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
+          }))
+      );
+      setStalls(matchedStalls);
+      setIsLoading(false);
+    };
+
+    const unsubscribe = clusterService.subscribe((data) => {
+      processCategoryStalls(data);
+    });
+
     const fetchCategoryStalls = async () => {
-      setIsLoading(true);
+      if (!clusterService.getCachedClusters()) {
+        setIsLoading(true);
+      }
       try {
         const res = await clusterService.getClusters();
-        if (res.success && res.data) {
-          const lowerCat = title.toLowerCase();
-          const matchedStalls = res.data.flatMap((c: any) =>
-            (c.stalls || [])
-              .filter((s: any) =>
-                (s.stall_category || '').toLowerCase().includes(lowerCat) ||
-                (s.menu_items || []).some((m: any) =>
-                  (m.name || '').toLowerCase().includes(lowerCat)
-                )
-              )
-              .map((s: any) => ({
-                id: s.id,
-                name: s.name,
-                rating: s.rating || 0.0,
-                time: '20-25 mins',
-                type: s.stall_category || 'Street Food',
-                price: '₹150 for two',
-                image: s.image_url || 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3',
-              }))
-          );
-          setStalls(matchedStalls);
+        if (isMounted && res.success && res.data) {
+          processCategoryStalls(res.data);
         }
       } catch (err) {
         console.error('Failed to load category stalls:', err);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchCategoryStalls();
-  }, [title]);
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [categoryName, title]);
 
   return (
     <div className="w-full max-w-7xl mx-auto md:mt-4 pb-20">

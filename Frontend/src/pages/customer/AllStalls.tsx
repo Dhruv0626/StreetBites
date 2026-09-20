@@ -13,33 +13,56 @@ export const AllStalls: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
+    let isMounted = true;
+
+    const processStalls = (clustersData: any[]) => {
+      if (!isMounted || !Array.isArray(clustersData)) return;
+      const dynamicStalls = clustersData.flatMap((c: any) =>
+        (c.stalls || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          rating: s.rating || 0,
+          stall_category: s.stall_category || 'Street Food',
+          cluster: c.name || 'Khau Galli',
+          open_till: s.open_till || '',
+          image_url: s.image_url || '',
+          is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
+        }))
+      );
+      setStalls(dynamicStalls);
+      setIsLoading(false);
+    };
+
+    // 1. Subscribe to live SWR updates
+    const unsubscribe = clusterService.subscribe((data) => {
+      processStalls(data);
+    });
+
+    // 2. Fetch / SWR trigger
     const loadStalls = async () => {
-      setIsLoading(true);
+      if (stalls.length === 0 && !clusterService.getCachedClusters()) {
+        setIsLoading(true);
+      }
       try {
         const res = await clusterService.getClusters();
         if (res.success && res.data) {
-          const dynamicStalls = res.data.flatMap((c: any) =>
-            (c.stalls || []).map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              rating: s.rating || 0,
-              stall_category: s.stall_category || 'Street Food',
-              cluster: c.name || 'Khau Galli',
-              open_till: s.open_till || '',
-              image_url: s.image_url || '',
-              is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
-            }))
-          );
-          setStalls(dynamicStalls);
+          processStalls(res.data);
         }
       } catch (err) {
         console.error('Failed to load stalls:', err);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadStalls();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const filteredStalls = useMemo(() => {

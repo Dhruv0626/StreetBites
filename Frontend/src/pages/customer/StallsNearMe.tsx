@@ -83,9 +83,62 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
 
   useEffect(() => {
     let isMounted = true;
+
+    const processClusters = (rawClusters: any[]) => {
+      if (!isMounted || !Array.isArray(rawClusters) || rawClusters.length === 0) return;
+      setClusters(rawClusters);
+
+      const clusterParam =
+        searchParams.get('khauGalliId') ||
+        searchParams.get('khauGalli') ||
+        searchParams.get('clusterId') ||
+        searchParams.get('cluster');
+
+      // 1. Resolve which cluster to select
+      let targetCluster = rawClusters[0];
+
+      if (clusterParam) {
+        const foundByParam = rawClusters.find(
+          (c) => String(c.id) === String(clusterParam) || c.name.toLowerCase() === clusterParam.toLowerCase()
+        );
+        if (foundByParam) targetCluster = foundByParam;
+      } else if (activeClusterId) {
+        const foundById = rawClusters.find((c) => String(c.id) === String(activeClusterId));
+        if (foundById) targetCluster = foundById;
+      } else if (stallId) {
+        // Find which cluster contains this stallId
+        const foundByStall = rawClusters.find((c) =>
+          (c.stalls || []).some((s: any) => String(s.id) === String(stallId) || String(s._id) === String(stallId))
+        );
+        if (foundByStall) targetCluster = foundByStall;
+      }
+
+      setActiveClusterId(targetCluster.id);
+
+      // 2. Extract ONLY the stalls for this target cluster
+      const targetStalls = mapClusterStalls(targetCluster);
+      setStallsList(targetStalls);
+
+      // 3. Select active stall within this cluster
+      if (targetStalls.length > 0) {
+        const currentActiveId = activeStallId || stallId;
+        const matchedStall = (currentActiveId && targetStalls.find((s) => s.id === currentActiveId)) || targetStalls[0];
+        setActiveStallId(matchedStall.id);
+      } else {
+        setActiveStallId('');
+      }
+    };
+
+    // 1. Subscribe to live SWR updates (updates instantly when DB changes in background)
+    const unsubscribe = clusterService.subscribe((data) => {
+      if (isMounted && Array.isArray(data) && data.length > 0) {
+        processClusters(data);
+      }
+    });
+
+    // 2. Fetch / SWR trigger
     const fetchClustersAndStalls = async () => {
-      // Only show full loading on initial mount when no data is cached
-      if (clusters.length === 0) {
+      if (clusters.length === 0 && !clusterService.getCachedClusters()) {
         setIsLoading(true);
       }
       try {
@@ -93,45 +146,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
         if (!isMounted) return;
 
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const rawClusters = res.data;
-          setClusters(rawClusters);
-
-          const clusterParam = searchParams.get('khauGalliId') || searchParams.get('khauGalli') || searchParams.get('clusterId') || searchParams.get('cluster');
-
-          // 1. Resolve which cluster to select
-          let targetCluster = rawClusters[0];
-
-          if (clusterParam) {
-            const foundByParam = rawClusters.find(
-              c => String(c.id) === String(clusterParam) || c.name.toLowerCase() === clusterParam.toLowerCase()
-            );
-            if (foundByParam) targetCluster = foundByParam;
-          } else if (stallId) {
-            // Find which cluster contains this stallId
-            const foundByStall = rawClusters.find(c =>
-              (c.stalls || []).some((s: any) => String(s.id) === String(stallId) || String(s._id) === String(stallId))
-            );
-            if (foundByStall) targetCluster = foundByStall;
-          }
-
-          setActiveClusterId(targetCluster.id);
-
-          // 2. Extract ONLY the stalls for this target cluster
-          const targetStalls = mapClusterStalls(targetCluster);
-          setStallsList(targetStalls);
-
-          // 3. Select active stall within this cluster
-          if (targetStalls.length > 0) {
-            const matchedStall = (stallId && targetStalls.find(s => s.id === stallId)) || targetStalls[0];
-            setActiveStallId(matchedStall.id);
-            setActiveCategory(matchedStall.categories[0] || 'All Items');
-          } else {
-            setActiveStallId('');
-            setActiveCategory('All Items');
-          }
-        } else {
-          setClusters([]);
-          setStallsList([]);
+          processClusters(res.data);
         }
       } catch (err) {
         console.error('Error fetching cluster-wise stalls in StallsNearMe:', err);
@@ -143,6 +158,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
     fetchClustersAndStalls();
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [stallId, searchParams]);
 

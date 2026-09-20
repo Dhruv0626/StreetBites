@@ -10,6 +10,8 @@ export interface RiderOnboardingPayload {
   makeModel?: string;
   vehiclePhoto?: string | null;
   vehicleNumberPlateImage?: string | null;
+  rcPhoto?: string | null;
+  insurancePhoto?: string | null;
   bankName: string;
   accountNumber: string;
   ifscCode: string;

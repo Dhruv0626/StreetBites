@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { getCustomerAddresses } from '../../services/addressService';
+import { getCustomerAddresses, subscribeAddresses } from '../../services/addressService';
 import { AddressModal } from '../../components/customer/AddressModal';
 import { calculateDistanceKm, calculateDeliveryFee, calculateETA } from '../../utils/distance';
 import type { AddressItem } from '../../types';
@@ -109,6 +109,19 @@ export const Checkout: React.FC<CheckoutProps> = ({
   // Fetch real saved customer addresses from MongoDB on mount or when user changes
   useEffect(() => {
     let isMounted = true;
+
+    // 1. Subscribe to live address SWR updates
+    const unsubscribe = subscribeAddresses((saved) => {
+      if (isMounted && Array.isArray(saved) && saved.length > 0) {
+        setAddresses(saved);
+        if (!selectedAddressId) {
+          const primary = saved.find((a) => a.is_primary) || saved[0];
+          setSelectedAddressId(primary.id || primary._id || '');
+        }
+        setIsLoadingAddresses(false);
+      }
+    });
+
     const loadAddresses = async () => {
       setIsLoadingAddresses(true);
       try {
@@ -138,6 +151,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [user]);
 

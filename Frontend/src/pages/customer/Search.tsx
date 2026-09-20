@@ -3,7 +3,7 @@ import { Search as SearchIcon, ArrowLeft, Star, Store, UtensilsCrossed } from 'l
 import { useNavigate, useSearchParams } from 'react-router';
 import { type Stall, type Dish } from '../../data/mockData';
 import { clusterService } from '../../services/clusterService';
-import { SearchSkeleton, StallCardSkeleton } from '../../components';
+import { StallCardSkeleton } from '../../components';
 
 export const Search: React.FC = () => {
   const navigate = useNavigate();
@@ -17,53 +17,76 @@ export const Search: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const processSearchStalls = (clustersData: any[]) => {
+      if (!isMounted || !Array.isArray(clustersData)) return;
+      const mapped: Stall[] = clustersData.flatMap((c: any) =>
+        (c.stalls || []).map((s: any, idx: number) => {
+          const mappedDishes: Dish[] = (s.menu_items || []).map((m: any, mIdx: number) => ({
+            id: m._id || `dish_${mIdx}`,
+            name: m.name,
+            price: m.price || m.base_price || 0,
+            description: m.description || '',
+            image_url: m.image_url || '',
+            category:
+              m.category || (m.food_item_id && typeof m.food_item_id === 'object' ? m.food_item_id.name : '') || '',
+            is_available: m.is_available !== false,
+            status: m.status || 'Approved',
+          }));
+
+          const categories = Array.from(new Set(mappedDishes.map((d) => d.category).filter(Boolean)));
+          if (categories.length === 0) categories.push('All Items');
+
+          return {
+            id: s.id,
+            name: s.name,
+            stall_category: s.stall_category || 'Street Food',
+            cluster: c.name,
+            rating: s.rating || 0.0,
+            open_till: s.open_till || '',
+            since: s.since || '1998',
+            description: s.description || '',
+            image_url: s.image_url || '',
+            is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
+            status: s.status || 'ACTIVE',
+            categories,
+            dishes: mappedDishes,
+          };
+        })
+      );
+      setAllStalls(mapped);
+      setIsLoading(false);
+    };
+
+    const unsubscribe = clusterService.subscribe((data) => {
+      processSearchStalls(data);
+    });
+
     const loadData = async () => {
+      if (!clusterService.getCachedClusters()) {
+        setIsLoading(true);
+      }
       try {
         const res = await clusterService.getClusters();
-        if (res.success && res.data) {
-          const mapped: Stall[] = res.data.flatMap((c: any) =>
-            (c.stalls || []).map((s: any, idx: number) => {
-              const mappedDishes: Dish[] = (s.menu_items || []).map((m: any, mIdx: number) => ({
-                id: m._id || `dish_${mIdx}`,
-                name: m.name,
-                price: m.price || m.base_price || 0,
-                description: m.description || '',
-                image_url: m.image_url || '',
-                category: m.category || (m.food_item_id && typeof m.food_item_id === 'object' ? m.food_item_id.name : '') || '',
-                is_available: m.is_available !== false,
-                status: m.status || 'Approved',
-              }));
-
-              const categories = Array.from(new Set(mappedDishes.map(d => d.category).filter(Boolean)));
-              if (categories.length === 0) categories.push('All Items');
-
-              return {
-                id: s.id,
-                name: s.name,
-                stall_category: s.stall_category || 'Street Food',
-                cluster: c.name,
-                rating: s.rating || 0.0,
-                open_till: s.open_till || '',
-                since: s.since || '1998',
-                description: s.description || '',
-                image_url: s.image_url || '',
-                is_accepting_orders: s.status !== 'CLOSED' && Boolean(s.is_accepting_orders),
-                status: s.status || 'ACTIVE',
-                categories,
-                dishes: mappedDishes,
-              };
-            })
-          );
-          setAllStalls(mapped);
+        if (isMounted && res.success && res.data) {
+          processSearchStalls(res.data);
         }
       } catch (err) {
         console.error('Failed to load stalls for search:', err);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

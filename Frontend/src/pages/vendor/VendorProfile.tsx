@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Store, MapPin, Phone, Mail, Clock, Camera, CheckCircle2, AlertCircle, Clock3, ChevronRight, LogOut, FileText } from 'lucide-react';
+import { Store, MapPin, Phone, Mail, Camera, CheckCircle2, AlertCircle, Clock3, ChevronRight, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
 
@@ -54,16 +54,17 @@ export const VendorProfilePage: React.FC = () => {
 
   return (
     <div className="animate-fadeIn pb-10 max-w-4xl mx-auto">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
+      <div className="mb-8 flex justify-between items-center gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Stall Profile</h1>
           <p className="text-sm text-stone-500 mt-1">Manage your public stall identity, timing, and verification details.</p>
         </div>
         <button
-          onClick={handleLogout}
-          className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2.5 px-5 rounded-xl transition-colors shadow-xs flex items-center gap-2 cursor-pointer text-xs"
+          onClick={handleLogout}  
+          className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2.5 px-4 rounded-xl transition-colors shadow-xs flex items-center gap-2 cursor-pointer text-xs shrink-0 whitespace-nowrap"
         >
-          <LogOut className="w-4 h-4" /> Log Out
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span>Log Out</span>
         </button>
       </div>
 
@@ -131,133 +132,144 @@ export const VendorProfilePage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Contact & Timing Details */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-3xl border border-[#E7E2D9] p-6 shadow-sm">
-            <h3 className="text-base font-bold text-stone-900 mb-6">Contact Information</h3>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-stone-50 border border-transparent">
-                <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-stone-500">
-                  <Phone className="w-4 h-4" />
+      {/* Verification Status Banner */}
+      <div className="mb-6">
+        {verificationStatus === 'VERIFIED' ? (
+          <div className="bg-emerald-50/90 rounded-3xl p-6 border border-emerald-200 relative overflow-hidden shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-emerald-900">Verified Stall Partner</h3>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Your stall registration, FSSAI certificate, and identity credentials have been approved by StreetBites Admin.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate('/vendor/Dashboard/kyc')}
+              className="shrink-0 bg-white hover:bg-emerald-100/60 text-emerald-800 font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs transition-colors flex items-center gap-2 cursor-pointer border border-emerald-200 self-start sm:self-auto"
+            >
+              <span>View Submitted KYC</span>
+              <ChevronRight className="w-4 h-4 text-emerald-600" />
+            </button>
+          </div>
+        ) : verificationStatus === 'REJECTED' ? (
+          <div className="bg-red-50/90 rounded-3xl p-6 border border-red-200 relative overflow-hidden shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-red-900">Verification Rejected</h3>
+                <p className="text-xs text-red-700 mt-0.5">
+                  Your verification documents could not be approved. Please review and update your onboarding records.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+              <button 
+                onClick={() => navigate('/vendor/Dashboard/kyc')}
+                className="bg-white hover:bg-stone-50 text-stone-700 font-bold py-2.5 px-3.5 rounded-xl shadow-xs text-xs transition-colors cursor-pointer border border-stone-200"
+              >
+                View Record
+              </button>
+              <button 
+                onClick={() => navigate('/vendor/registration')}
+                className="bg-[#D94A38] hover:bg-[#B83E2F] text-white font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <span>Update Documents</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-amber-50/90 rounded-3xl p-6 border border-amber-200 relative overflow-hidden shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+                <Clock3 className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-amber-900">Verification Pending</h3>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Your stall documents and identity proofs are submitted and undergoing admin verification review.
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate('/vendor/Dashboard/kyc')}
+              className="shrink-0 bg-white hover:bg-amber-100/60 text-amber-900 font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs transition-colors flex items-center gap-2 cursor-pointer border border-amber-200 self-start sm:self-auto"
+            >
+              <span>Review Submitted KYC</span>
+              <ChevronRight className="w-4 h-4 text-amber-600" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 2-Column Grid: Contact Information & Stall Details */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Contact Information */}
+        <div className="bg-white rounded-3xl border border-[#E7E2D9] p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 mb-5">Contact Information</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-stone-50 border border-stone-100">
+                <div className="w-10 h-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-stone-500 shrink-0">
+                  <Phone className="w-4 h-4 text-[#D94A38]" />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Phone Number</p>
-                  <p className="text-sm font-bold text-stone-900">{currentUser?.phone || currentUser?.phone_number || 'Not provided'}</p>
+                  <p className="text-sm font-bold text-stone-900 truncate">{currentUser?.phone || currentUser?.phone_number || 'Not provided'}</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-stone-50 border border-transparent">
-                <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-stone-500">
-                  <Mail className="w-4 h-4" />
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-stone-50 border border-stone-100">
+                <div className="w-10 h-10 rounded-xl bg-white shadow-xs flex items-center justify-center text-stone-500 shrink-0">
+                  <Mail className="w-4 h-4 text-[#D94A38]" />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Email Address</p>
-                  <p className="text-sm font-bold text-stone-900">{currentUser?.email || 'Not provided'}</p>
+                  <p className="text-sm font-bold text-stone-900 truncate">{currentUser?.email || 'Not provided'}</p>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-[#E7E2D9] p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-stone-900">Operating Hours</h3>
-              <button 
-                onClick={() => navigate('/vendor/registration')}
-                className="text-xs font-bold text-[#D94A38] hover:text-[#B83E2F] cursor-pointer"
-              >
-                Edit
-              </button>
-            </div>
-            <div className="p-4 rounded-2xl bg-stone-50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-stone-500" />
-                <div>
-                  <span className="text-sm font-bold text-stone-800">Daily Night Market Timing</span>
-                  <p className="text-xs text-stone-500 mt-0.5">Open until {openTill}</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Active Schedule
-              </span>
             </div>
           </div>
         </div>
 
-        {/* Verification Status Card */}
-        <div className="space-y-6">
-          {verificationStatus === 'VERIFIED' ? (
-            <div className="bg-emerald-50 rounded-3xl p-6 border border-emerald-200 relative overflow-hidden">
-              <div className="flex items-center gap-2 mb-2 text-emerald-800">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold">Verified Stall</h3>
-              </div>
-              <p className="text-xs text-emerald-700 leading-relaxed mb-6">
-                Your stall registration, FSSAI certificate, and identity credentials have been approved by StreetBites Admin.
-              </p>
-              <button 
-                onClick={() => navigate('/vendor/registration')}
-                className="w-full bg-white text-emerald-800 font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs hover:bg-emerald-100/50 transition-colors flex justify-between items-center cursor-pointer border border-emerald-200"
+        {/* Stall Details Card */}
+        <div className="bg-white rounded-3xl border border-[#E7E2D9] p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-bold text-stone-900">Stall Details</h4>
+              <button
+                onClick={() => navigate('/vendor/Dashboard/kyc')}
+                className="text-[11px] font-bold text-[#D94A38] hover:underline cursor-pointer"
               >
-                View Submitted KYC
-                <ChevronRight className="w-4 h-4 text-emerald-600" />
+                View KYC Record
               </button>
             </div>
-          ) : verificationStatus === 'REJECTED' ? (
-            <div className="bg-red-50 rounded-3xl p-6 border border-red-200 relative overflow-hidden">
-              <div className="flex items-center gap-2 mb-2 text-red-800">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-                <h3 className="text-base font-bold">Verification Rejected</h3>
-              </div>
-              <p className="text-xs text-red-700 leading-relaxed mb-6">
-                Your verification documents could not be approved. Please review and update your documents in Onboarding Details.
-              </p>
-              <button 
-                onClick={() => navigate('/vendor/registration')}
-                className="w-full bg-white text-red-700 font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs hover:bg-red-100/50 transition-colors flex justify-between items-center cursor-pointer border border-red-200"
-              >
-                Update Documents
-                <ChevronRight className="w-4 h-4 text-red-600" />
-              </button>
-            </div>
-          ) : (
-            <div className="bg-amber-50 rounded-3xl p-6 border border-amber-200 relative overflow-hidden">
-              <div className="flex items-center gap-2 mb-2 text-amber-800">
-                <Clock3 className="w-5 h-5 text-amber-600" />
-                <h3 className="text-base font-bold">Verification Pending</h3>
-              </div>
-              <p className="text-xs text-amber-800 leading-relaxed mb-6">
-                Your stall documents and identity proofs are submitted and undergoing admin verification review. You can configure your menu and stall details while waiting.
-              </p>
-              <button 
-                onClick={() => navigate('/vendor/registration')}
-                className="w-full bg-white text-amber-900 font-bold py-2.5 px-4 rounded-xl shadow-xs text-xs hover:bg-amber-100/50 transition-colors flex justify-between items-center cursor-pointer border border-amber-200"
-              >
-                Review Submitted KYC
-                <ChevronRight className="w-4 h-4 text-amber-600" />
-              </button>
-            </div>
-          )}
-
-          {/* KYC Summary Card */}
-          <div className="bg-white rounded-3xl border border-[#E7E2D9] p-6 shadow-sm">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-4">Stall Credentials</h4>
             <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
-                <span className="text-stone-500">Stall Category</span>
-                <span className="font-bold text-stone-800">{category}</span>
+              <div className="flex items-center justify-between gap-4 py-2 border-b border-stone-100">
+                <span className="text-stone-500 shrink-0">Stall Type</span>
+                <span className="font-bold text-stone-800 text-right truncate">{category}</span>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
-                <span className="text-stone-500">Assigned Khau Galli</span>
-                <span className="font-bold text-stone-800">{clusterName}</span>
+              <div className="flex items-center justify-between gap-4 py-2 border-b border-stone-100">
+                <span className="text-stone-500 shrink-0">Assigned Khau Galli</span>
+                <span className="font-bold text-stone-800 text-right truncate">{clusterName}</span>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
-                <span className="text-stone-500">FSSAI Document</span>
-                <span className="font-bold text-stone-800">{stallData?.fssai_image_url ? 'Attached' : 'Not Provided'}</span>
+              <div className="flex items-center justify-between gap-4 py-2 border-b border-stone-100">
+                <span className="text-stone-500 shrink-0">FSSAI Document</span>
+                <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] ${stallData?.fssai_image_url ? 'text-emerald-700 bg-emerald-50' : 'text-stone-600 bg-stone-100'}`}>
+                  {stallData?.fssai_image_url ? 'Attached' : 'Not Provided'}
+                </span>
               </div>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-stone-500">Aadhaar Document</span>
-                <span className="font-bold text-stone-800">{currentUser?.aadhaar_image_url || stallData?.aadhar_image_url ? 'Attached' : 'Not Provided'}</span>
+              <div className="flex items-center justify-between gap-4 py-1.5">
+                <span className="text-stone-500 shrink-0">Aadhaar Document</span>
+                <span className={`font-bold px-2 py-0.5 rounded-md text-[11px] ${(currentUser?.aadhaar_image_url || stallData?.aadhar_image_url || stallData?.aadhaar_image_url) ? 'text-emerald-700 bg-emerald-50' : 'text-stone-600 bg-stone-100'}`}>
+                  {(currentUser?.aadhaar_image_url || stallData?.aadhar_image_url || stallData?.aadhaar_image_url) ? 'Attached' : 'Not Provided'}
+                </span>
               </div>
             </div>
           </div>

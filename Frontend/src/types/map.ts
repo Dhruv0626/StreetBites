@@ -14,6 +14,12 @@ export interface MapMarker {
   description?: string;
   type?: MarkerType;
   popupHtml?: string;
+  imageUrl?: string;
+  category?: string;
+  rating?: number | string;
+  isLive?: boolean;
+  clusterName?: string;
+  stallId?: string;
   onClick?: (markerId: string) => void;
 }
 
@@ -25,6 +31,7 @@ export interface TomTomMapProps {
   className?: string;
   onMapClick?: (position: LngLatTuple) => void;
   onMapLoaded?: (mapInstance: any) => void;
+  onZoomChange?: (zoom: number) => void;
   showControls?: boolean;
   showMarkers?: boolean;
 }

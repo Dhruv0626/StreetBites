@@ -10,7 +10,6 @@ export const VendorSettingsPage: React.FC = () => {
   const { logout } = useAuth();
   const [activeSection, setActiveSection] = useState('notifications');
   const [pushEnabled, setPushEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [language, setLanguage] = useState('English');
 
@@ -85,24 +84,6 @@ export const VendorSettingsPage: React.FC = () => {
                     className={`relative w-11 h-6 rounded-full transition-colors ${pushEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
                   >
                     <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${pushEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
-                </div>
-
-                <div className="p-6 flex items-center justify-between hover:bg-stone-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                      <Smartphone className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-stone-900">SMS Alerts</h3>
-                      <p className="text-xs text-stone-500">Get text messages for large orders</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setSmsEnabled(!smsEnabled)}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${smsEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
-                  >
-                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${smsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
                 </div>
 

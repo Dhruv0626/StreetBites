@@ -282,6 +282,8 @@ export interface RiderPdfData {
   hasLicense: boolean;
   hasVehiclePhoto: boolean;
   hasNumberPlatePhoto: boolean;
+  hasRc?: boolean;
+  hasInsurance?: boolean;
 }
 
 /**
@@ -564,6 +566,11 @@ export const downloadRiderRegistrationPdf = (data: RiderPdfData): void => {
   curY -= 18;
   doc.drawField('Vehicle Photo:', data.hasVehiclePhoto ? 'Uploaded & Cloudinary Verified' : 'Uploaded', 48, curY, 130, 120);
   doc.drawField('Number Plate Photo:', data.hasNumberPlatePhoto ? 'Uploaded & Cloudinary Verified' : 'Uploaded', 300, curY, 130, 120);
+
+  curY -= 18;
+  doc.fillRect(36, curY - 3, 523, 16, 0.98, 0.98, 0.98);
+  doc.drawField('Vehicle RC Book:', data.hasRc ? 'Uploaded & Cloudinary Verified' : 'Uploaded', 48, curY, 130, 120);
+  doc.drawField('Vehicle Insurance:', data.hasInsurance ? 'Uploaded & Cloudinary Verified' : 'Uploaded', 300, curY, 130, 120);
 
   // 5. Section 3: Banking & Rider Payout Details
   curY -= 28;

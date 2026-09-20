@@ -313,10 +313,7 @@ export const VendorLayout: React.FC = () => {
             >
               <HelpCircle className="w-4 h-4" />
             </button>
-            <div className="hidden lg:flex relative w-64 items-center bg-white border border-[#E7E2D9] rounded-full px-3 py-1.5 text-xs focus-within:border-stone-300 transition-colors">
-              <Search className="w-3.5 h-3.5 text-stone-400 mr-2 shrink-0" />
-              <input type="text" placeholder="Search orders, dishes..." className="bg-transparent outline-none w-full placeholder-stone-400 text-stone-800" />
-            </div>
+
 
             {isVerified ? (
               <button

@@ -174,7 +174,7 @@ export const AdminUsers: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                {users.map(user => {
+                users.map(user => {
                   const userId = String(user.id || user._id || '');
                   return (
                     <tr key={userId} className="hover:bg-stone-50/50 transition-colors">
@@ -227,17 +227,10 @@ export const AdminUsers: React.FC = () => {
                       </td>
                     </tr>
                   );
-                })}
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-stone-500">
-                      No registered {activeTab} found in database.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

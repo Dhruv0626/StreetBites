@@ -39,65 +39,73 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
   useEffect(() => {
     let isMounted = true;
 
+    const parseStallFromClusters = (clustersData: any[]) => {
+      let foundStall: Stall | null = null;
+      for (const c of clustersData) {
+        const match = (c.stalls || []).find(
+          (s: any) => String(s.id) === String(stallId) || String(s._id) === String(stallId)
+        );
+        if (match) {
+          const mappedDishes: Dish[] = (match.menu_items || []).map((m: any, mIdx: number) => ({
+            id: String(m._id || `dish_${mIdx}`),
+            name: m.name || 'Dish',
+            price: Number(m.price ?? m.base_price ?? 0),
+            description: m.description || '',
+            image_url: m.image_url || '',
+            category: m.category || m.food_item_id?.name || match.stall_category || 'Specialties',
+            is_available: m.is_available !== false,
+            status: m.status || 'Approved',
+          }));
+
+          const rawCategories = Array.from(new Set(mappedDishes.map((d) => d.category))).filter(Boolean);
+          const categories = rawCategories.length > 0 ? ['All Items', ...rawCategories] : ['All Items'];
+
+          const isOnline = match.status !== 'CLOSED' && Boolean(match.is_accepting_orders);
+
+          foundStall = {
+            id: String(match.id || match._id || ''),
+            name: match.name || 'Stall',
+            stall_category: match.stall_category || 'Street Food',
+            cluster: c.name || 'Khau Galli',
+            clusterId: String(c.id || c._id || ''),
+            khauGalliId: String(c.id || c._id || ''),
+            khauGalliName: c.name || 'Khau Galli',
+            rating: Number(match.rating) || 0,
+            open_till: match.open_till || '',
+            since: match.since || '1998',
+            description: match.description || '',
+            image_url: match.image_url || '',
+            is_accepting_orders: isOnline,
+            status: match.status || 'ACTIVE',
+            categories,
+            dishes: mappedDishes,
+          };
+          break;
+        }
+      }
+
+      if (isMounted && foundStall) {
+        setCurrentStall(foundStall);
+        setIsLoading(false);
+      }
+    };
+
+    // 1. Subscribe to SWR live cache updates (instantly syncs UI without page reload)
+    const unsubscribe = clusterService.subscribe((clustersData) => {
+      if (isMounted && Array.isArray(clustersData) && clustersData.length > 0) {
+        parseStallFromClusters(clustersData);
+      }
+    });
+
+    // 2. Fetch / SWR trigger
     const fetchStall = async () => {
-      if (!currentStall) {
+      if (!currentStall && !clusterService.getCachedClusters()) {
         setIsLoading(true);
       }
       try {
         const res = await clusterService.getClusters();
-        if (!isMounted) return;
-
-        if (res.success && Array.isArray(res.data)) {
-          let foundStall: Stall | null = null;
-          for (const c of res.data) {
-            const match = (c.stalls || []).find(
-              (s: any) => String(s.id) === String(stallId) || String(s._id) === String(stallId)
-            );
-            if (match) {
-              const mappedDishes: Dish[] = (match.menu_items || []).map((m: any, mIdx: number) => ({
-                id: String(m._id || `dish_${mIdx}`),
-                name: m.name || 'Dish',
-                price: Number(m.price ?? m.base_price ?? 0),
-                description: m.description || '',
-                image_url: m.image_url || '',
-                category: m.category || m.food_item_id?.name || match.stall_category || 'Specialties',
-                is_available: m.is_available !== false,
-                status: m.status || 'Approved',
-              }));
-
-              const rawCategories = Array.from(new Set(mappedDishes.map(d => d.category))).filter(Boolean);
-              const categories = rawCategories.length > 0 ? ['All Items', ...rawCategories] : ['All Items'];
-
-              const isOnline = match.status !== 'CLOSED' && Boolean(match.is_accepting_orders);
-
-              foundStall = {
-                id: String(match.id || match._id || ''),
-                name: match.name || 'Stall',
-                stall_category: match.stall_category || 'Street Food',
-                cluster: c.name || 'Khau Galli',
-                clusterId: String(c.id || c._id || ''),
-                khauGalliId: String(c.id || c._id || ''),
-                khauGalliName: c.name || 'Khau Galli',
-                rating: Number(match.rating) || 0,
-                open_till: match.open_till || '',
-                since: match.since || '1998',
-                description: match.description || '',
-                image_url: match.image_url || '',
-                is_accepting_orders: isOnline,
-                status: match.status || 'ACTIVE',
-                categories,
-                dishes: mappedDishes,
-              };
-              break;
-            }
-          }
-
-          if (isMounted) {
-            setCurrentStall(foundStall);
-            if (foundStall && foundStall.categories.length > 0) {
-              setActiveCategory(foundStall.categories[0]);
-            }
-          }
+        if (isMounted && res.success && Array.isArray(res.data)) {
+          parseStallFromClusters(res.data);
         }
       } catch (err) {
         console.error('Error fetching stall detail:', err);
@@ -112,6 +120,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [stallId]);
 
@@ -364,7 +373,6 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {filteredDishes.map((dish, idx) => {
                       const qty = getDishQuantity(dish.id);
-                      const isBestseller = idx === 0 || dish.price >= 100;
 
                       return (
                         <div
@@ -632,7 +640,6 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
               ) : (
                 filteredDishes.map((dish, idx) => {
                   const qty = getDishQuantity(dish.id);
-                  const isBestseller = idx === 0 || dish.price >= 100;
 
                   return (
                     <div key={dish.id} className="bg-white p-3.5 rounded-3xl border border-[#EAE4DA] shadow-3xs flex flex-col justify-between">

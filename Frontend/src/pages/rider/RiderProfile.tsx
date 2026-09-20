@@ -73,6 +73,10 @@ export const RiderProfilePage: React.FC = () => {
                 <span className="text-stone-600">Vehicle RC</span>
                 <span className="text-emerald-600 font-bold text-xs bg-emerald-50 px-2 py-1 rounded">Verified</span>
               </li>
+              <li className="flex justify-between items-center">
+                <span className="text-stone-600">Vehicle Insurance</span>
+                <span className="text-emerald-600 font-bold text-xs bg-emerald-50 px-2 py-1 rounded">Verified</span>
+              </li>
             </ul>
           </div>
         </div>

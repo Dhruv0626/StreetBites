@@ -15,60 +15,81 @@ export const Home: React.FC = () => {
   const [isLoadingClusters, setIsLoadingClusters] = useState<boolean>(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const processHomeData = (rawClusters: any[]) => {
+      if (!isMounted || !Array.isArray(rawClusters)) return;
+      const mapped: ClusterItem[] = rawClusters.map((c: any) => {
+        const onlineCount = c.stalls
+          ? c.stalls.filter((s: any) => s.status !== 'CLOSED' && s.is_accepting_orders).length
+          : 0;
+        const totalCount = c.stalls ? c.stalls.length : 0;
+        return {
+          id: c.id,
+          name: c.name,
+          subtext: c.city || 'Ahmedabad',
+          distance: '',
+          eta: '',
+          imageText: c.name.toUpperCase(),
+          badge: onlineCount > 0 ? 'LIVE' : null,
+          isLive: c.is_active !== false && onlineCount > 0,
+          stallsOpen: onlineCount,
+          totalStalls: totalCount,
+          categories: [],
+          image: c.image_url || '',
+        };
+      });
+      setClusters(mapped);
+
+      const dynamicStalls = rawClusters.flatMap((c: any) =>
+        (c.stalls || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          rating: Number(s.rating ?? 0.0),
+          time: '20-25 mins',
+          type: s.stall_category || 'Street Food',
+          price: '₹150 for two',
+          image: s.image_url || 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop',
+          menu_items: s.menu_items || [],
+        }))
+      );
+      setStalls(dynamicStalls);
+      setIsLoadingClusters(false);
+    };
+
+    // 1. Subscribe to live SWR updates
+    const unsubscribe = clusterService.subscribe((data) => {
+      processHomeData(data);
+    });
+
+    // 2. Initial SWR fetch
     const loadClusters = async () => {
-      setIsLoadingClusters(true);
+      if (!clusterService.getCachedClusters()) {
+        setIsLoadingClusters(true);
+      }
       try {
         const res: any = await clusterService.getClusters();
-        if (res.success && res.data && res.data.length > 0) {
-          const mapped: ClusterItem[] = res.data.map((c: any) => {
-            const onlineCount = c.stalls ? c.stalls.filter((s: any) => s.status !== 'CLOSED' && s.is_accepting_orders).length : 0;
-            const totalCount = c.stalls ? c.stalls.length : 0;
-            return {
-              id: c.id,
-              name: c.name,
-              subtext: c.city || 'Ahmedabad',
-              distance: '',
-              eta: '',
-              imageText: c.name.toUpperCase(),
-              badge: onlineCount > 0 ? 'LIVE' : null,
-              isLive: c.is_active !== false && onlineCount > 0,
-              stallsOpen: onlineCount,
-              totalStalls: totalCount,
-              categories: [],
-              image: c.image_url || '',
-            };
-          });
-          setClusters(mapped);
-
-          const dynamicStalls = res.data.flatMap((c: any) =>
-            (c.stalls || []).map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              rating: Number(s.rating ?? 0.0),
-              time: '20-25 mins',
-              type: s.stall_category || 'Street Food',
-              price: '₹150 for two',
-              image: s.image_url || 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop',
-              menu_items: s.menu_items || [],
-            }))
-          );
-          setStalls(dynamicStalls);
-        } else {
-          setClusters([]);
-          setStalls([]);
+        if (isMounted && res.success && res.data && res.data.length > 0) {
+          processHomeData(res.data);
         }
-
-        if (res.food_items && Array.isArray(res.food_items)) {
+        if (isMounted && res.food_items && Array.isArray(res.food_items)) {
           setApprovedFoodCategories(res.food_items);
         }
       } catch (err) {
         console.error('Failed to load clusters for Home:', err);
       } finally {
-        setIsLoadingClusters(false);
+        if (isMounted) {
+          setIsLoadingClusters(false);
+        }
       }
     };
 
     loadClusters();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Exclusively show master FoodItem model categories approved by Admin (excluding stall-specific varieties)

@@ -26,6 +26,7 @@ import {
   createCustomerAddress,
   updateCustomerAddress,
   deleteCustomerAddress,
+  subscribeAddresses,
 } from '../../services/addressService';
 import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding';
 import type { AddressItem } from '../../types';
@@ -75,7 +76,20 @@ export const Profile: React.FC = () => {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    const unsubscribe = subscribeAddresses((data) => {
+      if (isMounted && Array.isArray(data)) {
+        setAddresses(data);
+        setIsLoadingAddresses(false);
+      }
+    });
+
     loadAddresses();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [user]);
 
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
