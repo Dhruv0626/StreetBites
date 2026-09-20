@@ -59,6 +59,7 @@ const formatCartResponse = async (customerId: string) => {
     id: String(clusterObj?._id || clusterObj || cart.cluster_id || ""),
     name: clusterObj?.name || cart.khau_galli_name || "Khau Galli",
     city: clusterObj?.city || "Ahmedabad",
+    coordinates: clusterObj?.coordinates?.coordinates || [72.5873, 23.0248], // [lng, lat]
   };
 
   const items = cart.items.map((item: any) => {

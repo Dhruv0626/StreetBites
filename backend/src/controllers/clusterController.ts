@@ -4,6 +4,7 @@ import { Stall } from "../models/Stall.ts";
 import { User } from "../models/User.ts";
 import { FoodItem } from "../models/FoodItem.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
+import { memoryCache } from "../utils/cache.ts";
 
 /**
  * @desc    Get all clusters with their nested stalls & live counts from MongoDB
@@ -11,6 +12,13 @@ import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary
  */
 export const getClusters = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const cacheKey = "all_clusters";
+    const cachedData = memoryCache.get(cacheKey);
+    if (cachedData) {
+      res.status(200).json(cachedData);
+      return;
+    }
+
     const clusters = await Cluster.find().sort({ createdAt: -1 }).lean();
     const approvedFoodItems = await FoodItem.find({
       status: { $in: ["Approved", "APPROVED", "approved"] },
@@ -75,7 +83,7 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
       })
     );
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       data: clustersWithStalls,
       food_items: approvedFoodItems.map((f: any) => ({
@@ -86,7 +94,12 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
         image_url: f.image_url || "",
         status: "Approved",
       })),
-    });
+    };
+
+    // Cache in RAM for 3 minutes (180 seconds)
+    memoryCache.set(cacheKey, responsePayload, 180);
+
+    res.status(200).json(responsePayload);
   } catch (error: any) {
     console.error("Get Clusters Error:", error);
     res.status(500).json({
@@ -104,6 +117,13 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
 export const getClusterById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const cacheKey = `cluster_${id}`;
+    const cachedData = memoryCache.get(cacheKey);
+    if (cachedData) {
+      res.status(200).json(cachedData);
+      return;
+    }
+
     const cluster = await Cluster.findById(id).lean();
 
     if (!cluster) {
@@ -149,13 +169,17 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
       })),
     }));
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       data: {
         ...cluster,
         stalls: formattedStalls,
       },
-    });
+    };
+
+    memoryCache.set(cacheKey, responsePayload, 180);
+
+    res.status(200).json(responsePayload);
   } catch (error: any) {
     console.error("Get Cluster By ID Error:", error);
     res.status(500).json({
@@ -216,6 +240,8 @@ export const createCluster = async (req: Request, res: Response): Promise<void> 
       },
       is_active: true,
     });
+
+    memoryCache.invalidateClusters();
 
     res.status(201).json({
       success: true,
@@ -294,6 +320,7 @@ export const updateCluster = async (req: Request, res: Response): Promise<void> 
     }
 
     await cluster.save();
+    memoryCache.invalidateClusters();
 
     res.status(200).json({
       success: true,
@@ -337,6 +364,8 @@ export const deleteCluster = async (req: Request, res: Response): Promise<void> 
       });
       return;
     }
+
+    memoryCache.invalidateClusters();
 
     res.status(200).json({
       success: true,

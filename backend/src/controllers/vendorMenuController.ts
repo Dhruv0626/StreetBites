@@ -7,6 +7,7 @@ import { User } from "../models/User.ts";
 import { Cluster } from "../models/Cluster.ts";
 import type { AuthRequest } from "../middlewares/authMiddleware.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
+import { memoryCache } from "../utils/cache.ts";
 
 // Helper to safely extract user ID from auth context, cookies, or headers
 const resolveUserId = async (req: AuthRequest): Promise<string | null> => {
@@ -295,6 +296,7 @@ export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void
       { _id: stall._id },
       { $push: { menu_items: newMenuItem } }
     );
+    memoryCache.invalidateClusters();
 
     res.status(201).json({
       success: true,
@@ -361,6 +363,7 @@ export const addFoodCategory = async (req: AuthRequest, res: Response): Promise<
         image_url: finalImageUrl,
         status: "Review_pending"
       });
+      memoryCache.invalidateClusters();
     }
 
     res.status(201).json({
@@ -406,6 +409,7 @@ export const toggleItemAvailability = async (req: AuthRequest, res: Response): P
 
     item.is_available = !item.is_available;
     await stall.save();
+    memoryCache.invalidateClusters();
 
     res.status(200).json({
       success: true,
@@ -445,6 +449,7 @@ export const deleteMenuItem = async (req: AuthRequest, res: Response): Promise<v
       { _id: stall._id },
       { $pull: { menu_items: { _id: new mongoose.Types.ObjectId(id) } } }
     );
+    memoryCache.invalidateClusters();
 
     res.status(200).json({
       success: true,

@@ -2,9 +2,14 @@ import mongoose, { type Document, type Model } from "mongoose";
 
 // Interface for User Address (Table 8: Saved Delivery Addresses)
 export interface IAddress extends Document {
-  customer_id: mongoose.Types.ObjectId;
+  customer_id: any;
   label: string;
   detail: string;
+  house_no?: string;
+  area?: string;
+  city?: string;
+  pincode?: string;
+  landmark?: string;
   is_primary: boolean;
   lat_lng: {
     type: "Point";
@@ -33,7 +38,7 @@ const PointSchema = new mongoose.Schema(
 const AddressSchema = new mongoose.Schema<IAddress>(
   {
     customer_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: "User",
       required: [true, "Customer ID reference is required"],
     },
@@ -45,6 +50,31 @@ const AddressSchema = new mongoose.Schema<IAddress>(
     detail: {
       type: String,
       required: [true, "Full address details are required"],
+      trim: true,
+    },
+    house_no: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    area: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    city: {
+      type: String,
+      default: "Ahmedabad",
+      trim: true,
+    },
+    pincode: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    landmark: {
+      type: String,
+      default: "",
       trim: true,
     },
     is_primary: {

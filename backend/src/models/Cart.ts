@@ -65,7 +65,6 @@ const CartSchema = new mongoose.Schema<ICart>(
       type: String,
       required: [true, "Customer ID is required"],
       unique: true,
-      index: true,
     },
     cluster_id: {
       type: mongoose.Schema.Types.Mixed,
@@ -84,7 +83,6 @@ const CartSchema = new mongoose.Schema<ICart>(
 );
 
 // Indexes
-CartSchema.index({ customer_id: 1 }, { unique: true });
 CartSchema.index({ customer_id: 1, cluster_id: 1 });
 
 export const Cart: Model<ICart> = mongoose.model<ICart>("Cart", CartSchema);
