@@ -8,7 +8,7 @@ export interface ApiResponse<T = any> {
 
 export const adminService = {
   // Transactions & Financials
-  getTransactions: async (): Promise<ApiResponse<{ all: any[]; payouts: any[]; refunds: any[] }>> => {
+  getTransactions: async (): Promise<ApiResponse<{ all: any[]; payouts: any[]; refunds: any[]; floatingCodCash?: number }>> => {
     return api.get('/admin/transactions');
   },
 

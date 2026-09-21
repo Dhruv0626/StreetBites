@@ -8,22 +8,25 @@ const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { useAuth } from '../../context/AuthContext';
 import { useLocationPermission } from '../../hooks/useLocationPermission';
-import { MapPin, Navigation } from 'lucide-react';
+import { MapPin } from 'lucide-react';
+import riderService from '../../services/riderService';
+import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
 export const RiderLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const { isGranted, requestLocation, isLocating } = useLocationPermission();
   const [showLocationAlert, setShowLocationAlert] = useState(false);
-
-  // If rider has not added registration data yet, navigate to registration form
-  if (user && !user.verification_status) {
-    return <Navigate to="/rider/registration" replace />;
-  }
+  const [isOnline, setIsOnline] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+  const [tourKey, setTourKey] = useState(0);
+  const [riderDebt, setRiderDebt] = useState<number>(0);
+  const [queueCount, setQueueCount] = useState<number>(0);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   // If verification_status is not yet VERIFIED (e.g. PENDING or empty), online button is disabled
   const isVerified = user?.verification_status === 'VERIFIED';
-
-  const [isOnline, setIsOnline] = useState(false);
 
   const handleToggleOnline = async () => {
     if (!isOnline) {
@@ -40,20 +43,45 @@ export const RiderLayout: React.FC = () => {
       setIsOnline(false);
     }
   };
-  const [runTour, setRunTour] = useState(false);
-  const [tourKey, setTourKey] = useState(0);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadBadges = async () => {
+      try {
+        const [statsRes, queueRes] = await Promise.allSettled([
+          riderService.getStats({ riderId: user?._id || user?.id, email: user?.email }),
+          riderService.getQueue(),
+        ]);
+        if (!isMounted) return;
+        if (statsRes.status === 'fulfilled' && statsRes.value.success && statsRes.value.data) {
+          setRiderDebt(statsRes.value.data.currentCodDebt || 0);
+        }
+        if (queueRes.status === 'fulfilled' && queueRes.value.success && Array.isArray(queueRes.value.data)) {
+          setQueueCount(queueRes.value.data.length);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    if (user) {
+      loadBadges();
+    }
+    return () => { isMounted = false; };
+  }, [user]);
+
+  // If rider has not added registration data yet, navigate to registration form (after all hooks)
+  if (user && !user.verification_status) {
+    return <Navigate to="/rider/registration" replace />;
+  }
 
   const navToday = [
-    { label: 'Active route', icon: Compass, path: '/rider/Dashboard/route', badge: '0' },
-    { label: 'Queue', icon: FileText, path: '/rider/Dashboard/queue', badge: '0' },
+    { label: 'Active route', icon: Compass, path: '/rider/Dashboard/route' },
+    { label: 'Queue', icon: FileText, path: '/rider/Dashboard/queue', badge: queueCount > 0 ? `${queueCount}` : undefined },
     { label: 'Earnings', icon: Wallet, path: '/rider/Dashboard/earnings' },
   ];
 
   const navLedger = [
-    { label: 'COD debt', icon: CreditCard, path: '/rider/Dashboard/debt', badge: '₹0' },
+    { label: 'COD debt', icon: CreditCard, path: '/rider/Dashboard/debt', badge: riderDebt > 0 ? `₹${riderDebt}` : undefined },
     { label: 'Compensation', icon: AlertCircle, path: '/rider/Dashboard/compensation' },
     { label: 'Rules', icon: FileWarning, path: '/rider/Dashboard/guidelines' },
     { label: 'Profile', icon: User, path: '/rider/Dashboard/profile' },
@@ -257,8 +285,12 @@ export const RiderLayout: React.FC = () => {
         <div className="pt-4 border-t border-[#EFEBE4]">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-[#D94A38]/10 border border-[#D94A38]/20 flex items-center justify-center text-[10px] font-bold text-[#D94A38] shrink-0">
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'R'}
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-[#D94A38]/30 shrink-0 bg-stone-100 shadow-sm">
+                <img 
+                  src={riderAvatarImg} 
+                  alt="Rider Avatar" 
+                  className="w-full h-full object-cover" 
+                />
               </div>
               <div className="overflow-hidden">
                 <h4 className="text-[11px] font-bold text-stone-800 leading-none truncate">{user?.name || 'StreetBites Rider'}</h4>

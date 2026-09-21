@@ -10,6 +10,8 @@ export type OrderStatus =
   | "CANCELLED";
 export type CodDepositStatus = "PENDING_DEPOSIT" | "DEPOSITED_TO_ADMIN";
 
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+
 // Interface for Order (Table 6: Parent Master Order)
 export interface IOrder extends Document {
   customer_id: mongoose.Types.ObjectId;
@@ -19,6 +21,10 @@ export interface IOrder extends Document {
   tax_amount: number;
   total_amount: number;
   payment_method: PaymentMethod;
+  payment_status?: PaymentStatus;
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_signature?: string | null;
   status: OrderStatus;
   delivery_address: string;
   delivery_notes?: string;
@@ -69,6 +75,23 @@ const OrderSchema = new mongoose.Schema<IOrder>(
       type: String,
       enum: ["ONLINE", "COD"],
       required: [true, "Payment method is required"],
+    },
+    payment_status: {
+      type: String,
+      enum: ["PENDING", "PAID", "FAILED", "REFUNDED"],
+      default: "PENDING",
+    },
+    razorpay_order_id: {
+      type: String,
+      default: null,
+    },
+    razorpay_payment_id: {
+      type: String,
+      default: null,
+    },
+    razorpay_signature: {
+      type: String,
+      default: null,
     },
     status: {
       type: String,

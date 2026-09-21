@@ -15,7 +15,8 @@ export interface IUser {
   aadhaar_image_url?: string | null;
   vehicle_photo_url?: string | null;
   vehicle_number_plate_image?: string | null;
-  rc_image_url?: string;
+  rc_image_url?: string | null;
+  insurance_image_url?: string | null;
   vehicle_model?: string | null;
   verification_status: VerificationStatus;
   account_status: AccountStatus;
@@ -29,6 +30,8 @@ export interface IUser {
   bank_ifsc?: string | null;
   upi_id?: string | null;
   wallet_balance: number;
+  floating_cash_debt: number;
+  cash_limit: number;
   favorite_stalls?: any[];
   google_id?: string | null;
   facebook_id?: string | null;
@@ -102,6 +105,9 @@ const UserSchema = new mongoose.Schema<IUser>(
     rc_image_url: {
       type: String,
     },
+    insurance_image_url: {
+      type: String,
+    },
     vehicle_model: {
       type: String,
     },
@@ -136,6 +142,16 @@ const UserSchema = new mongoose.Schema<IUser>(
     wallet_balance: {
       type: Number,
       default: 0,
+    },
+    floating_cash_debt: {
+      type: Number,
+      default: 0,
+      min: [0, "Floating cash debt cannot be negative"],
+    },
+    cash_limit: {
+      type: Number,
+      default: 0,
+      min: [0, "Cash limit cannot be negative"],
     },
     favorite_stalls: {
       type: [

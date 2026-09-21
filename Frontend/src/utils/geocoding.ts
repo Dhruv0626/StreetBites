@@ -65,7 +65,7 @@ export async function geocodeAddressText(
     return null;
   }
 
-  const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || 'pKaNxsGAgRWmxEehTjy8EIxVWGsfSIc3';
+  const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || "";
 
   // 1. Try TomTom Geocoding API across candidate queries
   for (const query of candidateQueries) {
@@ -176,7 +176,7 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
   // 2. Secondary: TomTom reverse geocode if area not found or identical to city
   if (!detectedArea || detectedArea.toLowerCase() === detectedCity.toLowerCase()) {
     try {
-      const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || 'pKaNxsGAgRWmxEehTjy8EIxVWGsfSIc3';
+      const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || "";
       const tomtomUrl = `https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${tomtomKey}`;
       const tomtomRes = await fetch(tomtomUrl);
       if (tomtomRes.ok) {

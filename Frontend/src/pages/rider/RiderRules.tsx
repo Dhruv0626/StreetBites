@@ -77,3 +77,5 @@ export const RiderRulesPage: React.FC = () => {
     </div>
   );
 };
+
+export default RiderRulesPage;

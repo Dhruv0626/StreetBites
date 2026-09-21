@@ -15,12 +15,14 @@ import favoriteRoutes from "./src/routes/favoriteRoutes.ts";
 import vendorMenuRoutes from "./src/routes/vendorMenuRoutes.ts";
 import cartRoutes from "./src/routes/cartRoutes.ts";
 import addressRoutes from "./src/routes/addressRoutes.ts";
+import riderRoutes from "./src/routes/riderRoutes.ts";
+import paymentRoutes from "./src/routes/paymentRoutes.ts";
 
 import { globalRateLimiter } from "./src/middlewares/rateLimiter.ts";
 
 // Initialize Express
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || "";
 
 // Enable Trust Proxy for accurate client IP resolution behind load balancers/proxies
 app.set("trust proxy", 1);
@@ -31,7 +33,7 @@ connectDB();
 // Global Middlewares
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL || "",
     credentials: true,
   })
 );
@@ -62,6 +64,8 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/vendor/menu", vendorMenuRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/addresses", addressRoutes);
+app.use("/api/rider", riderRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Global Error Handler
 app.use(

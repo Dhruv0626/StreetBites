@@ -1,6 +1,6 @@
 // API Client with automatic Cookie credentials and silent Refresh Token rotation
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;

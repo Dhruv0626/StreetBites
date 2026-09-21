@@ -12,6 +12,7 @@ export const AdminSettings: React.FC = () => {
   const [extraStallFee, setExtraStallFee] = useState('5');
   const [vendorCommission, setVendorCommission] = useState('5');
   const [taxPercentage, setTaxPercentage] = useState('5');
+  const [riderCashLimit, setRiderCashLimit] = useState('0');
 
   // Operations Toggles
   const [weatherSurge, setWeatherSurge] = useState(false);
@@ -52,6 +53,7 @@ export const AdminSettings: React.FC = () => {
         setExtraStallFee(String(s.extra_stall_fee ?? 5));
         setVendorCommission(String(s.vendor_commission_percentage ?? 5));
         setTaxPercentage(String(s.tax_percentage ?? 5));
+        setRiderCashLimit(String(s.rider_cash_limit ?? 0));
         setWeatherSurge(Boolean(s.is_weather_surge_enabled));
         setMaintenanceMode(Boolean(s.is_maintenance_mode));
         setFestivalDays(Boolean(s.is_festival_incentive_enabled));
@@ -79,6 +81,7 @@ export const AdminSettings: React.FC = () => {
       extra_stall_fee: Number(extraStallFee) >= 0 ? Number(extraStallFee) : 10,
       vendor_commission_percentage: Number(vendorCommission) || 5,
       tax_percentage: Number(taxPercentage) || 5,
+      rider_cash_limit: Number(riderCashLimit) >= 0 ? Number(riderCashLimit) : 0,
       is_weather_surge_enabled: weatherSurge,
       is_festival_incentive_enabled: festivalDays,
       is_maintenance_mode: maintenanceMode,
@@ -112,6 +115,7 @@ export const AdminSettings: React.FC = () => {
           setExtraStallFee(String(s.extra_stall_fee ?? 10));
           setVendorCommission(String(s.vendor_commission_percentage ?? 5));
           setTaxPercentage(String(s.tax_percentage ?? 5));
+          setRiderCashLimit(String(s.rider_cash_limit ?? 0));
           setWeatherSurge(Boolean(s.is_weather_surge_enabled));
           setMaintenanceMode(Boolean(s.is_maintenance_mode));
           setFestivalDays(Boolean(s.is_festival_incentive_enabled));
@@ -258,6 +262,23 @@ export const AdminSettings: React.FC = () => {
                 />
                 <span className="text-[10px] text-stone-400 mt-1 block">Statutory aggregator tax</span>
               </div>
+            </div>
+
+            <div className="pt-3 border-t border-stone-100">
+              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">
+                Rider Max COD Cash Limit (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={riderCashLimit}
+                onChange={(e) => setRiderCashLimit(e.target.value)}
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold text-stone-900 focus:outline-none focus:border-[#D94A38] transition-colors"
+                placeholder="0"
+              />
+              <span className="text-[10px] text-stone-400 mt-1 block">
+                Maximum floating cash debt riders can hold before account blocks accepting new COD orders (Default: ₹0).
+              </span>
             </div>
           </div>
         </div>

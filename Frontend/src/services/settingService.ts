@@ -9,6 +9,7 @@ export interface PlatformSettingsData {
   is_weather_surge_enabled: boolean;
   is_festival_incentive_enabled: boolean;
   is_maintenance_mode: boolean;
+  rider_cash_limit?: number;
   createdAt?: string;
   updatedAt?: string;
 }

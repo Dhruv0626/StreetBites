@@ -14,7 +14,7 @@ import {
 import type { CartItem } from '../../types';
 import { OrdersSkeleton } from '../../components';
 import buttonLoader from '../../assets/Loader/button_loading.gif';
-
+import { razorpayService } from '../../services/razorpayService';
 
 interface OrdersProps {
   activeOrder: {
@@ -36,14 +36,24 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   const [etaMinutes, setEtaMinutes] = useState<number>(18);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
 
-  // Scroll to top when Orders page is mounted
+  // Load real customer orders from backend
   useEffect(() => {
     window.scrollTo(0, 0);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
+    const fetchOrders = async () => {
+      try {
+        const res = await razorpayService.getCustomerOrders();
+        if (res.success && res.data && Array.isArray(res.data)) {
+          setLiveOrders(res.data);
+        }
+      } catch (err) {
+        console.error('Failed to load customer orders:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchOrders();
   }, []);
 
   const items = activeOrder?.items || [
@@ -99,14 +109,28 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
     }, 2000);
   };
 
+  const ordersToDisplay = liveOrders.length > 0 ? liveOrders.map(o => ({
+    id: o.orderNumber || `MO-${String(o.id).slice(-5).toUpperCase()}`,
+    realId: o.id,
+    date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
+    total: o.totalAmount,
+    cluster: o.clusterName || 'StreetBites Khau Galli',
+    stalls: [o.clusterName || 'StreetBites Khau Galli'],
+    items: o.itemsCount || 1,
+    status: o.status === 'DELIVERED' ? 'Delivered' : o.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : 'Preparing',
+    payment: o.paymentMethod || 'Online',
+    deliveryOtp: o.deliveryOtp,
+    address: o.deliveryAddress,
+  })) : [
+    { id: 'MO-77190', date: 'Oct 12, 2026, 8:15 PM', total: 340, cluster: 'Manek Chowk', stalls: ['Bhavesh Dabeli', 'Asharfi Kulfi'], items: 4, status: 'Delivered', payment: 'UPI', deliveryOtp: '4892', address: '' },
+    { id: 'MO-77145', date: 'Oct 05, 2026, 7:30 PM', total: 180, cluster: 'Urban Chowk', stalls: ['Gwalia Sweets'], items: 2, status: 'Delivered', payment: 'Card', deliveryOtp: '2914', address: '' },
+    { id: 'MO-76892', date: 'Sep 28, 2026, 9:00 PM', total: 450, cluster: 'Manek Chowk', stalls: ['Bhajipav Bhandar', 'Manek Pizza'], items: 5, status: 'Delivered', payment: 'UPI', deliveryOtp: '7182', address: '' },
+    { id: 'MO-75412', date: 'Sep 15, 2026, 1:15 PM', total: 220, cluster: 'Law Garden', stalls: ['Happy Sandwich', 'Swati Snacks'], items: 3, status: 'Delivered', payment: 'Cash', deliveryOtp: '3349', address: '' },
+  ];
+
   const renderPastOrders = () => (
     <div className="space-y-4 max-w-4xl animate-fadeIn">
-      {[
-        { id: 'MO-77190', date: 'Oct 12, 2026, 8:15 PM', total: 340, cluster: 'Manek Chowk', stalls: ['Bhavesh Dabeli', 'Asharfi Kulfi'], items: 4, status: 'Delivered', payment: 'UPI' },
-        { id: 'MO-77145', date: 'Oct 05, 2026, 7:30 PM', total: 180, cluster: 'Urban Chowk', stalls: ['Gwalia Sweets'], items: 2, status: 'Delivered', payment: 'Card' },
-        { id: 'MO-76892', date: 'Sep 28, 2026, 9:00 PM', total: 450, cluster: 'Manek Chowk', stalls: ['Bhajipav Bhandar', 'Manek Pizza'], items: 5, status: 'Delivered', payment: 'UPI' },
-        { id: 'MO-75412', date: 'Sep 15, 2026, 1:15 PM', total: 220, cluster: 'Law Garden', stalls: ['Happy Sandwich', 'Swati Snacks'], items: 3, status: 'Delivered', payment: 'Cash' },
-      ].map(order => {
+      {ordersToDisplay.map(order => {
         const isExpanded = expandedOrderId === order.id;
 
         return (
@@ -120,8 +144,13 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
             >
               <div>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider">{order.status}</span>
+                  {order.deliveryOtp && (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-md">
+                      OTP: {order.deliveryOtp}
+                    </span>
+                  )}
                   <span className="text-xs text-[#8E8B85] font-semibold">{order.date}</span>
                 </div>
                 <h3 className="text-sm font-bold text-[#1C1917] mb-1">{order.cluster} Order <span className="text-[#8E8B85] font-mono font-medium ml-1">#{order.id}</span></h3>

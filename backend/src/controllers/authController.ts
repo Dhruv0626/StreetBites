@@ -40,8 +40,8 @@ export const clearAuthCookies = (res: Response): void => {
 
 // Generate Access & Refresh tokens
 export const generateTokens = (userId: string, role: string) => {
-  const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "streetbites_access_jwt_secret_dev_key_2026";
-  const refreshSecret = process.env.JWT_REFRESH_SECRET || "streetbites_refresh_jwt_secret_dev_key_2026";
+  const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "";
+  const refreshSecret = process.env.JWT_REFRESH_SECRET || "";
 
   const accessToken = jwt.sign({ id: userId, role }, accessSecret, { expiresIn: "15m" });
   const refreshToken = jwt.sign({ id: userId, role }, refreshSecret, { expiresIn: "7d" });
@@ -95,14 +95,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     // Enforce Admin Secret Key validation for Admin registration
     if (userRole === "ADMIN") {
-      const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "StreetBitesAdmin2026SecurePasscode").trim();
+      const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
       const providedSecret = (req.body.secretKey || req.body.secret_key || req.body.SecretKey || "").trim();
 
       const isValidSecret =
         providedSecret &&
         (providedSecret === serverAdminSecret ||
-          providedSecret.toLowerCase() === serverAdminSecret.toLowerCase() ||
-          providedSecret === "StreetBitesAdmin2026SecurePasscode");
+          providedSecret.toLowerCase() === serverAdminSecret.toLowerCase());
 
       if (!isValidSecret) {
         res.status(403).json({
@@ -221,7 +220,7 @@ export const refreshAccessToken = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const refreshSecret = process.env.JWT_REFRESH_SECRET || "streetbites_refresh_jwt_secret_dev_key_2026";
+    const refreshSecret = process.env.JWT_REFRESH_SECRET || "";
     let decoded: any;
 
     try {
@@ -267,7 +266,7 @@ const fetchGoogleProfile = async (googleToken?: string, code?: string) => {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID || "",
         client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
-        redirect_uri: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/api/auth/google/callback",
+        redirect_uri: process.env.GOOGLE_CALLBACK_URL || "",
         grant_type: "authorization_code",
       }).toString(),
     });
@@ -346,7 +345,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
 // @desc    Google OAuth2 Callback redirect handler
 // @route   GET /api/auth/google/callback
 export const googleCallback = async (req: Request, res: Response): Promise<void> => {
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  const clientUrl = process.env.CLIENT_URL || "";
   try {
     const code = req.query.code as string;
     const rawState = (req.query.state as string) || "signin:customer";
@@ -450,7 +449,7 @@ const fetchFacebookProfile = async (accessToken?: string, code?: string) => {
   const clientSecret = (process.env.FACEBOOK_CLIENT_SECRET || "").trim();
   const redirectUri = (
     process.env.FACEBOOK_CALLBACK_URL ||
-    `http://localhost:${process.env.PORT || 3000}/api/auth/facebook/callback`
+    ``
   ).trim();
 
   let token = accessToken;
@@ -548,7 +547,7 @@ export const facebookAuth = async (req: Request, res: Response): Promise<void> =
 // @desc    Facebook OAuth2 Callback redirect handler
 // @route   GET /api/auth/facebook/callback
 export const facebookCallback = async (req: Request, res: Response): Promise<void> => {
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  const clientUrl = process.env.CLIENT_URL || "";
   try {
     const code = req.query.code as string;
     const rawState = (req.query.state as string) || "signin:customer";
@@ -651,7 +650,7 @@ export const getFacebookAuthUrl = (req: Request, res: Response): void => {
   const clientId = (process.env.FACEBOOK_CLIENT_ID || "").trim();
   const callbackUrl = (
     process.env.FACEBOOK_CALLBACK_URL ||
-    `http://localhost:${process.env.PORT || 3000}/api/auth/facebook/callback`
+    ``
   ).trim();
 
   const state = `${action}:${role.toLowerCase()}`;
@@ -678,7 +677,7 @@ export const getGoogleAuthUrl = (req: Request, res: Response): void => {
   const role = (req.query.role as string) || "customer"; // 'customer' | 'vendor' | 'rider'
 
   const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
-  const callbackUrl = (process.env.GOOGLE_CALLBACK_URL || `http://localhost:${process.env.PORT || 3000}/api/auth/google/callback`).trim();
+  const callbackUrl = (process.env.GOOGLE_CALLBACK_URL || ``).trim();
 
   // Combine action and role into state (e.g., 'signup:customer', 'signup:vendor', 'signin:customer')
   const state = `${action}:${role.toLowerCase()}`;

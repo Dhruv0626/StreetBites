@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, ArrowUpRight } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { clusterService, type ClusterData } from '../../services/clusterService';
 
@@ -24,7 +24,7 @@ export const CustomerFooter: React.FC = () => {
   }, []);
 
   const displayClusters = clusters.length > 0
-    ? clusters.slice(0, 5)
+    ? clusters.slice(0, 4)
     : [
         { id: 'manek_chowk_01', name: 'Manek Chowk Khau Galli' },
         { id: 'law_garden_02', name: 'Law Garden Food Street' },
@@ -67,13 +67,6 @@ export const CustomerFooter: React.FC = () => {
                   </button>
                 </li>
               ))}
-              <li className="pt-1">
-                <button
-                  onClick={() => navigate('/all-khaugallis')}
-                  className="text-xs font-bold text-[#D94A38] hover:text-[#B73525] transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                </button>
-              </li>
             </ul>
           </div>
 

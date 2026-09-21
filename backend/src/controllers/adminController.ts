@@ -46,7 +46,11 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
     }));
 
     const payouts = formattedTransactions.filter(
-      (t) => t.type === "VENDOR_PAYOUT" || t.type === "RIDER_EARNING" || t.type === "PLATFORM_FEE"
+      (t) =>
+        t.type === "VENDOR_PAYOUT" ||
+        t.type === "RIDER_EARNING" ||
+        t.type === "PLATFORM_FEE" ||
+        t.type === "RIDER_COD_DEPOSIT"
     );
     const refunds = formattedTransactions.filter((t) => t.type === "CUSTOMER_REFUND").map(r => ({
       id: r.id,
@@ -58,12 +62,24 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
       status: r.status,
     }));
 
+    // Calculate floating COD cash held by riders in field
+    const pendingCodOrders = await Order.find({
+      payment_method: "COD",
+      cod_deposit_status: "PENDING_DEPOSIT",
+      status: "DELIVERED",
+    });
+    const floatingCodCash = pendingCodOrders.reduce(
+      (sum, o) => sum + (o.cod_amount_held || o.total_amount || 0),
+      0
+    );
+
     res.status(200).json({
       success: true,
       data: {
         all: formattedTransactions,
         payouts,
         refunds,
+        floatingCodCash,
       },
     });
   } catch (error: any) {

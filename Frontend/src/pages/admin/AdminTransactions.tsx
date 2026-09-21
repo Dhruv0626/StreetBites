@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle, Banknote } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { TableRowsSkeleton } from '../../components/Skeleton';
 
@@ -7,6 +7,7 @@ export const AdminTransactions: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'payouts' | 'refunds'>('payouts');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [refunds, setRefunds] = useState<any[]>([]);
+  const [floatingCodCash, setFloatingCodCash] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -20,6 +21,7 @@ export const AdminTransactions: React.FC = () => {
       if (res.success && res.data) {
         setPayouts(res.data.payouts || []);
         setRefunds(res.data.refunds || []);
+        setFloatingCodCash(res.data.floatingCodCash || 0);
       } else {
         setErrorMessage(res.message || 'Failed to fetch transactions');
       }
@@ -159,7 +161,7 @@ export const AdminTransactions: React.FC = () => {
       )}
 
       {/* Financial Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Net Platform Revenue</span>
@@ -168,7 +170,18 @@ export const AdminTransactions: React.FC = () => {
           <h3 className="text-3xl font-black text-stone-900">
             {isLoading ? '...' : `₹${totalNetRevenue.toLocaleString()}`}
           </h3>
-          <p className="text-xs text-stone-400 mt-1">Live platform earnings</p>
+          <p className="text-xs text-stone-400 mt-1">Global 15% platform earnings</p>
+        </div>
+
+        <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Floating Cash in Field</span>
+            <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg"><Banknote className="w-4 h-4" /></div>
+          </div>
+          <h3 className="text-3xl font-black text-stone-900">
+            {isLoading ? '...' : `₹${floatingCodCash.toLocaleString()}`}
+          </h3>
+          <p className="text-xs text-stone-400 mt-1">COD cash held by riders</p>
         </div>
         
         <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
@@ -258,7 +271,11 @@ export const AdminTransactions: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="text-xs font-mono font-bold text-stone-800">{tx.orderId}</div>
                         <div className="text-[10px] text-stone-400 mt-0.5">{tx.date}</div>
-                        {tx.user?.name && <div className="text-[11px] text-stone-500 mt-0.5">{tx.user.name} ({tx.user.role})</div>}
+                        {tx.user?.name ? (
+                          <div className="text-[11px] text-stone-500 mt-0.5">{tx.user.name} ({tx.user.role})</div>
+                        ) : (
+                          <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">Global System Revenue</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm font-bold text-emerald-600">
                         {tx.vendorGain > 0 ? `+₹${tx.vendorGain}` : '—'}

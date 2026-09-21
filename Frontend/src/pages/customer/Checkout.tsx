@@ -20,9 +20,11 @@ import {
   UserCheck,
   Loader2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { getCustomerAddresses, subscribeAddresses } from '../../services/addressService';
+import { razorpayService } from '../../services/razorpayService';
 import { AddressModal } from '../../components/customer/AddressModal';
 import { calculateDistanceKm, calculateDeliveryFee, calculateETA } from '../../utils/distance';
 import type { AddressItem } from '../../types';
@@ -89,7 +91,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
   onNavigate = () => { },
   onConfirmOrder = () => { },
 }) => {
-  const { cartItems, activeKhauGalli } = useCart();
+  const navigate = useNavigate();
+  const { cartItems, activeKhauGalli, clearCart } = useCart();
   const { user } = useAuth();
   const rawKhauGalliName = activeKhauGalli?.name || cartItems[0]?.khauGalliName || clusterName;
   const displayKhauGalliName = rawKhauGalliName.replace(/_/g, ' ');
@@ -97,6 +100,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'cod'>('upi');
   const [selectedUpiProvider, setSelectedUpiProvider] = useState<string>('gpay');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
+  const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Customer addresses state (fetched exclusively from database based on user_id)
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
@@ -217,15 +222,118 @@ export const Checkout: React.FC<CheckoutProps> = ({
   // Estimated savings vs separate aggregator deliveries
   const estimatedSavings = uniqueVendorsCount > 1 ? (uniqueVendorsCount - 1) * 35 : 0;
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!selectedAddress) {
       setIsAddressModalOpen(true);
       return;
     }
-    onConfirmOrder(
-      cartItems,
-      paymentMethod === 'upi' ? `UPI (${selectedUpiProvider.toUpperCase()})` : paymentMethod.toUpperCase()
-    );
+
+    if (cartItems.length === 0) {
+      alert('Your cart is empty.');
+      return;
+    }
+
+    setIsPlacingOrder(true);
+    setOrderError(null);
+
+    const fullAddress = [
+      (selectedAddress as any).flat_plot || selectedAddress.house_no || selectedAddress.detail,
+      selectedAddress.landmark,
+      selectedAddress.area,
+      selectedAddress.city,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const payload = {
+      cluster_id: activeKhauGalli?.id || (cartItems[0] as any)?.clusterId || '678000000000000000000001',
+      items: cartItems.map((item) => ({
+        stall_id: item.vendorId,
+        stallId: item.vendorId,
+        item_id: item.id,
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      delivery_fee: deliveryFee || 0,
+      delivery_address: fullAddress,
+      delivery_notes: deliveryNotes,
+    };
+
+    if (paymentMethod === 'cod') {
+      try {
+        const res = await razorpayService.createCodOrder(payload);
+        if (res.success) {
+          clearCart();
+          onConfirmOrder(cartItems, 'COD');
+          navigate('/orders');
+        } else {
+          setOrderError(res.message || 'Failed to place COD order.');
+        }
+      } catch (err: any) {
+        setOrderError(err.message || 'Error placing COD order.');
+      } finally {
+        setIsPlacingOrder(false);
+      }
+    } else {
+      // ONLINE Payment via Razorpay
+      try {
+        const orderRes = await razorpayService.createCheckoutOrder(payload);
+        if (!orderRes.success || !orderRes.data) {
+          setOrderError(orderRes.message || 'Failed to initiate payment.');
+          setIsPlacingOrder(false);
+          return;
+        }
+
+        const rzpData = orderRes.data;
+
+        await razorpayService.openCheckout({
+          key: rzpData.keyId,
+          amount: rzpData.amount,
+          currency: rzpData.currency,
+          order_id: rzpData.orderId,
+          customerName: recipientName,
+          customerEmail: user?.email,
+          customerPhone: recipientPhone,
+          onSuccess: async (rzpResponse) => {
+            try {
+              const verifyRes = await razorpayService.verifyPayment({
+                razorpay_order_id: rzpResponse.razorpay_order_id,
+                razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                razorpay_signature: rzpResponse.razorpay_signature,
+                cluster_id: payload.cluster_id,
+                items: payload.items,
+                delivery_fee: payload.delivery_fee,
+                delivery_address: payload.delivery_address,
+                delivery_notes: payload.delivery_notes,
+              });
+
+              if (verifyRes.success) {
+                clearCart();
+                onConfirmOrder(
+                  cartItems,
+                  paymentMethod === 'upi' ? `UPI (${selectedUpiProvider.toUpperCase()})` : 'CARD'
+                );
+                navigate('/orders');
+              } else {
+                setOrderError(verifyRes.message || 'Payment verification failed.');
+              }
+            } catch (vErr: any) {
+              setOrderError(vErr.message || 'Error verifying payment.');
+            } finally {
+              setIsPlacingOrder(false);
+            }
+          },
+          onDismiss: () => {
+            setIsPlacingOrder(false);
+          },
+        });
+      } catch (err: any) {
+        setOrderError(err.message || 'Error processing online payment.');
+        setIsPlacingOrder(false);
+      }
+    }
   };
 
   const handleAddressCreated = (newAddr: AddressItem) => {
@@ -258,20 +366,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
           return (
             <label
               key={addr.id || addr._id}
-              className={`flex gap-3 items-start p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                isSelected
-                  ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs'
-                  : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
-              }`}
+              className={`flex gap-3 items-start p-3.5 rounded-2xl border cursor-pointer transition-all ${isSelected
+                ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs'
+                : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
+                }`}
               onClick={() => {
                 setSelectedAddressId(addr.id || addr._id || '');
                 setIsChangingAddress(false);
               }}
             >
               <div
-                className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-[#D94A38] bg-[#D94A38]' : 'border-[#DCD6CC]'
-                }`}
+                className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-[#D94A38] bg-[#D94A38]' : 'border-[#DCD6CC]'
+                  }`}
               >
                 {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
               </div>
@@ -508,11 +614,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
               <div className="grid grid-cols-3 gap-2 p-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl mb-6">
                 <button
                   onClick={() => setPaymentMethod('upi')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
-                    paymentMethod === 'upi'
-                      ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                      : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-                  }`}
+                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'upi'
+                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
+                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                    }`}
                 >
                   <Zap className="w-3.5 h-3.5 text-[#D94A38]" />
                   <span>UPI · Instant</span>
@@ -520,11 +625,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
                 <button
                   onClick={() => setPaymentMethod('card')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
-                    paymentMethod === 'card'
-                      ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                      : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-                  }`}
+                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'card'
+                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
+                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                    }`}
                 >
                   <CreditCard className="w-3.5 h-3.5 text-[#8E8B85]" />
                   <span>Card</span>
@@ -532,11 +636,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
                 <button
                   onClick={() => setPaymentMethod('cod')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
-                    paymentMethod === 'cod'
-                      ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                      : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-                  }`}
+                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'cod'
+                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
+                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                    }`}
                 >
                   <Banknote className="w-3.5 h-3.5 text-[#2E7D32]" />
                   <span>Cash</span>
@@ -556,11 +659,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
                       <button
                         key={provider.id}
                         onClick={() => setSelectedUpiProvider(provider.id)}
-                        className={`p-3.5 rounded-2xl border text-left flex justify-between items-center transition-all cursor-pointer ${
-                          selectedUpiProvider === provider.id
-                            ? 'border-[#D94A38] bg-[#FAF0ED]/30 shadow-xs ring-1 ring-[#D94A38]'
-                            : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
-                        }`}
+                        className={`p-3.5 rounded-2xl border text-left flex justify-between items-center transition-all cursor-pointer ${selectedUpiProvider === provider.id
+                          ? 'border-[#D94A38] bg-[#FAF0ED]/30 shadow-xs ring-1 ring-[#D94A38]'
+                          : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
+                          }`}
                       >
                         <div>
                           <div className="flex items-center gap-1.5">
@@ -576,11 +678,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
                           <span className="text-[10px] text-[#8E8B85]">{provider.handle}</span>
                         </div>
                         <div
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                            selectedUpiProvider === provider.id
-                              ? 'border-[#D94A38] bg-[#D94A38] text-white'
-                              : 'border-[#DCD6CC]'
-                          }`}
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${selectedUpiProvider === provider.id
+                            ? 'border-[#D94A38] bg-[#D94A38] text-white'
+                            : 'border-[#DCD6CC]'
+                            }`}
                         >
                           {selectedUpiProvider === provider.id && (
                             <div className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -791,12 +892,23 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   )}
                 </div>
 
+                {orderError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl mb-3 animate-fadeIn">
+                    {orderError}
+                  </div>
+                )}
+
                 <button
                   onClick={handlePay}
-                  disabled={isCalculatingFee}
+                  disabled={isCalculatingFee || isPlacingOrder}
                   className="w-full bg-gradient-to-r from-[#D94A38] to-[#C43D2E] hover:from-[#C43D2E] hover:to-[#B33527] text-white font-extrabold text-sm py-4 rounded-2xl flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer border-0 active:scale-[0.99] disabled:opacity-75"
                 >
-                  {isCalculatingFee ? (
+                  {isPlacingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Processing order...</span>
+                    </>
+                  ) : isCalculatingFee ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Computing delivery fee...</span>
@@ -1032,20 +1144,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
               Payment method
             </h3>
             <div
-              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${
-                paymentMethod === 'upi' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
-              }`}
+              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${paymentMethod === 'upi' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
+                }`}
             >
               <label
                 className="flex items-center gap-3 cursor-pointer"
                 onClick={() => setPaymentMethod('upi')}
               >
                 <div
-                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                    paymentMethod === 'upi'
-                      ? 'border-[#D94A38] bg-[#D94A38] text-white'
-                      : 'border-[#DCD6CC]'
-                  }`}
+                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'upi'
+                    ? 'border-[#D94A38] bg-[#D94A38] text-white'
+                    : 'border-[#DCD6CC]'
+                    }`}
                 >
                   {paymentMethod === 'upi' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
@@ -1064,20 +1174,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
             </div>
 
             <div
-              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${
-                paymentMethod === 'cod' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
-              }`}
+              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${paymentMethod === 'cod' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
+                }`}
             >
               <label
                 className="flex items-center gap-3 cursor-pointer"
                 onClick={() => setPaymentMethod('cod')}
               >
                 <div
-                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                    paymentMethod === 'cod'
-                      ? 'border-[#D94A38] bg-[#D94A38] text-white'
-                      : 'border-[#DCD6CC]'
-                  }`}
+                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'cod'
+                    ? 'border-[#D94A38] bg-[#D94A38] text-white'
+                    : 'border-[#DCD6CC]'
+                    }`}
                 >
                   {paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
@@ -1102,10 +1210,15 @@ export const Checkout: React.FC<CheckoutProps> = ({
           </div>
           <button
             onClick={handlePay}
-            disabled={isCalculatingFee}
+            disabled={isCalculatingFee || isPlacingOrder}
             className="flex-1 py-3.5 bg-gradient-to-r from-[#D94A38] to-[#C43D2E] text-white text-xs font-black rounded-2xl flex items-center justify-center gap-1.5 shadow-sm border-0 cursor-pointer disabled:opacity-75"
           >
-            {isCalculatingFee ? (
+            {isPlacingOrder ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : isCalculatingFee ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Calculating...</span>
@@ -1118,7 +1231,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
             ) : (
               <>
                 <Lock className="w-3.5 h-3.5" />
-                <span>Pay via {paymentMethod === 'upi' ? 'UPI' : 'Cash'}</span>
+                <span>Pay via {paymentMethod === 'upi' ? 'UPI' : paymentMethod === 'card' ? 'CARD' : 'Cash'}</span>
               </>
             )}
           </button>

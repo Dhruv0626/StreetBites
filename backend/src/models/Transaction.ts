@@ -5,17 +5,19 @@ export type TransactionType =
   | "RIDER_EARNING"
   | "PLATFORM_FEE"
   | "RIDER_COD_DEDUCTION"
+  | "RIDER_COD_DEPOSIT"
   | "CUSTOMER_REFUND";
 
 export type TransactionStatus = "PENDING" | "PROCESSING" | "COMPLETED";
 
 // Interface for Transaction (Table 9: Transactions & Money Ledger)
 export interface ITransaction extends Document {
-  user_id?: mongoose.Types.ObjectId | null; // Vendor, Rider, or Admin/Platform
-  order_id: mongoose.Types.ObjectId;
+  user_id?: mongoose.Types.ObjectId | null; // Vendor, Rider, or Admin/Platform (null = Global Platform Ledger)
+  order_id?: mongoose.Types.ObjectId | null;
   amount: number;
   type: TransactionType;
   status: TransactionStatus;
+  note?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,7 +32,7 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
     order_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
-      required: [true, "Associated order ID is required"],
+      default: null,
     },
     amount: {
       type: Number,
@@ -43,6 +45,7 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
         "RIDER_EARNING",
         "PLATFORM_FEE",
         "RIDER_COD_DEDUCTION",
+        "RIDER_COD_DEPOSIT",
         "CUSTOMER_REFUND",
       ],
       required: [true, "Transaction type is required"],
@@ -51,6 +54,10 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
       type: String,
       enum: ["PENDING", "PROCESSING", "COMPLETED"],
       default: "PENDING",
+    },
+    note: {
+      type: String,
+      default: "",
     },
   },
   {

@@ -103,7 +103,7 @@ export const onboardingService = {
     if (params?.userId) query.append("userId", params.userId);
     if (params?.email) query.append("email", params.email);
     const queryString = query.toString() ? `?${query.toString()}` : "";
-    return apiRequest<{ success: boolean; data: any }>(`/onboarding/rider${queryString}`, {
+    return apiRequest<any>(`/onboarding/rider${queryString}`, {
       method: "GET",
     });
   },

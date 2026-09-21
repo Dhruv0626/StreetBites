@@ -9,6 +9,7 @@ export interface IPlatformSetting extends Document {
   is_weather_surge_enabled: boolean;
   is_festival_incentive_enabled: boolean;
   is_maintenance_mode: boolean;
+  rider_cash_limit: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +35,11 @@ const PlatformSettingSchema = new mongoose.Schema<IPlatformSetting>(
       type: Number,
       default: 5.0,
       min: [0, "Tax percentage cannot be negative"],
+    },
+    rider_cash_limit: {
+      type: Number,
+      default: 0,
+      min: [0, "Rider cash limit cannot be negative"],
     },
     is_weather_surge_enabled: {
       type: Boolean,

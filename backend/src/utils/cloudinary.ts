@@ -182,9 +182,9 @@ export const uploadToCloudinary = async (
     return fileData;
   }
 
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "dcf55qcn4";
-  const apiKey = process.env.CLOUDINARY_API_KEY || "179968529793519";
-  const apiSecret = process.env.CLOUDINARY_API_SECRET || "fj7cai3jjqhd8R120RY1EPcrDm4";
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
+  const apiKey = process.env.CLOUDINARY_API_KEY || "";
+  const apiSecret = process.env.CLOUDINARY_API_SECRET || "";
 
   const timestamp = Math.round(new Date().getTime() / 1000);
   const signatureString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;

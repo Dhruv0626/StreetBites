@@ -24,6 +24,8 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
       makeModel,
       vehiclePhoto,
       vehicleNumberPlateImage,
+      rcPhoto,
+      insurancePhoto,
       bankName,
       accountNumber,
       ifscCode,
@@ -42,11 +44,13 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
       return;
     }
 
-    // 1. Upload documents to Cloudinary asynchronously with (.JPG, .JPEG, .PNG up to 500KB) validation
+    // 1. Upload documents to Cloudinary asynchronously with validation
     let aadhaarImageUrl = user.aadhaar_image_url || null;
     let dlImageUrl = user.dl_image_url || null;
     let vehiclePhotoUrl = user.vehicle_photo_url || null;
     let vehicleNumberPlateImageUrl = user.vehicle_number_plate_image || null;
+    let rcImageUrl = user.rc_image_url || null;
+    let insuranceImageUrl = user.insurance_image_url || null;
 
     if (aadhaarPhoto && aadhaarPhoto.startsWith("data:")) {
       aadhaarImageUrl = await uploadToCloudinary(aadhaarPhoto, "streetbites/riders/aadhaar", {
@@ -70,6 +74,16 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
         { label: "Vehicle Number Plate" }
       );
     }
+    if (rcPhoto && rcPhoto.startsWith("data:")) {
+      rcImageUrl = await uploadToCloudinary(rcPhoto, "streetbites/riders/rc", {
+        label: "Vehicle RC Book",
+      });
+    }
+    if (insurancePhoto && insurancePhoto.startsWith("data:")) {
+      insuranceImageUrl = await uploadToCloudinary(insurancePhoto, "streetbites/riders/insurance", {
+        label: "Vehicle Insurance Copy",
+      });
+    }
 
     // 2. Save details and Cloudinary URLs in database
     if (name) user.name = name.trim();
@@ -80,6 +94,8 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
     if (modelVal) user.vehicle_model = modelVal.trim();
     if (vehiclePhotoUrl) user.vehicle_photo_url = vehiclePhotoUrl;
     if (vehicleNumberPlateImageUrl) user.vehicle_number_plate_image = vehicleNumberPlateImageUrl;
+    if (rcImageUrl) user.rc_image_url = rcImageUrl;
+    if (insuranceImageUrl) user.insurance_image_url = insuranceImageUrl;
     if (bankName) user.bank_name = bankName.trim();
     if (accountNumber) user.bank_account_no = accountNumber.trim();
     if (ifscCode) user.bank_ifsc = ifscCode.trim();
@@ -104,8 +120,11 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
           verification_status: user.verification_status,
           aadhaar_image_url: user.aadhaar_image_url,
           dl_image_url: user.dl_image_url,
+          vehicle_model: user.vehicle_model,
           vehicle_photo_url: user.vehicle_photo_url,
           vehicle_number_plate_image: user.vehicle_number_plate_image,
+          rc_image_url: user.rc_image_url,
+          insurance_image_url: user.insurance_image_url,
         },
       },
     });
@@ -133,7 +152,7 @@ const getAuthUserId = (req: Request): string | null => {
       const accessSecret =
         process.env.JWT_ACCESS_SECRET ||
         process.env.JWT_SECRET ||
-        "streetbites_access_jwt_secret_dev_key_2026";
+        "";
       const decoded = jwt.verify(token, accessSecret) as any;
       if (decoded?.id) return decoded.id;
     } catch {
@@ -407,6 +426,8 @@ export const getRiderDetails = async (req: Request, res: Response): Promise<void
         vehicle_model: user.vehicle_model,
         vehicle_photo_url: user.vehicle_photo_url,
         vehicle_number_plate_image: user.vehicle_number_plate_image,
+        rc_image_url: user.rc_image_url,
+        insurance_image_url: user.insurance_image_url,
         bank_name: user.bank_name,
         bank_account_no: user.bank_account_no,
         bank_ifsc: user.bank_ifsc,
@@ -455,6 +476,8 @@ export const deleteRiderDetails = async (req: Request, res: Response): Promise<v
     user.aadhaar_image_url = null;
     user.vehicle_photo_url = null;
     user.vehicle_number_plate_image = null;
+    user.rc_image_url = null;
+    user.insurance_image_url = null;
     user.vehicle_model = null;
     user.bank_name = null;
     user.bank_account_no = null;
@@ -774,6 +797,20 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
             documents.push({
               name: "Vehicle Number Plate Photo",
               url: u.vehicle_number_plate_image,
+              type: "image",
+            });
+          }
+          if (u.rc_image_url) {
+            documents.push({
+              name: "Vehicle Registration Certificate (RC Book)",
+              url: u.rc_image_url,
+              type: "image",
+            });
+          }
+          if (u.insurance_image_url) {
+            documents.push({
+              name: "Vehicle Insurance Certificate",
+              url: u.insurance_image_url,
               type: "image",
             });
           }

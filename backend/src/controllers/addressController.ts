@@ -49,11 +49,11 @@ export const getAddresses = async (req: AuthenticatedRequest, res: Response): Pr
 
     const formatted = addresses.map((addr: any) => {
       const userRef = addr.customer_id && typeof addr.customer_id === "object" ? addr.customer_id : null;
-      
+
       // Strip any legacy 'Live GPS Location (lat, lng)' coordinates from user-facing detail
       let displayDetail = (addr.detail || "").replace(/Live GPS Location\s*\([^)]*\),?\s*/gi, "").trim();
       if (displayDetail.startsWith(",")) displayDetail = displayDetail.substring(1).trim();
-      
+
       // If displayDetail is only city name or empty, combine Area and City
       if (!displayDetail || displayDetail.toLowerCase() === (addr.city || "ahmedabad").toLowerCase()) {
         const parts = [addr.house_no, addr.landmark, addr.area, addr.city, addr.pincode]
@@ -136,7 +136,7 @@ const geocodeAddressBackend = async (options: {
 
   if (candidateQueries.length === 0) return null;
 
-  const tomtomKey = process.env.TOMTOM_API_KEY || "pKaNxsGAgRWmxEehTjy8EIxVWGsfSIc3";
+  const tomtomKey = process.env.TOMTOM_API_KEY || "";
 
   for (const q of candidateQueries) {
     try {

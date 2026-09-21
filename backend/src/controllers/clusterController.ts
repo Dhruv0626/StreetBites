@@ -10,13 +10,16 @@ import { memoryCache } from "../utils/cache.ts";
  * @desc    Get all clusters with their nested stalls & live counts from MongoDB
  * @route   GET /api/clusters
  */
-export const getClusters = async (_req: Request, res: Response): Promise<void> => {
+export const getClusters = async (req: Request, res: Response): Promise<void> => {
   try {
+    const isFresh = req.query.fresh === "true" || req.headers["x-fresh"] === "true";
     const cacheKey = "all_clusters";
-    const cachedData = memoryCache.get(cacheKey);
-    if (cachedData) {
-      res.status(200).json(cachedData);
-      return;
+    if (!isFresh) {
+      const cachedData = memoryCache.get(cacheKey);
+      if (cachedData) {
+        res.status(200).json(cachedData);
+        return;
+      }
     }
 
     const clusters = await Cluster.find().sort({ createdAt: -1 }).lean();
@@ -96,8 +99,8 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
       })),
     };
 
-    // Cache in RAM for 3 minutes (180 seconds)
-    memoryCache.set(cacheKey, responsePayload, 180);
+    // Cache in RAM for 45 seconds
+    memoryCache.set(cacheKey, responsePayload, 45);
 
     res.status(200).json(responsePayload);
   } catch (error: any) {
@@ -117,11 +120,14 @@ export const getClusters = async (_req: Request, res: Response): Promise<void> =
 export const getClusterById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const isFresh = req.query.fresh === "true" || req.headers["x-fresh"] === "true";
     const cacheKey = `cluster_${id}`;
-    const cachedData = memoryCache.get(cacheKey);
-    if (cachedData) {
-      res.status(200).json(cachedData);
-      return;
+    if (!isFresh) {
+      const cachedData = memoryCache.get(cacheKey);
+      if (cachedData) {
+        res.status(200).json(cachedData);
+        return;
+      }
     }
 
     const cluster = await Cluster.findById(id).lean();
@@ -177,7 +183,7 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
       },
     };
 
-    memoryCache.set(cacheKey, responsePayload, 180);
+    memoryCache.set(cacheKey, responsePayload, 45);
 
     res.status(200).json(responsePayload);
   } catch (error: any) {

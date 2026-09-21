@@ -15,6 +15,7 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
         extra_stall_fee: 5.0,
         vendor_commission_percentage: 5.0,
         tax_percentage: 5.0,
+        rider_cash_limit: 0,
       });
     }
 
@@ -25,6 +26,7 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
         extra_stall_fee: settings.extra_stall_fee ?? 5.0,
         vendor_commission_percentage: settings.vendor_commission_percentage,
         tax_percentage: settings.tax_percentage,
+        rider_cash_limit: settings.rider_cash_limit ?? 0,
         is_weather_surge_enabled: settings.is_weather_surge_enabled,
         is_festival_incentive_enabled: settings.is_festival_incentive_enabled,
         is_maintenance_mode: settings.is_maintenance_mode,
@@ -50,6 +52,7 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       extra_stall_fee,
       tax_percentage,
       vendor_commission_percentage,
+      rider_cash_limit,
       is_weather_surge_enabled,
       is_festival_incentive_enabled,
       is_maintenance_mode,
@@ -64,6 +67,7 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
     if (extra_stall_fee !== undefined) settings.extra_stall_fee = extra_stall_fee;
     if (tax_percentage !== undefined) settings.tax_percentage = tax_percentage;
     if (vendor_commission_percentage !== undefined) settings.vendor_commission_percentage = vendor_commission_percentage;
+    if (rider_cash_limit !== undefined) settings.rider_cash_limit = rider_cash_limit;
     if (is_weather_surge_enabled !== undefined) settings.is_weather_surge_enabled = is_weather_surge_enabled;
     if (is_festival_incentive_enabled !== undefined) settings.is_festival_incentive_enabled = is_festival_incentive_enabled;
     if (is_maintenance_mode !== undefined) settings.is_maintenance_mode = is_maintenance_mode;
@@ -95,6 +99,7 @@ export const createPlatformSettings = async (req: Request, res: Response): Promi
       extra_stall_fee,
       tax_percentage,
       vendor_commission_percentage,
+      rider_cash_limit,
       is_weather_surge_enabled,
       is_festival_incentive_enabled,
       is_maintenance_mode,
@@ -106,6 +111,7 @@ export const createPlatformSettings = async (req: Request, res: Response): Promi
       if (extra_stall_fee !== undefined) settings.extra_stall_fee = extra_stall_fee;
       if (tax_percentage !== undefined) settings.tax_percentage = tax_percentage;
       if (vendor_commission_percentage !== undefined) settings.vendor_commission_percentage = vendor_commission_percentage;
+      if (rider_cash_limit !== undefined) settings.rider_cash_limit = rider_cash_limit;
       if (is_weather_surge_enabled !== undefined) settings.is_weather_surge_enabled = is_weather_surge_enabled;
       if (is_festival_incentive_enabled !== undefined) settings.is_festival_incentive_enabled = is_festival_incentive_enabled;
       if (is_maintenance_mode !== undefined) settings.is_maintenance_mode = is_maintenance_mode;
@@ -116,6 +122,7 @@ export const createPlatformSettings = async (req: Request, res: Response): Promi
         extra_stall_fee: extra_stall_fee ?? 10.0,
         vendor_commission_percentage: vendor_commission_percentage ?? 5.0,
         tax_percentage: tax_percentage ?? 5.0,
+        rider_cash_limit: rider_cash_limit ?? 0,
         is_weather_surge_enabled: is_weather_surge_enabled ?? false,
         is_festival_incentive_enabled: is_festival_incentive_enabled ?? false,
         is_maintenance_mode: is_maintenance_mode ?? false,
@@ -148,6 +155,7 @@ export const deletePlatformSettings = async (_req: Request, res: Response): Prom
       extra_stall_fee: 10.0,
       vendor_commission_percentage: 5.0,
       tax_percentage: 5.0,
+      rider_cash_limit: 0,
       is_weather_surge_enabled: false,
       is_festival_incentive_enabled: false,
       is_maintenance_mode: false,
