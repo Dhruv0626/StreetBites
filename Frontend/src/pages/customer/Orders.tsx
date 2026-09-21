@@ -1,44 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
-  Phone,
-  Check,
-  HelpCircle,
-  XCircle,
   RotateCcw,
   FileText,
   ChevronDown,
-  Download,
-  AlertTriangle
+  MapPin,
 } from 'lucide-react';
 import type { CartItem } from '../../types';
+import { useNavigate } from 'react-router';
 import { OrdersSkeleton } from '../../components';
 import buttonLoader from '../../assets/Loader/button_loading.gif';
 import { razorpayService } from '../../services/razorpayService';
 
 interface OrdersProps {
-  activeOrder: {
+  activeOrder?: {
     items: CartItem[];
     paymentMethod: string;
     timestamp: string;
   } | null;
-  onNavigate: (tab: string) => void;
+  onNavigate?: (tab: string) => void;
 }
 
 export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'live' | 'past'>('live');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [activeStep, setActiveStep] = useState<number>(3); // Step 3: Kitchens preparing
-  const [s4Status, setS4Status] = useState<'preparing' | 'ready' | 'collected'>('preparing');
-  const [s1Status, setS1Status] = useState<'ready' | 'collected'>('ready');
-  const [s3Status, setS3Status] = useState<'ready' | 'collected'>('ready');
-  const [riderStatusText, setRiderStatusText] = useState<string>('Kitchens are cooking, rider is on the way.');
-  const [etaMinutes, setEtaMinutes] = useState<number>(18);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
 
-  // Load real customer orders from backend
+  const handleNav = (tab: string) => {
+    if (onNavigate) {
+      onNavigate(tab);
+    }
+    navigate(tab === 'home' || tab === 'discover' ? '/' : `/${tab}`);
+  };
+
+  // Load real customer orders from backend MongoDB
   useEffect(() => {
     window.scrollTo(0, 0);
     const fetchOrders = async () => {
@@ -46,6 +44,13 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         const res = await razorpayService.getCustomerOrders();
         if (res.success && res.data && Array.isArray(res.data)) {
           setLiveOrders(res.data);
+          // If there's an ongoing live order, keep 'live' tab; otherwise switch to 'past'
+          const hasActive = res.data.some(
+            (o: any) => o.status && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
+          );
+          if (!activeOrder && !hasActive && res.data.length > 0) {
+            setActiveTab('past');
+          }
         }
       } catch (err) {
         console.error('Failed to load customer orders:', err);
@@ -54,422 +59,496 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       }
     };
     fetchOrders();
-  }, []);
-
-  const items = activeOrder?.items || [
-    { id: 'kutchi-dabeli', name: 'Kutchi Dabeli', price: 40, quantity: 2, vendorId: 'v_s1_bhavesh', vendorName: 'Bhavesh Dabeli', emoji: '🌮' },
-    { id: 'cheese-dabeli', name: 'Cheese Dabeli', price: 70, quantity: 1, vendorId: 'v_s1_bhavesh', vendorName: 'Bhavesh Dabeli', emoji: '🫓' },
-    { id: 'malai-kulfi', name: 'Malai Kulfi (2pc)', price: 120, quantity: 1, vendorId: 'v_s3_asharfi', vendorName: 'Asharfi Kulfi', emoji: '🍨' },
-    { id: 'butter-pav-bhaji', name: 'Butter Pav Bhaji', price: 90, quantity: 1, vendorId: 'v_s4_bhajipav', vendorName: 'Bhajipav Bhandar', emoji: '🍛' }
-  ];
-
-  const totalItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
-  const itemsSubtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const totalAmount = itemsSubtotal + 49 + 5;
-
-  // Mock live order tracking lifecycle updates
-  useEffect(() => {
-    const t1 = setTimeout(() => {
-      setS4Status('ready');
-      setS1Status('collected');
-      setS3Status('collected');
-      setEtaMinutes(14);
-    }, 7000);
-
-    const t2 = setTimeout(() => {
-      setS4Status('collected');
-      setActiveStep(4);
-      setRiderStatusText('Rider has collected all sub-orders. Heading your way.');
-      setEtaMinutes(10);
-    }, 14000);
-
-    const t3 = setTimeout(() => {
-      setActiveStep(5);
-      setEtaMinutes(5);
-    }, 21000);
-
-    const t4 = setTimeout(() => {
-      setActiveStep(6);
-      setEtaMinutes(0);
-      setRiderStatusText('Your food from StreetBites has been delivered. Enjoy!');
-    }, 28000);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
-  }, []);
+  }, [activeOrder]);
 
   const handleReorder = (orderId: string) => {
     setReorderingId(orderId);
     setTimeout(() => {
       setReorderingId(null);
-    }, 2000);
+      handleNav('home');
+    }, 1500);
   };
 
-  const ordersToDisplay = liveOrders.length > 0 ? liveOrders.map(o => ({
-    id: o.orderNumber || `MO-${String(o.id).slice(-5).toUpperCase()}`,
-    realId: o.id,
-    date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
-    total: o.totalAmount,
-    cluster: o.clusterName || 'StreetBites Khau Galli',
-    stalls: [o.clusterName || 'StreetBites Khau Galli'],
-    items: o.itemsCount || 1,
-    status: o.status === 'DELIVERED' ? 'Delivered' : o.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : 'Preparing',
-    payment: o.paymentMethod || 'Online',
-    deliveryOtp: o.deliveryOtp,
-    address: o.deliveryAddress,
-  })) : [
-    { id: 'MO-77190', date: 'Oct 12, 2026, 8:15 PM', total: 340, cluster: 'Manek Chowk', stalls: ['Bhavesh Dabeli', 'Asharfi Kulfi'], items: 4, status: 'Delivered', payment: 'UPI', deliveryOtp: '4892', address: '' },
-    { id: 'MO-77145', date: 'Oct 05, 2026, 7:30 PM', total: 180, cluster: 'Urban Chowk', stalls: ['Gwalia Sweets'], items: 2, status: 'Delivered', payment: 'Card', deliveryOtp: '2914', address: '' },
-    { id: 'MO-76892', date: 'Sep 28, 2026, 9:00 PM', total: 450, cluster: 'Manek Chowk', stalls: ['Bhajipav Bhandar', 'Manek Pizza'], items: 5, status: 'Delivered', payment: 'UPI', deliveryOtp: '7182', address: '' },
-    { id: 'MO-75412', date: 'Sep 15, 2026, 1:15 PM', total: 220, cluster: 'Law Garden', stalls: ['Happy Sandwich', 'Swati Snacks'], items: 3, status: 'Delivered', payment: 'Cash', deliveryOtp: '3349', address: '' },
-  ];
+  // Convert real MongoDB orders into UI display items
+  const ordersToDisplay = liveOrders.map((o: any) => {
+    const idStr = String(o.id || o._id || Math.random().toString(36).substring(2, 7));
+    const orderNum = o.orderNumber || `MO-${idStr.slice(-5).toUpperCase()}`;
+    const rawStalls = Array.isArray(o.stalls) && o.stalls.length > 0 ? o.stalls : [o.clusterName || 'Street Stall'];
+    const cleanStalls = rawStalls.map((s: any) => (typeof s === 'string' ? s : s?.name || 'Street Stall'));
+    const cleanAddress = typeof o.deliveryAddress === 'string'
+      ? o.deliveryAddress
+      : (o.deliveryAddress?.formatted || o.deliveryAddress?.street || 'Saved Delivery Address');
 
-  const renderPastOrders = () => (
-    <div className="space-y-4 max-w-4xl animate-fadeIn">
-      {ordersToDisplay.map(order => {
-        const isExpanded = expandedOrderId === order.id;
+    return {
+      id: orderNum,
+      orderNumber: orderNum,
+      realId: o.id || o._id,
+      date: o.createdAt
+        ? new Date(o.createdAt).toLocaleDateString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Recently',
+      total: o.totalAmount || 0,
+      foodItemsTotal: o.foodItemsTotal || 0,
+      deliveryFee: o.deliveryFee || 0,
+      taxAmount: o.taxAmount || 0,
+      cluster: o.clusterName || 'StreetBites Khau Galli',
+      stalls: cleanStalls,
+      itemsCount: o.itemsCount || (Array.isArray(o.items) ? o.items.length : 1),
+      items: Array.isArray(o.items) ? o.items : [],
+      status: o.status === 'DELIVERED' ? 'Delivered' : o.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : 'Preparing',
+      rawStatus: o.status,
+      payment: o.paymentMethod || 'Online',
+      deliveryOtp: o.deliveryOtp,
+      address: cleanAddress,
+      rider: o.rider,
+    };
+  });
 
-        return (
-          <div
-            key={order.id}
-            className={`bg-white rounded-3xl border ${isExpanded ? 'border-[#D94A38]' : 'border-[#EAE4DA]'} shadow-2xs overflow-hidden transition-all duration-300`}
-          >
-            {/* Clickable Header */}
-            <div
-              className="p-5 cursor-pointer hover:bg-[#FAF7F2] transition-colors flex flex-col md:flex-row justify-between gap-4 select-none"
-              onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-            >
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider">{order.status}</span>
-                  {order.deliveryOtp && (
-                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-md">
-                      OTP: {order.deliveryOtp}
-                    </span>
-                  )}
-                  <span className="text-xs text-[#8E8B85] font-semibold">{order.date}</span>
-                </div>
-                <h3 className="text-sm font-bold text-[#1C1917] mb-1">{order.cluster} Order <span className="text-[#8E8B85] font-mono font-medium ml-1">#{order.id}</span></h3>
-                <p className="text-xs text-[#4B5563]">{order.stalls.join(' · ')}</p>
-                <p className="text-xs font-black text-[#1C1917] mt-2">₹{order.total} <span className="text-[#8E8B85] font-medium mx-1">•</span> <span className="font-medium text-[#4B5563]">{order.items} items</span></p>
-              </div>
-              <div className="flex items-center justify-end">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'bg-[#FCE8E6] text-[#D94A38] rotate-180' : 'bg-[#F5F0E8] text-[#8E8B85]'}`}>
-                  <ChevronDown className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
+  // Identify active order for live tracking
+  const currentLiveOrder: any = activeOrder
+    ? {
+        id: 'LIVE',
+        orderNumber: 'LIVE-ORDER',
+        cluster: 'StreetBites Khau Galli',
+        status: 'Preparing',
+        total: activeOrder.items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 1), 0) + 49 + 5,
+        items: activeOrder.items.map((it) => ({
+          name: it.name,
+          quantity: it.quantity || 1,
+          price: it.price || 0,
+          stallName: it.vendorName || it.stallName || 'Food Stall',
+        })),
+        stalls: Array.from(new Set(activeOrder.items.map((i) => i.vendorName || i.stallName || 'Food Stall').filter(Boolean))),
+        payment: activeOrder.paymentMethod || 'Online',
+        deliveryOtp: '',
+        address: 'Saved Delivery Address',
+        rider: null,
+      }
+    : ordersToDisplay.find((o) => o.rawStatus && o.rawStatus !== 'DELIVERED' && o.rawStatus !== 'CANCELLED') || null;
 
-            {/* Expanded Content */}
-            {isExpanded && (
-              <div className="px-5 pb-5 pt-2 border-t border-[#F5F0E8] animate-fadeIn bg-[#FAF8F5]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Left: Order Items */}
-                  <div>
-                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#8E8B85] mb-3">Order Summary</h4>
-                    <div className="space-y-3 bg-white p-4 rounded-2xl border border-[#EAE4DA]">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-[#4B5563]">1x Masala Dosa</span>
-                        <span className="font-bold text-[#1C1917]">₹120</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-[#4B5563]">2x Vada Pav</span>
-                        <span className="font-bold text-[#1C1917]">₹60</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-[#4B5563]">1x Cold Coffee</span>
-                        <span className="font-bold text-[#1C1917]">₹80</span>
-                      </div>
-                      <div className="pt-3 mt-2 border-t border-[#F5F0E8] flex justify-between items-center text-xs text-[#8E8B85]">
-                        <span>Delivery Fee</span>
-                        <span>₹49</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs text-[#8E8B85]">
-                        <span>Taxes (5% GST)</span>
-                        <span>₹13</span>
-                      </div>
-                      <div className="pt-3 mt-2 border-t border-[#F5F0E8] flex justify-between items-center text-sm font-black text-[#D94A38]">
-                        <span>Total</span>
-                        <span>₹{order.total}</span>
-                      </div>
-                    </div>
-                  </div>
+  const liveStalls: string[] = Array.isArray(currentLiveOrder?.stalls) && currentLiveOrder.stalls.length > 0
+    ? currentLiveOrder.stalls.map((s: any) => (typeof s === 'string' ? s : s?.name || 'Food Stall'))
+    : [currentLiveOrder?.cluster || 'StreetBites Khau Galli'];
 
-                  {/* Right: Actions & Info */}
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#8E8B85] mb-3">Details & Actions</h4>
-                    <div className="bg-white p-4 rounded-2xl border border-[#EAE4DA] text-xs flex flex-col gap-2">
-                      <div className="flex justify-between text-[#4B5563]">
-                        <span>Payment Method:</span>
-                        <span className="font-bold text-[#1C1917]">{order.payment}</span>
-                      </div>
-                      <div className="flex justify-between text-[#4B5563]">
-                        <span>Delivered to:</span>
-                        <span className="font-bold text-[#1C1917]">Home</span>
-                      </div>
-                    </div>
+  const liveItems: any[] = Array.isArray(currentLiveOrder?.items) ? currentLiveOrder.items : [];
 
-                    <div className="flex flex-col gap-2 pt-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleReorder(order.id); }}
-                        disabled={reorderingId === order.id}
-                        className="w-full bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-80 disabled:cursor-not-allowed"
-                      >
-                        {reorderingId === order.id ? (
-                          <img src={buttonLoader} alt="Loading..." className="h-4 w-auto" />
-                        ) : (
-                          <>
-                            <RotateCcw className="w-4 h-4" />
-                            <span>Reorder</span>
-                          </>
-                        )}
-                      </button>
-                      <div className="flex gap-2">
-                        <button className="flex-1 bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2.5 border border-[#EAE4DA] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-3xs">
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Invoice</span>
-                        </button>
-                        <button className="flex-1 bg-white hover:bg-red-50 text-red-600 text-xs font-bold px-4 py-2.5 border border-red-200 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-3xs">
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          <span>Report Issue</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+  const renderPastOrders = () => {
+    if (ordersToDisplay.length === 0) {
+      return (
+        <div className="bg-white border border-[#EAE4DA] rounded-3xl p-16 text-center space-y-4 max-w-2xl mx-auto my-6 animate-fadeIn">
+          <div className="w-16 h-16 rounded-3xl bg-[#FAF7F2] border border-[#EAE4DA] flex items-center justify-center mx-auto shadow-inner text-[#D94A38]">
+            <FileText className="w-8 h-8" />
           </div>
-        );
-      })}
-    </div>
-  );
+          <div>
+            <h3 className="text-base font-bold text-[#1C1917]">No Past Orders Yet</h3>
+            <p className="text-xs text-[#8E8B85] mt-1 max-w-sm mx-auto">
+              Your order history will appear here once you place an order with StreetBites stalls.
+            </p>
+          </div>
+          <button
+            onClick={() => handleNav('home')}
+            className="px-6 py-2.5 bg-[#D94A38] text-white text-xs font-bold rounded-xl shadow-xs border-0 cursor-pointer hover:bg-[#C43D2E] transition-all"
+          >
+            Explore Street Stalls
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4 max-w-4xl animate-fadeIn">
+        {ordersToDisplay.map((order) => {
+          const isExpanded = expandedOrderId === order.id;
+
+          return (
+            <div
+              key={order.id}
+              className={`bg-white rounded-3xl border ${
+                isExpanded ? 'border-[#D94A38]' : 'border-[#EAE4DA]'
+              } shadow-2xs overflow-hidden transition-all duration-300`}
+            >
+              {/* Clickable Header */}
+              <div
+                className="p-5 cursor-pointer hover:bg-[#FAF7F2] transition-colors flex flex-col md:flex-row justify-between gap-4 select-none"
+                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span
+                      className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${
+                        order.status === 'Delivered'
+                          ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
+                          : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                    {order.deliveryOtp && (
+                      <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-black px-2 py-0.5 rounded-md">
+                        OTP: {order.deliveryOtp}
+                      </span>
+                    )}
+                    <span className="text-xs text-[#8E8B85] font-semibold">{order.date}</span>
+                  </div>
+                  <h3 className="text-sm font-bold text-[#1C1917] mb-1">
+                    {order.cluster} Order <span className="text-[#8E8B85] font-mono font-medium ml-1">#{order.id}</span>
+                  </h3>
+                  <p className="text-xs text-[#4B5563]">{order.stalls.join(' · ')}</p>
+                  <p className="text-xs font-black text-[#1C1917] mt-2">
+                    ₹{order.total} <span className="text-[#8E8B85] font-medium mx-1">•</span>{' '}
+                    <span className="font-medium text-[#4B5563]">{order.itemsCount} items</span>
+                  </p>
+                </div>
+                <div className="flex items-center justify-end">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${
+                      isExpanded ? 'bg-[#FCE8E6] text-[#D94A38] rotate-180' : 'bg-[#F5F0E8] text-[#8E8B85]'
+                    }`}
+                  >
+                    <ChevronDown className="w-5 h-5" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Content with Real Item Breakdown */}
+              {isExpanded && (
+                <div className="px-5 pb-5 pt-2 border-t border-[#F5F0E8] animate-fadeIn bg-[#FAF8F5]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left: Real Order Items */}
+                    <div>
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#8E8B85] mb-3">
+                        Order Breakdown
+                      </h4>
+                      <div className="space-y-3 bg-white p-4 rounded-2xl border border-[#EAE4DA]">
+                        {order.items && order.items.length > 0 ? (
+                          order.items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-[#4B5563]">
+                                {item.quantity || 1}x {item.name}
+                                {item.stallName && (
+                                  <span className="text-[10px] text-[#8E8B85] font-normal ml-1.5">
+                                    ({item.stallName})
+                                  </span>
+                                )}
+                              </span>
+                              <span className="font-bold text-[#1C1917]">
+                                ₹{(item.price || 0) * (item.quantity || 1)}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-[#8E8B85] italic py-1">Order processed successfully</div>
+                        )}
+                        <div className="pt-3 mt-2 border-t border-[#F5F0E8] flex justify-between items-center text-xs text-[#8E8B85]">
+                          <span>Delivery Fee</span>
+                          <span>₹{order.deliveryFee}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-[#8E8B85]">
+                          <span>Taxes (5% GST)</span>
+                          <span>₹{order.taxAmount}</span>
+                        </div>
+                        <div className="pt-3 mt-2 border-t border-[#F5F0E8] flex justify-between items-center text-sm font-black text-[#D94A38]">
+                          <span>Total Paid</span>
+                          <span>₹{order.total}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Actions & Address Info */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#8E8B85] mb-3">
+                        Delivery & Details
+                      </h4>
+                      <div className="bg-white p-4 rounded-2xl border border-[#EAE4DA] text-xs flex flex-col gap-2.5">
+                        <div className="flex justify-between text-[#4B5563]">
+                          <span>Payment Method:</span>
+                          <span className="font-bold text-[#1C1917]">{order.payment}</span>
+                        </div>
+                        <div className="flex justify-between items-start text-[#4B5563] gap-2">
+                          <span className="shrink-0">Delivered to:</span>
+                          <span className="font-bold text-[#1C1917] text-right truncate max-w-[220px]">
+                            {order.address}
+                          </span>
+                        </div>
+                        {order.deliveryOtp && (
+                          <div className="flex justify-between text-[#4B5563]">
+                            <span>Delivery OTP:</span>
+                            <span className="font-mono font-bold text-[#D94A38]">{order.deliveryOtp}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 pt-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReorder(order.id);
+                          }}
+                          disabled={reorderingId === order.id}
+                          className="w-full bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-80"
+                        >
+                          {reorderingId === order.id ? (
+                            <img src={buttonLoader} alt="Loading..." className="h-4 w-auto" />
+                          ) : (
+                            <>
+                              <RotateCcw className="w-4 h-4" />
+                              <span>Order Again</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (isLoading) {
     return <OrdersSkeleton />;
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 pb-24">
       {/* ─── DESKTOP VIEW ─── */}
       <div className="hidden md:block">
-        {/* Header bar */}
+        {/* Navigation Tabs Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2 text-xs text-[#8E8B85]">
-            <button onClick={() => onNavigate('discover')} className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0">Orders</button>
+            <button
+              onClick={() => handleNav('home')}
+              className="hover:text-[#D94A38] transition-colors cursor-pointer bg-transparent border-0 p-0"
+            >
+              Home
+            </button>
             <span className="mx-1">›</span>
-            <span className="text-[#1C1917] font-semibold">{activeTab === 'live' ? 'MO-77213 · Live' : 'History'}</span>
+            <span className="text-[#1C1917] font-semibold">
+              {activeTab === 'live'
+                ? currentLiveOrder
+                  ? `${currentLiveOrder?.orderNumber || currentLiveOrder?.id || 'Live'} · Live Tracking`
+                  : 'Live Order'
+                : 'Order History'}
+            </span>
           </div>
 
           <div className="bg-[#F5F0E8] p-1.5 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer ${activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] hover:text-[#1C1917]'}`}
+              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${
+                activeTab === 'live'
+                  ? 'bg-white shadow-sm text-[#D94A38]'
+                  : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+              }`}
             >
-              Live Order
+              Live Order {currentLiveOrder ? '•' : ''}
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer ${activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] hover:text-[#1C1917]'}`}
+              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${
+                activeTab === 'past'
+                  ? 'bg-white shadow-sm text-[#D94A38]'
+                  : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+              }`}
             >
-              Order History
+              Order History ({ordersToDisplay.length})
             </button>
           </div>
 
-          {activeTab === 'live' && (
-            <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-3xs select-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
-              {etaMinutes > 0 ? `Rider arriving in ~${etaMinutes} min` : 'Delivered'}
-            </span>
-          )}
-          {activeTab === 'past' && <div className="w-[150px]"></div> /* Spacer */}
+          <div className="w-[150px] text-right">
+            {activeTab === 'live' && currentLiveOrder && (
+              <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-bold px-3 py-1 rounded-full inline-flex items-center gap-1.5 shadow-3xs select-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
+                Live Hub Sync
+              </span>
+            )}
+          </div>
         </div>
 
+        {/* ─── DESKTOP LIVE ORDER VIEW ─── */}
         {activeTab === 'live' && (
           <div className="animate-fadeIn">
-            {/* Action Buttons Header */}
-            <div className="flex justify-between items-start mb-6">
-              <h1 className="text-3xl font-semibold text-[#1C1917]">
-                {activeStep === 6 ? 'Order Delivered!' : riderStatusText}
-              </h1>
-              <div className="flex gap-2 shrink-0">
-                <button className="bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-3xs">
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>Support</span>
-                </button>
-                {activeStep < 4 && (
-                  <button className="bg-white hover:bg-red-50 text-red-600 text-xs font-bold px-4 py-2 border border-red-200 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-3xs">
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Cancel order</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop Lower Grid */}
-            <div className="grid grid-cols-12 gap-8 items-start">
-              {/* Left Column: Timeline & Sub-orders list */}
-              <div className="col-span-8 space-y-6">
-                {/* Timeline Progress */}
-                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
-                  <div className="flex justify-between items-center pb-4 border-b border-[#F5F0E8] mb-5">
-                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917]">Timeline</h3>
-                    <span className="bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] text-[10px] font-bold px-2.5 py-0.5 rounded-md">
-                      STATE: {activeStep === 6 ? 'COMPLETED' : activeStep === 5 ? 'DELIVERING' : 'PREPARING'}
-                    </span>
+            {currentLiveOrder ? (
+              <div>
+                {/* Header info */}
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h1 className="text-3xl font-bold text-[#1C1917]">
+                      Order in Progress
+                    </h1>
+                    <p className="text-xs text-[#8E8B85] mt-1">
+                      {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · Order #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
+                    </p>
                   </div>
-
-                  {/* Vertical Steps */}
-                  <div className="relative border-l border-[#FAF7F2] pl-8 space-y-6 ml-3.5">
-                    {[
-                      { step: 1, label: 'Order placed', time: '20:14', desc: 'MainOrder MO-77213 forked into 3 sub-orders.' },
-                      { step: 2, label: 'All stalls accepted', time: '20:15', desc: 'Bhavesh · Asharfi · Bhajipav confirmed.' },
-                      { step: 3, label: 'Kitchens preparing', time: '20:16', desc: s4Status === 'ready' ? 'All 3 stalls preparation complete.' : '2 of 3 stalls prep complete.' },
-                      { step: 4, label: 'Rider collecting', time: activeStep >= 4 ? '20:21' : '--:--', desc: 'Aditya V. picking up in cluster order.' },
-                      { step: 5, label: 'Out for delivery', time: activeStep >= 5 ? '20:25' : '--:--', desc: 'Single trip · 3 pickups · 1 drop.' },
-                      { step: 6, label: 'Delivered', time: activeStep === 6 ? '20:29' : '--:--', desc: 'Rate each stall individually after arrival.' }
-                    ].map((s) => (
-                      <div key={s.step} className="relative">
-                        <div className={`absolute -left-12 top-0.5 w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all ${activeStep >= s.step
-                          ? 'border-[#D94A38] bg-[#FAF7F2] text-[#D94A38] shadow-3xs'
-                          : 'border-[#EAE4DA] bg-white text-[#8E8B85]'
-                          }`}>
-                          {activeStep >= s.step ? <Check className="w-4 h-4 stroke-[3]" /> : s.step}
-                        </div>
-                        <div className="flex justify-between items-start gap-4">
-                          <div>
-                            <h4 className={`text-xs font-bold font-sans ${activeStep >= s.step ? 'text-[#1C1917]' : 'text-[#8E8B85]'}`}>
-                              {s.label}
-                            </h4>
-                            <p className="text-[11px] text-[#8E8B85] leading-relaxed mt-0.5">{s.desc}</p>
-                          </div>
-                          <span className="text-[10px] text-[#8E8B85] font-semibold">{s.time}</span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => handleNav('home')}
+                      className="bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+                    >
+                      <span>Explore More Food</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Sub-orders Fork Card */}
-                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917] pb-4 border-b border-[#F5F0E8] mb-4">
-                    Sub-orders
-                  </h3>
-                  <div className="space-y-3">
-                    {[
-                      { id: 'S1', name: 'Bhavesh Dabeli', code: 'SO-s1', status: s1Status === 'ready' ? 'Ready for pickup' : 'Collected', type: s1Status === 'ready' ? 'ready' : 'collected' },
-                      { id: 'S3', name: 'Asharfi Kulfi', code: 'SO-s3', status: s3Status === 'ready' ? 'Ready for pickup' : 'Collected', type: s3Status === 'ready' ? 'ready' : 'collected' },
-                      { id: 'S4', name: 'Bhajipav Bhandar', code: 'SO-s4', status: s4Status === 'preparing' ? 'Preparing · 4 min' : s4Status === 'ready' ? 'Ready for pickup' : 'Collected', type: s4Status },
-                    ].map((so) => (
-                      <div key={so.id} className="flex justify-between items-center p-3.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl">
-                        <div className="flex gap-3 items-center">
-                          <span className="w-7 h-7 rounded-full bg-[#1C1917] text-white text-[10px] font-black flex items-center justify-center select-none">
-                            {so.id}
-                          </span>
-                          <div>
-                            <span className="text-xs font-bold text-[#1C1917] block">{so.name}</span>
-                            <span className="text-[9px] text-[#8E8B85] font-mono block">{so.code}</span>
-                          </div>
-                        </div>
-                        <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full border ${so.type === 'collected'
-                          ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
-                          : so.type === 'ready'
-                            ? 'bg-[#FAF7F2] text-[#4B5563] border-[#EAE4DA]'
-                            : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2] animate-pulse'
-                          }`}>
-                          {so.status}
+                <div className="grid grid-cols-12 gap-8 items-start">
+                  {/* Left: Stalls & Real Items in Order */}
+                  <div className="col-span-8 space-y-6">
+                    {/* Multi-Stall Sub-orders List */}
+                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
+                      <div className="flex justify-between items-center pb-4 border-b border-[#F5F0E8] mb-4">
+                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917]">
+                          Multi-Stall Sub-Orders
+                        </h3>
+                        <span className="text-[10px] text-[#8E8B85] font-bold uppercase">
+                          {liveStalls.length} Stalls Consolidated
                         </span>
                       </div>
-                    ))}
+                      <div className="space-y-3">
+                        {liveStalls.map((stallName: string, sIdx: number) => {
+                          const stallTitle = typeof stallName === 'string' ? stallName : (stallName as any)?.name || 'Food Stall';
+                          const stallItems = liveItems.filter((it: any) => {
+                            const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
+                            return !itemStall || itemStall === stallTitle;
+                          });
+                          return (
+                            <div
+                              key={sIdx}
+                              className="flex justify-between items-center p-4 bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl"
+                            >
+                              <div className="flex gap-3 items-center">
+                                <span className="w-8 h-8 rounded-full bg-[#1C1917] text-white text-xs font-black flex items-center justify-center select-none">
+                                  S{sIdx + 1}
+                                </span>
+                                <div>
+                                  <span className="text-xs font-bold text-[#1C1917] block">
+                                    {stallTitle}
+                                  </span>
+                                  <span className="text-[10px] text-[#8E8B85] block mt-0.5">
+                                    {stallItems.length > 0
+                                      ? stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : (i.name?.name || 'Item')}`).join(' · ')
+                                      : 'Consolidated Items'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                Preparing
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Delivery Address Card */}
+                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-2xs flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center shrink-0">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-[10px] uppercase font-bold text-[#8E8B85] block tracking-wider">
+                          Delivering to
+                        </span>
+                        <span className="text-xs font-bold text-[#1C1917] block mt-0.5">
+                          {typeof currentLiveOrder?.address === 'string'
+                            ? currentLiveOrder.address
+                            : (currentLiveOrder?.address as any)?.formatted || 'Saved Delivery Address'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Live Status & Delivery OTP */}
+                  <div className="col-span-4 space-y-6">
+                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8E8B85]">
+                          Order Status
+                        </span>
+                        <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 select-none">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
+                          CONFIRMED
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="text-xl font-bold text-[#1C1917]">
+                          Kitchens are Cooking
+                        </h3>
+                        <p className="text-xs text-[#8E8B85] mt-1 leading-relaxed">
+                          Your street food order is confirmed and being prepared simultaneously across participating stalls.
+                        </p>
+                      </div>
+
+                      {/* Delivery Verification OTP */}
+                      {currentLiveOrder?.deliveryOtp && (
+                        <div className="p-4 bg-gradient-to-r from-[#FAF0ED] to-[#FFF8F0] border border-[#FCE8E6] rounded-2xl">
+                          <span className="text-[10px] uppercase font-extrabold text-[#8E8B85] tracking-wider block">
+                            Your 4-Digit Delivery OTP
+                          </span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-2xl font-mono font-black text-[#D94A38] tracking-widest">
+                              {currentLiveOrder?.deliveryOtp}
+                            </span>
+                            <span className="text-[10px] text-[#8E8B85] font-semibold max-w-[120px] text-right">
+                              Share with rider upon doorstep delivery
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Payment summary */}
+                      <div className="pt-3 border-t border-[#F5F0E8] flex justify-between items-center text-xs">
+                        <span className="text-[#8E8B85]">Payment Method:</span>
+                        <span className="font-bold text-[#1C1917]">{currentLiveOrder?.payment || 'Online'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-bold text-[#1C1917]">
+                        <span>Total Paid:</span>
+                        <span className="text-base text-[#D94A38]">₹{currentLiveOrder?.total || 0}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Right Column: Live Status Tracking & Rider info */}
-              <div className="col-span-4 space-y-6">
-                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-2xs space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8E8B85]">Order Tracking</span>
-                    <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 select-none">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
-                      LIVE
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xl font-bold text-[#1C1917]">
-                      {activeStep === 6 ? 'Delivered!' : `Arriving in ~${etaMinutes} mins`}
-                    </h3>
-                    <p className="text-xs text-[#8E8B85] mt-1 leading-relaxed">
-                      {riderStatusText}
-                    </p>
-                  </div>
-
-                  {/* Step Progress Bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-bold text-[#8E8B85]">
-                      <span>Stage {activeStep} of 6</span>
-                      <span>{Math.round((activeStep / 6) * 100)}% Complete</span>
-                    </div>
-                    <div className="w-full bg-[#FAF7F2] border border-[#EAE4DA] h-2 rounded-full overflow-hidden p-0.5">
-                      <div
-                        className="bg-[#D94A38] h-full rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${(activeStep / 6) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Multi-stall sync summary */}
-                  <div className="p-3 bg-[#FAF7F2] rounded-2xl border border-[#EAE4DA] space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#D94A38]" />
-                      <span className="text-xs font-bold text-[#1C1917]">Synchronized Hub Pickup</span>
-                    </div>
-                    <p className="text-[10px] text-[#8E8B85] leading-normal pl-4">
-                      Single rider combining orders across 3 stalls in Manek Chowk Khau Galli into one seamless delivery.
-                    </p>
-                  </div>
+            ) : (
+              /* Empty Live Order State */
+              <div className="bg-white border border-[#EAE4DA] rounded-3xl p-16 text-center space-y-4 max-w-xl mx-auto my-8 animate-fadeIn">
+                <div>
+                  <h3 className="text-base font-bold text-[#1C1917]">No Active Orders in Progress</h3>
+                  <p className="text-xs text-[#8E8B85] mt-1 max-w-sm mx-auto">
+                    You don't have any food orders currently cooking or on the way.
+                  </p>
                 </div>
-
-                <div className="bg-white rounded-3xl border border-[#EAE4DA] p-4 shadow-2xs flex justify-between items-center">
-                  <div className="flex gap-3 items-center">
-                    <div className="w-10 h-10 rounded-2xl bg-[#FAF7F2] border border-[#EAE4DA] text-xs font-black text-[#4B5563] flex items-center justify-center select-none">
-                      AV
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-[#1C1917]">Aditya Vaghela</h4>
-                      <p className="text-[10px] text-[#8E8B85] mt-0.5 leading-normal">
-                        Rider · R-2118 · GJ-01 EE 4472<br />
-                        ★ 4.9 · 312 trips
-                      </p>
-                    </div>
-                  </div>
-                  <button className="w-9 h-9 rounded-xl bg-[#FAF7F2] border border-[#EAE4DA] hover:bg-[#F2EDE5] text-[#1C1917] flex items-center justify-center transition-all cursor-pointer">
-                    <Phone className="w-4 h-4" />
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => handleNav('home')}
+                    className="px-5 py-2.5 bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold rounded-xl shadow-xs border-0 cursor-pointer transition-all"
+                  >
+                    Order Delicious Food
                   </button>
-                </div>
-
-                <div className="bg-[#FAF7F2] border border-[#EAE4DA] p-4 rounded-3xl space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-[#8E8B85]">
-                    <span>Method: {activeOrder?.paymentMethod || 'PAID VIA UPI'}</span>
-                    <span>{totalItemCount} items</span>
-                  </div>
-                  <div className="flex justify-between items-baseline font-bold text-[#1C1917] pt-1 border-t border-[#EAE4DA]">
-                    <span>Total amount</span>
-                    <span className="text-sm">₹{totalAmount}</span>
-                  </div>
+                  {ordersToDisplay.length > 0 && (
+                    <button
+                      onClick={() => setActiveTab('past')}
+                      className="px-5 py-2.5 bg-[#FAF7F2] border border-[#EAE4DA] text-[#1C1917] text-xs font-bold rounded-xl cursor-pointer hover:bg-white transition-all"
+                    >
+                      View Past Orders ({ordersToDisplay.length})
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
+        {/* ─── DESKTOP ORDER HISTORY VIEW ─── */}
         {activeTab === 'past' && (
-          <div className="mt-6">
+          <div className="mt-4">
             <h1 className="text-2xl font-bold text-[#1C1917] mb-6 flex items-center gap-2">
               <FileText className="w-6 h-6 text-[#D94A38]" /> Order History
             </h1>
@@ -479,161 +558,104 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       </div>
 
       {/* ─── MOBILE VIEW ─── */}
-      <div className="md:hidden block bg-[#FAF7F2] min-h-screen pb-32">
-        {/* Header bar */}
-        <div className="flex items-center justify-between py-4 px-4 bg-white border-b border-[#EAE4DA] sticky top-0 z-30 shadow-sm">
-          <button onClick={() => onNavigate('discover')} className="w-8 h-8 rounded-full bg-[#FAF7F2] border border-[#EAE4DA] flex items-center justify-center cursor-pointer">
+      <div className="md:hidden block">
+        {/* Top Mobile Bar */}
+        <div className="flex items-center justify-between py-3.5 px-2 bg-white border-b border-[#EAE4DA] sticky top-0 z-30 mb-4">
+          <button
+            onClick={() => handleNav('home')}
+            className="w-8 h-8 rounded-full bg-[#FAF7F2] border border-[#EAE4DA] flex items-center justify-center cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4 text-[#1C1917]" />
           </button>
 
           <div className="bg-[#F5F0E8] p-1 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer ${activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85]'}`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
+                activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+              }`}
             >
               Live
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer ${activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85]'}`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
+                activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+              }`}
             >
-              History
+              History ({ordersToDisplay.length})
             </button>
           </div>
         </div>
 
+        {/* Mobile Live View */}
         {activeTab === 'live' && (
-          <div className="p-4 space-y-5 animate-fadeIn">
-            <div className="flex justify-between items-start gap-4">
-              <div>
-                <h1 className="text-2xl font-semibold text-[#1C1917]">
-                  {activeStep === 6 ? 'Delivered!' : `Arriving in ${etaMinutes} min`}
-                </h1>
-                <p className="text-xs text-[#8E8B85] font-semibold mt-0.5">Rider stitching your 3-stall route</p>
-              </div>
-              <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider select-none shrink-0 border border-[#A7E1BA]">
-                Live
-              </span>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs flex justify-between items-center">
-              <div className="flex gap-3 items-center">
-                <div className="w-8 h-8 rounded-xl bg-[#FAF7F2] border border-[#EAE4DA] text-[10px] font-black text-[#4B5563] flex items-center justify-center">
-                  NP
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-[#1C1917] block">Nikhil Prajapati</span>
-                  <span className="text-[9px] text-[#8E8B85]">GJ-01 EX 8291 · ★ 4.9</span>
-                </div>
-              </div>
-              <button className="w-8 h-8 rounded-xl bg-[#FAF7F2] border border-[#EAE4DA] text-[#1C1917] flex items-center justify-center">
-                <Phone className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-baseline">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#8E8B85]">Order fork</h3>
-                <span className="text-[10px] text-[#8E8B85] font-semibold">3 SubOrders</span>
-              </div>
-              <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-4">
-                <div className="flex justify-between items-center pb-3 border-b border-[#FAF7F2]">
-                  <div>
-                    <strong className="text-xs font-bold text-[#1C1917] block">Main order · #SB-8291</strong>
-                    <span className="text-[9px] text-[#8E8B85] font-mono block">clusterId: manek_chowk_01</span>
+          <div>
+            {currentLiveOrder ? (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] uppercase font-bold text-[#8E8B85]">Active Order</span>
+                    <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-black px-2 py-0.5 rounded-full uppercase border border-[#A7E1BA]">
+                      Confirmed
+                    </span>
                   </div>
-                  <strong className="text-xs font-black text-[#1C1917]">₹{totalAmount}</strong>
-                </div>
+                  <h2 className="text-xl font-bold text-[#1C1917]">Preparing Food</h2>
+                  <p className="text-xs text-[#8E8B85]">
+                    {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
+                  </p>
 
-                <div className="flex justify-between items-start gap-4 text-[11px] pt-1">
-                  <div>
-                    <div className="flex gap-2 items-center">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] font-bold text-[9px] flex items-center justify-center shrink-0">S1</span>
-                      <strong className="text-[#1C1917]">Bhavesh Dabeli</strong>
+                  {/* OTP display on mobile */}
+                  {currentLiveOrder?.deliveryOtp && (
+                    <div className="p-3 bg-[#FAF0ED] rounded-xl border border-[#FCE8E6] flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-[#8E8B85] uppercase">Delivery OTP:</span>
+                      <span className="text-lg font-mono font-black text-[#D94A38] tracking-widest">
+                        {currentLiveOrder?.deliveryOtp}
+                      </span>
                     </div>
-                    <p className="text-[10px] text-[#8E8B85] pl-7 mt-0.5">2x Kutchi Dabeli · 1x Cheese</p>
-                    <p className="text-[9px] text-[#8E8B85] pl-7 mt-0.5 font-mono">Picked at 8:42 PM</p>
-                  </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border select-none ${s1Status === 'collected' ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]' : 'bg-[#FAF7F2] text-[#4B5563] border-[#EAE4DA]'}`}>
-                    {s1Status === 'collected' ? 'COLLECTED' : 'READY'}
-                  </span>
+                  )}
                 </div>
 
-                <div className="flex justify-between items-start gap-4 text-[11px] pt-1">
-                  <div>
-                    <div className="flex gap-2 items-center">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] font-bold text-[9px] flex items-center justify-center shrink-0">S3</span>
-                      <strong className="text-[#1C1917]">Asharfi Kulfi</strong>
-                    </div>
-                    <p className="text-[10px] text-[#8E8B85] pl-7 mt-0.5">1x Malai Kulfi (2pc)</p>
-                    <p className="text-[9px] text-[#8E8B85] pl-7 mt-0.5 font-mono">Ready at 8:44 PM</p>
-                  </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border select-none ${s3Status === 'collected' ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]' : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'}`}>
-                    {s3Status === 'collected' ? 'COLLECTED' : 'READY · en route'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-start gap-4 text-[11px] pt-1">
-                  <div>
-                    <div className="flex gap-2 items-center">
-                      <span className="w-5 h-5 rounded-full bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] font-bold text-[9px] flex items-center justify-center shrink-0">S4</span>
-                      <strong className="text-[#1C1917]">Bhajipav Bhandar</strong>
-                    </div>
-                    <p className="text-[10px] text-[#8E8B85] pl-7 mt-0.5">1x Butter Pav Bhaji</p>
-                  </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border select-none ${s4Status === 'collected' ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]' : s4Status === 'ready' ? 'bg-[#FAF7F2] text-[#4B5563] border-[#EAE4DA]' : 'bg-stone-100 text-stone-500 border-[#EAE4DA] animate-pulse'}`}>
-                    {s4Status.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#8E8B85]">Timeline</h3>
-                <span className="bg-[#FAF7F2] border border-[#EAE4DA] text-[#4B5563] text-[9px] font-bold px-2 py-0.5 rounded-md">
-                  {activeStep === 6 ? 'COMPLETED' : activeStep === 5 ? 'DELIVERING' : 'PREPARING'}
-                </span>
-              </div>
-              <div className="bg-white rounded-2xl border border-[#EAE4DA] p-5 shadow-3xs">
-                <div className="relative border-l border-[#FAF7F2] pl-8 space-y-6 ml-3.5">
-                  {[
-                    { step: 1, label: 'Order placed', time: '20:14', desc: 'MainOrder MO-77213 forked into 3 sub-orders.' },
-                    { step: 2, label: 'All stalls accepted', time: '20:15', desc: 'Bhavesh · Asharfi · Bhajipav confirmed.' },
-                    { step: 3, label: 'Kitchens preparing', time: '20:16', desc: s4Status === 'ready' ? 'All 3 stalls preparation complete.' : '2 of 3 stalls prep complete.' },
-                    { step: 4, label: 'Rider collecting', time: activeStep >= 4 ? '20:21' : '--:--', desc: 'Aditya V. picking up in cluster order.' },
-                    { step: 5, label: 'Out for delivery', time: activeStep >= 5 ? '20:25' : '--:--', desc: 'Single trip · 3 pickups · 1 drop.' },
-                    { step: 6, label: 'Delivered', time: activeStep === 6 ? '20:29' : '--:--', desc: 'Rate each stall individually after arrival.' }
-                  ].map((s) => (
-                    <div key={s.step} className="relative">
-                      <div className={`absolute -left-12 top-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all ${activeStep >= s.step
-                        ? 'border-[#D94A38] bg-[#FAF7F2] text-[#D94A38] shadow-3xs'
-                        : 'border-[#EAE4DA] bg-white text-[#8E8B85]'
-                        }`}>
-                        {activeStep >= s.step ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : s.step}
-                      </div>
-                      <div className="flex justify-between items-start gap-4 pt-0.5">
-                        <div>
-                          <h4 className={`text-xs font-bold font-sans ${activeStep >= s.step ? 'text-[#1C1917]' : 'text-[#8E8B85]'}`}>
-                            {s.label}
-                          </h4>
-                          <p className="text-[10px] text-[#8E8B85] leading-relaxed mt-0.5">{s.desc}</p>
+                <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#8E8B85]">
+                    Sub-Orders ({liveStalls.length} Stalls)
+                  </h3>
+                  <div className="space-y-2">
+                    {liveStalls.map((sName: any, idx: number) => {
+                      const stallTitle = typeof sName === 'string' ? sName : (sName?.name || 'Food Stall');
+                      return (
+                        <div key={idx} className="p-3 bg-[#FAF7F2] rounded-xl border border-[#EAE4DA] flex justify-between items-center text-xs">
+                          <span className="font-bold text-[#1C1917]">{stallTitle}</span>
+                          <span className="text-[10px] font-bold text-[#D94A38]">Preparing</span>
                         </div>
-                        <span className="text-[9px] text-[#8E8B85] font-semibold mt-0.5">{s.time}</span>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-white border border-[#EAE4DA] rounded-2xl p-10 text-center space-y-3 animate-fadeIn my-4">
+                <h3 className="text-sm font-bold text-[#1C1917]">No Active Orders</h3>
+                <p className="text-xs text-[#8E8B85]">
+                  Order from street food stalls to track your delivery in real-time.
+                </p>
+                <button
+                  onClick={() => handleNav('home')}
+                  className="px-5 py-2 bg-[#D94A38] text-white text-xs font-bold rounded-xl border-0 cursor-pointer shadow-xs"
+                >
+                  Order Food
+                </button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* Mobile History View */}
         {activeTab === 'past' && (
-          <div className="p-4">
-            <h1 className="text-xl font-bold text-[#1C1917] mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#D94A38]" /> Past Orders
-            </h1>
+          <div className="space-y-4 animate-fadeIn">
+            <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#D94A38]" /> Past Orders
+            </h2>
             {renderPastOrders()}
           </div>
         )}

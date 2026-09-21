@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, MapPin, Package, Check, X, History, Store, Loader2, RefreshCw } from 'lucide-react';
+import { Clock, MapPin, Check, X, History, Store, Loader2, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import riderService, { type QueueOrder } from '../../services/riderService';

@@ -7,7 +7,6 @@ import {
   Store,
   ShieldCheck,
   Zap,
-  CreditCard,
   Banknote,
   Clock,
   Sparkles,
@@ -97,8 +96,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
   const rawKhauGalliName = activeKhauGalli?.name || cartItems[0]?.khauGalliName || clusterName;
   const displayKhauGalliName = rawKhauGalliName.replace(/_/g, ' ');
 
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'cod'>('upi');
-  const [selectedUpiProvider, setSelectedUpiProvider] = useState<string>('gpay');
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
   const [isPlacingOrder, setIsPlacingOrder] = useState<boolean>(false);
   const [orderError, setOrderError] = useState<string | null>(null);
@@ -313,7 +311,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 clearCart();
                 onConfirmOrder(
                   cartItems,
-                  paymentMethod === 'upi' ? `UPI (${selectedUpiProvider.toUpperCase()})` : 'CARD'
+                  'ONLINE (RAZORPAY)'
                 );
                 navigate('/orders');
               } else {
@@ -535,7 +533,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 </div>
               ) : (
                 <div className="flex gap-4 items-start bg-[#FAF7F2]/60 border border-[#EAE4DA]/70 rounded-2xl p-4 animate-fadeIn">
-                  <div className="w-11 h-11 rounded-2xl bg-[#FAF0ED] border border-[#FCE8E6] flex items-center justify-center text-[#D94A38] shrink-0 shadow-3xs">
+                  <div className="w-11 h-11 rounded-2xl bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] flex items-center justify-center  shrink-0 shadow-3xs">
                     {selectedAddress.label === 'Home' && <Home className="w-5 h-5" />}
                     {selectedAddress.label === 'Office' && <Briefcase className="w-5 h-5" />}
                     {selectedAddress.label !== 'Home' && selectedAddress.label !== 'Office' && <MapPin className="w-5 h-5" />}
@@ -567,7 +565,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                         <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
                         {currentDistanceKm} km from {displayKhauGalliName}
                       </span>
-                      <span className="bg-[#E6F4EA] border border-[#A7E1BA] text-[#137333] text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                      <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#D94A38]   text-[10px] font-bold px-2.5 py-0.5 rounded-md flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
                         ETA {currentETA}
                       </span>
@@ -589,9 +587,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
                     placeholder="e.g. 2nd floor, ring the bell, gate colour..."
                     className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl pl-4 pr-10 py-3 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] transition-all"
                   />
-                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8E8B85]">
-                    💬
-                  </div>
                 </div>
               </div>
             </div>
@@ -605,142 +600,105 @@ export const Checkout: React.FC<CheckoutProps> = ({
                     Select Payment Method
                   </h3>
                 </div>
-                <span className="text-sm font-black text-[#1C1917] bg-[#FAF7F2] border border-[#EAE4DA] px-3 py-1 rounded-full">
-                  ₹{totalPayable}
-                </span>
               </div>
 
-              {/* Method Switcher Tabs */}
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl mb-6">
-                <button
-                  onClick={() => setPaymentMethod('upi')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'upi'
-                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+              {/* Two Payment Method Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5">
+                {/* Option 1: Online Payment */}
+                <div
+                  onClick={() => setPaymentMethod('online')}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${paymentMethod === 'online'
+                      ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs ring-1 ring-[#D94A38]'
+                      : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
                     }`}
                 >
-                  <Zap className="w-3.5 h-3.5 text-[#D94A38]" />
-                  <span>UPI · Instant</span>
-                </button>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center shrink-0">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-[#1C1917]">Online Payment</span>
+                        </div>
+                        <span className="text-[10px] text-[#8E8B85] block mt-0.5">
+                          UPI, Cards, NetBanking
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${paymentMethod === 'online'
+                          ? 'border-[#D94A38] bg-[#D94A38] text-white'
+                          : 'border-[#DCD6CC]'
+                        }`}
+                    >
+                      {paymentMethod === 'online' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </div>
 
-                <button
-                  onClick={() => setPaymentMethod('card')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'card'
-                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-                    }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-[#8E8B85]" />
-                  <span>Card</span>
-                </button>
+                  <div className="flex items-center gap-1.5 pt-2.5 border-t border-[#F5F0E8]">
+                    <span className="text-[9px] font-bold text-[#8E8B85] uppercase">Supports:</span>
+                    <span className="text-[9px] font-semibold text-[#5A5751] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE4DA]">GPay</span>
+                    <span className="text-[9px] font-semibold text-[#5A5751] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE4DA]">PhonePe</span>
+                    <span className="text-[9px] font-semibold text-[#5A5751] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE4DA]">Paytm</span>
+                    <span className="text-[9px] font-semibold text-[#5A5751] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE4DA]">Cards</span>
+                  </div>
+                </div>
 
-                <button
+                {/* Option 2: Cash on Delivery */}
+                <div
                   onClick={() => setPaymentMethod('cod')}
-                  className={`py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${paymentMethod === 'cod'
-                    ? 'bg-white text-[#1C1917] shadow-xs font-black'
-                    : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${paymentMethod === 'cod'
+                      ? 'border-[#D94A38] bg-[#FAF0ED]/40 shadow-xs ring-1 ring-[#D94A38]'
+                      : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
                     }`}
                 >
-                  <Banknote className="w-3.5 h-3.5 text-[#2E7D32]" />
-                  <span>Cash</span>
-                </button>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-[#FAF0ED] text-[#D94A38]  flex items-center justify-center shrink-0">
+                        <Banknote className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-[#1C1917]">Cash on Delivery</span>
+                          
+                        </div>
+                        <span className="text-[10px] text-[#8E8B85] block mt-0.5">
+                          Pay cash to rider upon arrival
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 ${paymentMethod === 'cod'
+                          ? 'border-[#D94A38] bg-[#D94A38] text-white'
+                          : 'border-[#DCD6CC]'
+                        }`}
+                    >
+                      {paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-2.5 border-t border-[#F5F0E8]">
+                    <span className="text-[9px] font-bold text-[#8E8B85] uppercase">Pay at door:</span>
+                    <span className="text-[9px] font-bold text-[#1C1917]">₹{totalPayable} cash</span>
+                  </div>
+                </div>
               </div>
 
-              {/* UPI Tab Body */}
-              {paymentMethod === 'upi' && (
-                <div className="space-y-4 animate-fadeIn">
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { id: 'gpay', name: 'Google Pay', handle: 'Instant UPI', badge: 'Popular' },
-                      { id: 'phonepe', name: 'PhonePe', handle: 'Instant UPI', badge: 'Fast' },
-                      { id: 'paytm', name: 'Paytm UPI', handle: 'Wallet & UPI', badge: null },
-                      { id: 'bhim', name: 'BHIM UPI', handle: 'Govt. NPCI', badge: null },
-                    ].map((provider) => (
-                      <button
-                        key={provider.id}
-                        onClick={() => setSelectedUpiProvider(provider.id)}
-                        className={`p-3.5 rounded-2xl border text-left flex justify-between items-center transition-all cursor-pointer ${selectedUpiProvider === provider.id
-                          ? 'border-[#D94A38] bg-[#FAF0ED]/30 shadow-xs ring-1 ring-[#D94A38]'
-                          : 'border-[#EAE4DA] bg-white hover:border-[#DCD6CC]'
-                          }`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-[#1C1917] block">
-                              {provider.name}
-                            </span>
-                            {provider.badge && (
-                              <span className="bg-[#FAF0ED] text-[#D94A38] text-[8px] font-black uppercase px-1.5 py-0.2 rounded">
-                                {provider.badge}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-[#8E8B85]">{provider.handle}</span>
-                        </div>
-                        <div
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${selectedUpiProvider === provider.id
-                            ? 'border-[#D94A38] bg-[#D94A38] text-white'
-                            : 'border-[#DCD6CC]'
-                            }`}
-                        >
-                          {selectedUpiProvider === provider.id && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-[#F4F9FF] border border-[#D0E2FF] rounded-2xl p-3.5 flex gap-3 items-center">
-                    <ShieldCheck className="w-5 h-5 text-[#0043CE] shrink-0" />
-                    <p className="text-[11px] text-[#0043CE] leading-relaxed">
-                      Sandbox payment simulation active. On clicking Pay, your order is atomically saved and splits across <strong>{uniqueVendorsCount} stall sub-orders</strong>.
-                    </p>
-                  </div>
+              {/* Dynamic Information Notice */}
+              {paymentMethod === 'online' ? (
+                <div className="bg-white border border-[#D94A38]  rounded-2xl p-3.5 flex gap-3 items-center animate-fadeIn">
+                  <ShieldCheck className="w-5 h-5 text-[#D94A38]  shrink-0" />
+                  <p className="text-[11px] text-black leading-relaxed">
+                    Razorpay secured checkout. On clicking Pay, your order is atomically saved and splits across <strong>{uniqueVendorsCount} stall sub-orders</strong>.
+                  </p>
                 </div>
-              )}
-
-              {/* Card Tab Body */}
-              {paymentMethod === 'card' && (
-                <div className="space-y-3 py-2 animate-fadeIn">
-                  <input
-                    type="text"
-                    placeholder="Card Number"
-                    className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-4 py-3 text-xs text-[#1C1917] focus:outline-none"
-                    disabled
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="MM/YY"
-                      className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-4 py-3 text-xs text-[#1C1917] focus:outline-none"
-                      disabled
-                    />
-                    <input
-                      type="password"
-                      placeholder="CVV"
-                      className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-4 py-3 text-xs text-[#1C1917] focus:outline-none"
-                      disabled
-                    />
-                  </div>
-                  <span className="text-[10px] text-[#8E8B85] block">
-                    Card payments disabled in sandbox demo. Please select UPI or Cash on Delivery.
-                  </span>
-                </div>
-              )}
-
-              {/* COD Tab Body */}
-              {paymentMethod === 'cod' && (
-                <div className="bg-[#FFF8F0] border border-[#FFE1C2] rounded-2xl p-4 flex gap-3 items-center animate-fadeIn">
-                  <Banknote className="w-5 h-5 text-[#B76E00] shrink-0" />
-                  <div>
-                    <h4 className="text-xs font-bold text-[#B76E00] uppercase tracking-wide">
-                      Cash on Delivery
-                    </h4>
-                    <p className="text-[11px] text-[#B76E00] leading-relaxed mt-0.5">
-                      Please hand exact cash of <strong>₹{totalPayable}</strong> to the rider upon delivery.
-                    </p>
-                  </div>
+              ) : (
+                <div className="bg-white border border-[#D94A38]  rounded-2xl p-3.5 flex gap-3 items-center animate-fadeIn">
+                  <Banknote className="w-5 h-5 text-[#D94A38]  shrink-0" />
+                  <p className="text-[11px] text-black leading-relaxed">
+                    Please keep exact cash of <strong>₹{totalPayable}</strong> ready. You will share your 4-digit Delivery OTP with the rider upon delivery.
+                  </p>
                 </div>
               )}
             </div>
@@ -848,11 +806,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 <div className="flex justify-between items-center min-h-[24px]">
                   <div className="flex items-center gap-1">
                     <span>Delivery Fee</span>
-                    {selectedAddress && (
-                      <span className="text-[9px] font-extrabold text-[#2E7D32] bg-[#E6F4EA] px-1.5 py-0.2 rounded border border-[#A7E1BA]">
-                        Consolidated
-                      </span>
-                    )}
+                    
                   </div>
                   {isCalculatingFee ? (
                     <div className="flex items-center gap-1.5 text-[11px] text-[#D94A38] font-bold">
@@ -921,7 +875,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      <span>Pay ₹{totalPayable} via {paymentMethod.toUpperCase()}</span>
+                      <span>{paymentMethod === 'cod' ? `Place Cash on Delivery Order (₹${totalPayable})` : `Pay ₹${totalPayable} via Online Payment`}</span>
                     </>
                   )}
                 </button>
@@ -960,12 +914,9 @@ export const Checkout: React.FC<CheckoutProps> = ({
         <div className="p-4 space-y-4">
           {/* Mobile Headline */}
           <div>
-            <span className="text-[9px] font-extrabold text-[#D94A38] uppercase tracking-widest bg-[#FAF0ED] px-2 py-0.5 rounded-sm border border-[#FCE8E6]">
+            <span className="text-[10px] font-extrabold text-[#D94A38] uppercase tracking-widest bg-[#FAF0ED] py-0.5 rounded-sm border border-[#FCE8E6]">
               CONFIRM ORDER
             </span>
-            <h1 className="text-2xl font-extrabold text-[#1C1917] mt-1">
-              Almost there!
-            </h1>
             <p className="text-xs text-[#8E8B85] font-semibold mt-0.5">
               {totalItemsCount} items · {uniqueVendorsCount} stalls · ETA {currentETA}
             </p>
@@ -1039,7 +990,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                       <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
                       {currentDistanceKm} km
                     </span>
-                    <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-bold px-2 py-0.5 rounded border border-[#A7E1BA] flex items-center gap-1">
+                    <span className="bg-[#FAF0ED] text-[#D94A38] text-[9px] font-bold px-2 py-0.5 rounded border border-[#D94A38] flex items-center gap-1">
                       <Clock className="w-2.5 h-2.5" />
                       ETA {currentETA}
                     </span>
@@ -1144,43 +1095,39 @@ export const Checkout: React.FC<CheckoutProps> = ({
               Payment method
             </h3>
             <div
-              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${paymentMethod === 'upi' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
+              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all cursor-pointer ${paymentMethod === 'online' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
                 }`}
+              onClick={() => setPaymentMethod('online')}
             >
-              <label
-                className="flex items-center gap-3 cursor-pointer"
-                onClick={() => setPaymentMethod('upi')}
-              >
+              <label className="flex items-center gap-3 cursor-pointer">
                 <div
-                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'upi'
+                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'online'
                     ? 'border-[#D94A38] bg-[#D94A38] text-white'
                     : 'border-[#DCD6CC]'
                     }`}
                 >
-                  {paymentMethod === 'upi' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  {paymentMethod === 'online' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-[#1C1917]">UPI · Instant</span>
+                    <span className="text-xs font-bold text-[#1C1917]">Online Payment</span>
                     <span className="bg-[#FAF0ED] text-[#D94A38] text-[8px] font-extrabold tracking-wide uppercase px-1.5 py-0.2 rounded">
-                      Recommended
+                      Popular
                     </span>
                   </div>
                   <span className="text-[10px] text-[#8E8B85] block mt-0.5">
-                    GPay · PhonePe · Paytm · BHIM
+                    UPI (GPay, PhonePe, Paytm) · Cards · NetBanking
                   </span>
                 </div>
               </label>
             </div>
 
             <div
-              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all ${paymentMethod === 'cod' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
+              className={`p-3.5 rounded-2xl border bg-white flex flex-col gap-2.5 transition-all cursor-pointer ${paymentMethod === 'cod' ? 'border-[#D94A38] shadow-3xs' : 'border-[#EAE4DA]'
                 }`}
+              onClick={() => setPaymentMethod('cod')}
             >
-              <label
-                className="flex items-center gap-3 cursor-pointer"
-                onClick={() => setPaymentMethod('cod')}
-              >
+              <label className="flex items-center gap-3 cursor-pointer">
                 <div
                   className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'cod'
                     ? 'border-[#D94A38] bg-[#D94A38] text-white'
@@ -1190,7 +1137,12 @@ export const Checkout: React.FC<CheckoutProps> = ({
                   {paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
                 <div className="flex-1">
-                  <span className="text-xs font-bold text-[#1C1917] block">Cash on delivery</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-[#1C1917]">Cash on delivery</span>
+                    <span className="bg-[#FAF0ED] text-[#D94A38] text-[8px] font-extrabold tracking-wide uppercase px-1.5 py-0.2 rounded">
+                      Cash
+                    </span>
+                  </div>
                   <span className="text-[10px] text-[#8E8B85] block mt-0.5">
                     Pay ₹{totalPayable} in cash to rider
                   </span>
@@ -1231,7 +1183,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
             ) : (
               <>
                 <Lock className="w-3.5 h-3.5" />
-                <span>Pay via {paymentMethod === 'upi' ? 'UPI' : paymentMethod === 'card' ? 'CARD' : 'Cash'}</span>
+                <span>{paymentMethod === 'cod' ? `Place COD Order (₹${totalPayable})` : `Pay ₹${totalPayable} Online`}</span>
               </>
             )}
           </button>

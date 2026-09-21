@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, MapPin, CheckCircle2, ChevronLeft, Calendar, Loader2, Package } from 'lucide-react';
+import {  MapPin, CheckCircle2, ChevronLeft, Calendar, Loader2, Package } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import riderService, { type RiderHistoryItem } from '../../services/riderService';
