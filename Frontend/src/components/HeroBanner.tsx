@@ -11,14 +11,8 @@ interface HeroBannerProps {
   isLoading?: boolean;
 }
 
-export const HeroBanner: React.FC<HeroBannerProps> = ({
-  clusters = [],
-  isLoading = false,
-}) => {
+export const HeroBanner: React.FC<HeroBannerProps> = () => {
   const navigate = useNavigate();
-
-  // Real-time dynamic calculations from live database data
-  const totalMarkets = clusters.length;
 
 
   const handleExploreClick = () => {

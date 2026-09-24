@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Navigate } from 'react-router';
-import { Store, Menu as MenuIcon, TrendingUp, Wallet, Settings, Search, BookOpen, HelpCircle, User, ShieldAlert, Lock, LogOut } from 'lucide-react';
+import { Store, Menu as MenuIcon, TrendingUp, Wallet, Settings, BookOpen, HelpCircle, User, ShieldAlert, Lock, LogOut } from 'lucide-react';
 // @ts-ignore
 import { Joyride as OriginalJoyride, STATUS } from 'react-joyride';
 const Joyride = OriginalJoyride as any;

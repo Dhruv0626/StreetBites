@@ -22,7 +22,7 @@ export const Search: React.FC = () => {
     const processSearchStalls = (clustersData: any[]) => {
       if (!isMounted || !Array.isArray(clustersData)) return;
       const mapped: Stall[] = clustersData.flatMap((c: any) =>
-        (c.stalls || []).map((s: any, idx: number) => {
+        (c.stalls || []).map((s: any) => {
           const mappedDishes: Dish[] = (s.menu_items || []).map((m: any, mIdx: number) => ({
             id: m._id || `dish_${mIdx}`,
             name: m.name,

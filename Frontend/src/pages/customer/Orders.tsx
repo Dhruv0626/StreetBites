@@ -85,11 +85,11 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       realId: o.id || o._id,
       date: o.createdAt
         ? new Date(o.createdAt).toLocaleDateString('en-IN', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
         : 'Recently',
       total: o.totalAmount || 0,
       foodItemsTotal: o.foodItemsTotal || 0,
@@ -111,23 +111,23 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   // Identify active order for live tracking
   const currentLiveOrder: any = activeOrder
     ? {
-        id: 'LIVE',
-        orderNumber: 'LIVE-ORDER',
-        cluster: 'StreetBites Khau Galli',
-        status: 'Preparing',
-        total: activeOrder.items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 1), 0) + 49 + 5,
-        items: activeOrder.items.map((it) => ({
-          name: it.name,
-          quantity: it.quantity || 1,
-          price: it.price || 0,
-          stallName: it.vendorName || it.stallName || 'Food Stall',
-        })),
-        stalls: Array.from(new Set(activeOrder.items.map((i) => i.vendorName || i.stallName || 'Food Stall').filter(Boolean))),
-        payment: activeOrder.paymentMethod || 'Online',
-        deliveryOtp: '',
-        address: 'Saved Delivery Address',
-        rider: null,
-      }
+      id: 'LIVE',
+      orderNumber: 'LIVE-ORDER',
+      cluster: 'StreetBites Khau Galli',
+      status: 'Preparing',
+      total: activeOrder.items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 1), 0) + 49 + 5,
+      items: activeOrder.items.map((it) => ({
+        name: it.name,
+        quantity: it.quantity || 1,
+        price: it.price || 0,
+        stallName: it.vendorName || it.stallName || 'Food Stall',
+      })),
+      stalls: Array.from(new Set(activeOrder.items.map((i) => i.vendorName || i.stallName || 'Food Stall').filter(Boolean))),
+      payment: activeOrder.paymentMethod || 'Online',
+      deliveryOtp: '',
+      address: 'Saved Delivery Address',
+      rider: null,
+    }
     : ordersToDisplay.find((o) => o.rawStatus && o.rawStatus !== 'DELIVERED' && o.rawStatus !== 'CANCELLED') || null;
 
   const liveStalls: string[] = Array.isArray(currentLiveOrder?.stalls) && currentLiveOrder.stalls.length > 0
@@ -167,9 +167,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           return (
             <div
               key={order.id}
-              className={`bg-white rounded-3xl border ${
-                isExpanded ? 'border-[#D94A38]' : 'border-[#EAE4DA]'
-              } shadow-2xs overflow-hidden transition-all duration-300`}
+              className={`bg-white rounded-3xl border ${isExpanded ? 'border-[#D94A38]' : 'border-[#EAE4DA]'
+                } shadow-2xs overflow-hidden transition-all duration-300`}
             >
               {/* Clickable Header */}
               <div
@@ -179,11 +178,10 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span
-                      className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${
-                        order.status === 'Delivered'
+                      className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${order.status === 'Delivered'
                           ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
                           : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
-                      }`}
+                        }`}
                     >
                       {order.status}
                     </span>
@@ -205,9 +203,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 </div>
                 <div className="flex items-center justify-end">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${
-                      isExpanded ? 'bg-[#FCE8E6] text-[#D94A38] rotate-180' : 'bg-[#F5F0E8] text-[#8E8B85]'
-                    }`}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${isExpanded ? 'bg-[#FCE8E6] text-[#D94A38] rotate-180' : 'bg-[#F5F0E8] text-[#8E8B85]'
+                      }`}
                   >
                     <ChevronDown className="w-5 h-5" />
                   </div>
@@ -342,21 +339,19 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           <div className="bg-[#F5F0E8] p-1.5 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${
-                activeTab === 'live'
+              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${activeTab === 'live'
                   ? 'bg-white shadow-sm text-[#D94A38]'
                   : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-              }`}
+                }`}
             >
               Live Order {currentLiveOrder ? '•' : ''}
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${
-                activeTab === 'past'
+              className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${activeTab === 'past'
                   ? 'bg-white shadow-sm text-[#D94A38]'
                   : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
-              }`}
+                }`}
             >
               Order History ({ordersToDisplay.length})
             </button>
@@ -571,17 +566,15 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           <div className="bg-[#F5F0E8] p-1 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
-                activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-              }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+                }`}
             >
               Live
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
-                activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-              }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+                }`}
             >
               History ({ordersToDisplay.length})
             </button>

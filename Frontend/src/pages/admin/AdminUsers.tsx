@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User as UserIcon, Store, Bike, Trash2, Ban, Shield, Loader2, AlertCircle } from 'lucide-react';
+import { Search, User as UserIcon, Store, Bike, Trash2, Ban, Shield, AlertCircle } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useAlert } from '../../context/AlertContext';
 import { TableRowsSkeleton } from '../../components/Skeleton';

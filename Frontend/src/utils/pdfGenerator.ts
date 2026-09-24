@@ -72,7 +72,7 @@ export class SimplePdfDocument {
     x: number,
     y: number,
     labelWidth = 100,
-    valueWidth = 140
+    _valueWidth = 140
   ) {
     this.drawText(label, x, y, 8.5, 'F2', 0.4, 0.4, 0.4);
     this.drawText(value || 'N/A', x + labelWidth, y, 9, 'F1', 0.1, 0.1, 0.1);

@@ -5,7 +5,6 @@ import {
   XCircle,
   Info,
   X,
-  ShieldAlert,
 } from 'lucide-react';
 
 export type AlertType = 'success' | 'error' | 'warning' | 'info' | 'danger';

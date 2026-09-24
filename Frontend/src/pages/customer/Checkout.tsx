@@ -104,7 +104,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
   // Customer addresses state (fetched exclusively from database based on user_id)
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
-  const [isLoadingAddresses, setIsLoadingAddresses] = useState<boolean>(true);
   const [isChangingAddress, setIsChangingAddress] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isCalculatingFee, setIsCalculatingFee] = useState<boolean>(false);
@@ -121,12 +120,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
           const primary = saved.find((a) => a.is_primary) || saved[0];
           setSelectedAddressId(primary.id || primary._id || '');
         }
-        setIsLoadingAddresses(false);
       }
     });
 
     const loadAddresses = async () => {
-      setIsLoadingAddresses(true);
       try {
         const saved = await getCustomerAddresses();
         if (isMounted) {
@@ -143,10 +140,6 @@ export const Checkout: React.FC<CheckoutProps> = ({
         console.warn('Error fetching saved addresses from database:', err);
         if (isMounted) {
           setAddresses([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingAddresses(false);
         }
       }
     };

@@ -10,7 +10,6 @@ export const VendorProfilePage: React.FC = () => {
 
   const [stallData, setStallData] = useState<any>(null);
   const [userData, setUserData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,8 +22,6 @@ export const VendorProfilePage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching stall profile:', err);
-      } finally {
-        if (isMounted) setLoading(false);
       }
     };
     fetchProfile();
@@ -114,6 +111,7 @@ export const VendorProfilePage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-stone-500 mt-2">
                 <span className="flex items-center gap-1.5"><Store className="w-4 h-4 text-[#D94A38]" /> {category}</span>
                 <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-stone-400" /> {clusterName}</span>
+                <span className="flex items-center gap-1.5"><Clock3 className="w-4 h-4 text-stone-400" /> Open till {openTill}</span>
               </div>
               <p className="text-sm text-stone-600 mt-4 leading-relaxed max-w-2xl">
                 {description}

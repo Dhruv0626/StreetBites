@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, AlertCircle, MessageSquare, CheckCircle2, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { Search, AlertCircle, MessageSquare, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { CustomSelect } from '../../components/CustomSelect';
 import { useAlert } from '../../context/AlertContext';

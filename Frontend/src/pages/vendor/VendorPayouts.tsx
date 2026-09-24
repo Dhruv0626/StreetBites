@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, ArrowDownLeft, Building2, ExternalLink, ShieldCheck, Clock, CheckCircle2, X } from 'lucide-react';
+import { IndianRupee, ArrowDownLeft, Building2, ShieldCheck, Clock, CheckCircle2, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
@@ -18,12 +18,11 @@ export const VendorPayoutsPage: React.FC = () => {
   const { showAlert, toast } = useAlert();
   const navigate = useNavigate();
   const [vendorData, setVendorData] = useState<{ user?: any; stall?: any } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   // Real transactions list (initialized empty)
-  const [transactions, setTransactions] = useState<PayoutTransaction[]>([]);
+  const [transactions] = useState<PayoutTransaction[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,8 +34,6 @@ export const VendorPayoutsPage: React.FC = () => {
         }
       } catch (err) {
         // Fall back gracefully to user context
-      } finally {
-        if (isMounted) setLoading(false);
       }
     };
     fetchDetails();

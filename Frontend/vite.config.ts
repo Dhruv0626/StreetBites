@@ -10,5 +10,13 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    port: 5173,
+    host: true,
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    }
+  }
 })
 

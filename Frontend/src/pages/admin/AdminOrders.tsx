@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import TomTomMap from '../../components/map/TomTomMap';
 import { type MapMarker, type LngLatTuple } from '../../types/map';
 import { AHMEDABAD_CENTER } from '../../config/tomtom';
@@ -75,7 +75,6 @@ export const AdminOrders: React.FC = () => {
 
   // Convert active global orders to TomTom Map Markers
   const orderMarkers: MapMarker[] = activeOrders.map((order) => {
-    const isSelected = order.id === selectedOrderId;
     const badgeColor =
       order.status === 'Delayed'
         ? '#D97706'

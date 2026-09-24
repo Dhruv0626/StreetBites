@@ -13,7 +13,6 @@ import {
   UtensilsCrossed,
   Search,
   Check,
-  RotateCcw,
   Store,
   MapPin,
   Info,
@@ -60,7 +59,7 @@ export const AdminVerification: React.FC = () => {
         const list = Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
         setApplications(list);
         if (list.length > 0) {
-          if (!selectedAppId || !list.some(a => a.id === selectedAppId)) {
+          if (!selectedAppId || !list.some((a: any) => a.id === selectedAppId)) {
             setSelectedAppId(list[0].id);
             setCurrentDocIndex(0);
           }

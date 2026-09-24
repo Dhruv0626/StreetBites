@@ -283,7 +283,7 @@ export const AllClusters: React.FC = () => {
                 <span className="text-[9px] text-[#D94A38] font-bold">Direct Access</span>
               </div>
               <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                {matchingStalls.map(({ stall, clusterId, clusterName }) => (
+                {matchingStalls.map(({ stall, clusterName }) => (
                   <button
                     key={stall.id || stall._id}
                     onClick={() => navigate(`/stall/${stall.id || stall._id}`)}

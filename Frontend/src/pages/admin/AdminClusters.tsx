@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   MapPin, Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp,
-  Store, Clock, X, Image as ImageIcon, Navigation, Crosshair, Loader2, AlertCircle, CheckCircle2, Upload, Map
+  Store, Clock, X, Navigation, Crosshair, Loader2, AlertCircle, CheckCircle2, Upload, Map
 } from 'lucide-react';
 import { TomTomMap } from '../../components/map/TomTomMap';
 import { clusterService, type ClusterData } from '../../services/clusterService';

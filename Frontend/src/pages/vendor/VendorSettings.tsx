@@ -6,7 +6,7 @@ import { CustomSelect } from '../../components/CustomSelect';
 import { useAlert } from '../../context/AlertContext';
 
 export const VendorSettingsPage: React.FC = () => {
-  const { showAlert, showConfirm, toast } = useAlert();
+  const { showConfirm, toast } = useAlert();
   const { logout } = useAuth();
   const [activeSection, setActiveSection] = useState('notifications');
   const [pushEnabled, setPushEnabled] = useState(true);

@@ -371,7 +371,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {filteredDishes.map((dish, idx) => {
+                    {filteredDishes.map((dish) => {
                       const qty = getDishQuantity(dish.id);
 
                       return (
@@ -638,7 +638,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                   No dishes listed in this category yet.
                 </div>
               ) : (
-                filteredDishes.map((dish, idx) => {
+                filteredDishes.map((dish) => {
                   const qty = getDishQuantity(dish.id);
 
                   return (

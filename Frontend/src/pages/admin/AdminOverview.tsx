@@ -120,7 +120,7 @@ export const AdminOverview: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EFEBE4" />
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
-                  formatter={(value: number) => [`₹${value}`, 'Revenue']}
+                  formatter={(value: any) => [`₹${value ?? 0}`, 'Revenue']}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#D94A38" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>

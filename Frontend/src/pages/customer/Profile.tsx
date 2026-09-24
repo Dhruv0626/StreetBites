@@ -60,18 +60,14 @@ export const Profile: React.FC = () => {
 
   // Real Saved Addresses State (Fetched from MongoDB based on user_id)
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
-  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
 
   const loadAddresses = async () => {
-    setIsLoadingAddresses(true);
     try {
       const data = await getCustomerAddresses();
       setAddresses(Array.isArray(data) ? data : []);
     } catch (e) {
       console.warn('Failed to load profile addresses from API:', e);
       setAddresses([]);
-    } finally {
-      setIsLoadingAddresses(false);
     }
   };
 
@@ -80,7 +76,6 @@ export const Profile: React.FC = () => {
     const unsubscribe = subscribeAddresses((data) => {
       if (isMounted && Array.isArray(data)) {
         setAddresses(data);
-        setIsLoadingAddresses(false);
       }
     });
 

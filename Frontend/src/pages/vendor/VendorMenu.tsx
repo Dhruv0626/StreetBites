@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Menu as MenuIcon, Plus, Search, MoreVertical, X, Upload, Loader2, AlertCircle, CheckCircle2, Image as ImageIcon} from 'lucide-react';
-import { useNavigate } from 'react-router';
 import { vendorMenuService, type VendorMenuItem } from '../../services/vendorMenuService';
 import { Skeleton } from '../../components/Skeleton';
 import { CustomSelect } from '../../components/CustomSelect';
 import { useAlert } from '../../context/AlertContext';
 
 export const VendorMenuPage: React.FC = () => {
-  const navigate = useNavigate();
   const { showAlert, showConfirm, toast } = useAlert();
   const [allMasterCategories, setAllMasterCategories] = useState<string[]>([]);
   const [menuItems, setMenuItems] = useState<VendorMenuItem[]>([]);
@@ -190,12 +188,13 @@ export const VendorMenuPage: React.FC = () => {
       });
 
       if (res.success && res.data) {
-        setSuccessMessage(`Food item "${res.data.name}" added and stored in database successfully!`);
-        if (!allMasterCategories.includes(res.data.name)) {
-          setAllMasterCategories(prev => [...prev, res.data.name]);
+        const addedCat = res.data;
+        setSuccessMessage(`Food item "${addedCat.name}" added and stored in database successfully!`);
+        if (!allMasterCategories.includes(addedCat.name)) {
+          setAllMasterCategories(prev => [...prev, addedCat.name]);
         }
-        if ((res.data as any).menuItem) {
-          setMenuItems(prev => [(res.data as any).menuItem, ...prev]);
+        if ((addedCat as any).menuItem) {
+          setMenuItems(prev => [(addedCat as any).menuItem, ...prev]);
         }
         setNewCategoryName('');
         setNewCategoryImage(null);
@@ -242,8 +241,9 @@ export const VendorMenuPage: React.FC = () => {
       });
 
       if (res.success && res.data) {
-        setSuccessMessage(`Food item variety "${res.data.name}" saved in database!`);
-        setMenuItems(prev => [res.data, ...prev.filter(i => i.id !== res.data.id)]);
+        const savedItem = res.data;
+        setSuccessMessage(`Food item variety "${savedItem.name}" saved in database!`);
+        setMenuItems(prev => [savedItem, ...prev.filter(i => i.id !== savedItem.id)]);
         setNewItem({ name: '', description: '', category: '', base_price: '', price: '', imageUrl: '' });
         setShowItemModal(false);
         loadMenu();
