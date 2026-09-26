@@ -7,6 +7,7 @@ const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
+import { vendorOrderService } from '../../services/vendorOrderService';
 import logoImg from '../../assets/Logo/Logo.png';
 
 export const VendorLayout: React.FC = () => {
@@ -67,13 +68,45 @@ export const VendorLayout: React.FC = () => {
     }
   };
 
+  const [liveOrdersCount, setLiveOrdersCount] = useState<number>(0);
+
+  // Poll live orders count for navbar badge
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchLiveCount = async () => {
+      try {
+        const res = await vendorOrderService.getMetrics();
+        if (isMounted && res.success && res.data) {
+          setLiveOrdersCount(res.data.liveCount || 0);
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    if (user) {
+      fetchLiveCount();
+      const timer = setInterval(fetchLiveCount, 8000);
+      return () => {
+        isMounted = false;
+        clearInterval(timer);
+      };
+    }
+  }, [user]);
+
   // If vendor has not added registration data yet, navigate to registration form
   if (user && !user.verification_status) {
     return <Navigate to="/vendor/registration" replace />;
   }
 
   const navItems = [
-    { label: 'Live orders', icon: Store, path: '/vendor/Dashboard/orders', badge: '0', tourClass: 'tour-nav-orders' },
+    {
+      label: 'Live orders',
+      icon: Store,
+      path: '/vendor/Dashboard/orders',
+      badge: liveOrdersCount > 0 ? String(liveOrdersCount) : undefined,
+      tourClass: 'tour-nav-orders',
+    },
     { label: 'Menu', icon: MenuIcon, path: '/vendor/Dashboard/menu', tourClass: 'tour-nav-menu' },
     { label: 'Analytics', icon: TrendingUp, path: '/vendor/Dashboard/analytics', tourClass: 'tour-nav-analytics' },
   ];
