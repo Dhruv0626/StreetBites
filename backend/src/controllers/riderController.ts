@@ -451,11 +451,11 @@ export const getRiderHistory = async (req: Request, res: Response): Promise<void
           rawId: o._id,
           time: o.delivered_at
             ? new Date(o.delivered_at).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
             : "Delivered",
           stalls: Math.max(uniqueStalls, 1),
           distance: "2.8 km",

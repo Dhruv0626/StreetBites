@@ -12,66 +12,40 @@ const STORAGE_ENABLED_KEY = 'streetbites_location_enabled';
 
 export function useLocationPermission() {
   const [permission, setPermission] = useState<PermissionStatus | null>(() => {
-    const perm = localStorage.getItem(STORAGE_PERMISSION_KEY);
     const enabled = localStorage.getItem(STORAGE_ENABLED_KEY);
-
-    // If user explicitly disabled it, always respect their choice
-    if (enabled === 'false' || perm === 'denied') return 'denied';
-    if (enabled === 'true' && perm === 'granted') return 'granted';
+    // User's manual setting is strictly respected and persists across page reloads
+    if (enabled === 'true') return 'granted';
+    if (enabled === 'false') return 'denied';
+    const perm = localStorage.getItem(STORAGE_PERMISSION_KEY);
+    if (perm === 'granted') return 'granted';
     return 'denied'; // Default to disabled
   });
 
   const [coords, setCoords] = useState<LocationCoords | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
 
-  // Sync with browser navigator permissions ONLY if user has enabled location in the app
+  // Sync state with storage and handle browser permissions query safely without resetting user's manual switch
   useEffect(() => {
-    const currentEnabled = localStorage.getItem(STORAGE_ENABLED_KEY);
-    if (currentEnabled === 'false') {
+    const isEnabled = localStorage.getItem(STORAGE_ENABLED_KEY) === 'true';
+    if (isEnabled) {
+      setPermission('granted');
+    } else {
       setPermission('denied');
-      return;
     }
 
-    if (typeof window !== 'undefined' && navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' })
-        .then((result) => {
-          const enabledNow = localStorage.getItem(STORAGE_ENABLED_KEY);
-          if (enabledNow === 'false') {
-            setPermission('denied');
-            return;
-          }
-
-          if (result.state === 'granted' && enabledNow === 'true') {
-            setPermission('granted');
-            localStorage.setItem(STORAGE_PERMISSION_KEY, 'granted');
-          } else if (result.state === 'denied') {
-            setPermission('denied');
-            localStorage.setItem(STORAGE_PERMISSION_KEY, 'denied');
-            localStorage.setItem(STORAGE_ENABLED_KEY, 'false');
-          }
-
-          result.onchange = () => {
-            const userPref = localStorage.getItem(STORAGE_ENABLED_KEY);
-            if (userPref === 'false') {
-              setPermission('denied');
-              return;
-            }
-            const updated: PermissionStatus = result.state === 'granted' ? 'granted' : 'denied';
-            setPermission(updated);
-            localStorage.setItem(STORAGE_PERMISSION_KEY, updated);
-            localStorage.setItem(STORAGE_ENABLED_KEY, updated === 'granted' ? 'true' : 'false');
-          };
-        })
-        .catch(() => {});
-    }
+    // Listen to storage events so when user toggles in Settings, it updates across all components
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_ENABLED_KEY) {
+        setPermission(e.newValue === 'true' ? 'granted' : 'denied');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const requestLocation = useCallback((): Promise<LocationCoords | null> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        setPermission('denied');
-        localStorage.setItem(STORAGE_PERMISSION_KEY, 'denied');
-        localStorage.setItem(STORAGE_ENABLED_KEY, 'false');
         resolve(null);
         return;
       }
@@ -91,11 +65,9 @@ export function useLocationPermission() {
           resolve(newCoords);
         },
         (error) => {
-          console.warn('Geolocation denied or error:', error);
-          setPermission('denied');
-          localStorage.setItem(STORAGE_PERMISSION_KEY, 'denied');
-          localStorage.setItem(STORAGE_ENABLED_KEY, 'false');
+          console.warn('Geolocation error:', error);
           setIsLocating(false);
+          // Never reset user's manual in-app enabled setting on error/reload
           resolve(null);
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }

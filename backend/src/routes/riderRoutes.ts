@@ -22,10 +22,8 @@ try {
       fs.mkdirSync(destDir, { recursive: true });
     }
     fs.copyFileSync(AVATAR_SOURCE, FRONTEND_AVATAR_DEST);
-    console.log("✅ AI Cartoon Rider Avatar synchronized to Frontend assets!");
   }
-} catch (e) {
-  console.warn("Avatar sync note:", e);
+} catch (_e) {
 }
 
 // Endpoint to serve the rider cartoon avatar directly
