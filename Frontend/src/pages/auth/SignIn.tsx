@@ -1,6 +1,6 @@
 import React, { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router';
-import { ChevronLeft, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import SidePanelImg from '../../assets/images/hero_market.jpg';
 import { FcGoogle } from "react-icons/fc";
@@ -229,18 +229,29 @@ export const SignIn: React.FC = () => {
                       Forgot?
                     </Link>
                   </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                    className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                    placeholder="••••••••"
-                    disabled={isSubmitting}
-                  />
+                  <div className="relative">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      placeholder="••••••••"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button
