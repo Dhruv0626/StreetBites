@@ -151,10 +151,10 @@ export const Signup: React.FC = () => {
           else navigate('/home');
         }, 1000);
       } else {
-        setLocalError(updateRes.message || 'Failed to update phone number.');
+        setGeneralError(updateRes.message || 'Failed to update phone number.');
       }
     } catch (err: any) {
-      setLocalError(err.message || 'Network error connecting to backend.');
+      setGeneralError(err.message || 'Network error connecting to backend.');
     } finally {
       setIsSubmitting(false);
     }
@@ -164,7 +164,7 @@ export const Signup: React.FC = () => {
     try {
       await redirectToGoogleAuth('signup', role.toLowerCase());
     } catch (err: any) {
-      setLocalError(err.message || 'Failed to start Google sign-up.');
+      setGeneralError(err.message || 'Failed to start Google sign-up.');
     }
   };
 
@@ -172,11 +172,9 @@ export const Signup: React.FC = () => {
     try {
       await redirectToFacebookAuth('signup', role.toLowerCase());
     } catch (err: any) {
-      setLocalError(err.message || 'Failed to start Facebook sign-up.');
+      setGeneralError(err.message || 'Failed to start Facebook sign-up.');
     }
   };
-
-  const displayError = localError || error;
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917] flex flex-col font-sans">
@@ -290,10 +288,10 @@ export const Signup: React.FC = () => {
               )}
 
               {/* Error Banner for General / System Errors */}
-              {generalError && (
+              {(generalError || error) && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{generalError}</span>
+                  <span>{generalError || error}</span>
                 </div>
               )}
 
