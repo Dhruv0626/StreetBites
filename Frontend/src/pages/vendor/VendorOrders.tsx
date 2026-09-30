@@ -16,7 +16,6 @@ import {
 import {
   vendorOrderService,
   type VendorOrder,
-  type VendorOrderItem,
   type VendorOrderMetrics
 } from '../../services/vendorOrderService';
 import { useAlert } from '../../context/AlertContext';

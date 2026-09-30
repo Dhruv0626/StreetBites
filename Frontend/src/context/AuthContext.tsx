@@ -38,35 +38,67 @@ const defaultAuthContext: AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
+const CACHED_USER_KEY = "streetbites_auth_user";
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Read cached user synchronously on mount so initial screen renders with 0ms delay
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem(CACHED_USER_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Never block guest users from seeing the public pages (e.g. Home, Splash, SignIn)
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const clearError = () => setError(null);
 
+  const updateCachedUser = (userData: User | null) => {
+    setUser(userData);
+    try {
+      if (userData) {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(userData));
+        if (userData.id || (userData as any)._id) {
+          localStorage.setItem("streetbites_customer_id", userData.id || (userData as any)._id);
+        }
+      } else {
+        localStorage.removeItem(CACHED_USER_KEY);
+      }
+    } catch {}
+  };
+
   // Helper event using useEffectEvent: sets the user data and turns off loading
   const handleSessionResult = useEffectEvent((userData: User | null) => {
-    setUser(userData);
+    updateCachedUser(userData);
     setIsLoading(false);
   });
 
-  // Check login status on first load
+  // Check login status on first load in background (non-blocking)
   useEffect(() => {
+    let isMounted = true;
     const checkUserSession = async () => {
       try {
         const res = await authService.getProfile();
+        if (!isMounted) return;
         if (res.success && res.data?.user) {
           handleSessionResult(res.data.user);
-        } else {
+        } else if (res.message && (res.message.includes("401") || res.message.includes("Unauthorized") || res.message.includes("Session expired"))) {
           handleSessionResult(null);
         }
       } catch (err) {
-        handleSessionResult(null);
+        // In case of cold-start or offline, preserve existing cache or allow guest browsing
+        if (isMounted) setIsLoading(false);
       }
     };
 
     checkUserSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Login function
@@ -76,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.login(credentials);
       if (res.success && res.data?.user) {
-        setUser(res.data.user);
+        updateCachedUser(res.data.user);
         setIsLoading(false);
         return { success: true, role: res.data.user.role, user: res.data.user };
       } else {
@@ -100,13 +132,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.register(data);
       if (res.success && res.data?.user) {
-        setUser(res.data.user);
+        updateCachedUser(res.data.user);
         // Explicitly set notifications and live location to disabled on new registration
         localStorage.setItem("streetbites_notifications_enabled", "false");
         localStorage.setItem("streetbites_location_enabled", "false");
         localStorage.setItem("streetbites_location_permission", "denied");
         setIsLoading(false);
-        return { success: true, role: res.data.user.role };
+        return { success: true, role: res.data.user.role, user: res.data.user };
       } else {
         const msg = res.message || "Registration failed. Please check the details.";
         setError(msg);
@@ -128,9 +160,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.googleAuth(tokenOrCode);
       if (res.success && res.data?.user) {
-        setUser(res.data.user);
+        updateCachedUser(res.data.user);
         setIsLoading(false);
-        return { success: true };
+        return { success: true, user: res.data.user };
       } else {
         const msg = res.message || "Google sign-in failed.";
         setError(msg);
@@ -151,7 +183,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.success && res.data?.url) {
       window.location.href = res.data.url;
     } else {
-      setError(res.message || "Unable to initiate Google Authentication.");
+      const msg = res.message || "Unable to initiate Google Authentication.";
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -162,7 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.facebookAuth(payload);
       if (res.success && res.data?.user) {
-        setUser(res.data.user);
+        updateCachedUser(res.data.user);
         setIsLoading(false);
         return { success: true, user: res.data.user };
       } else {
@@ -185,24 +219,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.success && res.data?.url) {
       window.location.href = res.data.url;
     } else {
-      setError(res.message || "Unable to initiate Facebook Authentication.");
+      const msg = res.message || "Unable to initiate Facebook Authentication.";
+      setError(msg);
+      throw new Error(msg);
     }
   };
 
   // Logout function
   const logout = async () => {
     setIsLoading(true);
-    await authService.logout();
-    setUser(null);
+    try {
+      await authService.logout();
+    } catch {}
+    updateCachedUser(null);
     setIsLoading(false);
   };
 
   // Refresh profile details
   const refreshProfile = async () => {
-    const res = await authService.getProfile();
-    if (res.success && res.data?.user) {
-      setUser(res.data.user);
-    }
+    try {
+      const res = await authService.getProfile();
+      if (res.success && res.data?.user) {
+        updateCachedUser(res.data.user);
+      }
+    } catch {}
   };
 
   // Update profile details (e.g. phone number)
@@ -212,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await authService.updateProfile(data);
       if (res.success && res.data?.user) {
-        setUser(res.data.user);
+        updateCachedUser(res.data.user);
         setIsLoading(false);
         return { success: true };
       } else {

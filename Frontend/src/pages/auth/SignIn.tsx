@@ -18,6 +18,7 @@ export const SignIn: React.FC = () => {
   const [role, setRole] = useState<string>('Customer');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -180,9 +181,19 @@ export const SignIn: React.FC = () => {
 
               {/* Error Banner */}
               {displayError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-xs">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{displayError}</span>
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                    <span>{displayError}</span>
+                  </div>
+                  {displayError.toLowerCase().includes('register first') && (
+                    <Link
+                      to={`/signup?role=${role.toLowerCase()}`}
+                      className="font-bold underline text-red-800 hover:text-red-950 shrink-0 ml-2"
+                    >
+                      Register Now
+                    </Link>
+                  )}
                 </div>
               )}
 

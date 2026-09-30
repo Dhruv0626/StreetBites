@@ -45,8 +45,8 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // DDoS & Spam Protection: Apply Global Rate Limiting to all /api routes
 app.use("/api", globalRateLimiter);
 
-// Health check endpoint
-app.get("/api/health", (_req: Request, res: Response) => {
+// Health check endpoints (for Render, uptime monitors, and background warm-ups)
+app.get(["/health", "/api/health", "/"], (_req: Request, res: Response) => {
   res.status(200).json({
     status: "OK",
     message: "StreetBites API is running smoothly 🚀",

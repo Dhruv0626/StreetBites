@@ -59,7 +59,7 @@ export const authService = {
     });
   },
 
-  // Google Sign-In / Sign-Up
+  // Google OAuth Auth API
   async googleAuth(payload: { token?: string; id_token?: string; credential?: string; code?: string; action?: 'signin' | 'signup' }) {
     return apiRequest<AuthResponseData>("/auth/google", {
       method: "POST",
@@ -68,15 +68,15 @@ export const authService = {
     });
   },
 
-  // Get Google OAuth consent URL with action ('signin' | 'signup') and role ('customer' | 'vendor' | 'rider')
+  // Get Google OAuth Authorization URL
   async getGoogleAuthUrl(action: 'signin' | 'signup' = 'signin', role: string = 'customer') {
-    return apiRequest<{ url: string }>(`/auth/google/url?action=${action}&role=${encodeURIComponent(role)}`, {
+    return apiRequest<{ url: string }>(`/auth/google/url?action=${encodeURIComponent(action)}&role=${encodeURIComponent(role)}`, {
       method: "GET",
       requiresAuth: false,
     });
   },
 
-  // Facebook Sign-In / Sign-Up
+  // Facebook OAuth Auth API
   async facebookAuth(payload: { token?: string; code?: string; action?: 'signin' | 'signup' }) {
     return apiRequest<AuthResponseData>("/auth/facebook", {
       method: "POST",
@@ -85,9 +85,9 @@ export const authService = {
     });
   },
 
-  // Get Facebook OAuth URL with action ('signin' | 'signup') and role ('customer' | 'vendor' | 'rider')
+  // Get Facebook OAuth Authorization URL
   async getFacebookAuthUrl(action: 'signin' | 'signup' = 'signin', role: string = 'customer') {
-    return apiRequest<{ url: string }>(`/auth/facebook/url?action=${action}&role=${encodeURIComponent(role)}`, {
+    return apiRequest<{ url: string }>(`/auth/facebook/url?action=${encodeURIComponent(action)}&role=${encodeURIComponent(role)}`, {
       method: "GET",
       requiresAuth: false,
     });

@@ -1,6 +1,6 @@
 import React, { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { CheckCircle2, ChevronLeft, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import { useAuth } from '../../context/AuthContext';
 
@@ -10,8 +10,11 @@ export const AdminRegister: React.FC = () => {
   const [fullName, setFullName] = useState<string>('');
   const [workEmail, setWorkEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [SecretKey, setSecretKey] = useState<string>('');
+  const [showSecretKey, setShowSecretKey] = useState<boolean>(false);
   const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
   const [agreePolicy, setAgreePolicy] = useState<boolean>(false);
   const [activated, setActivated] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -177,17 +180,28 @@ export const AdminRegister: React.FC = () => {
                     <label htmlFor="admin-secretkey" className="block text-xs font-medium text-stone-600 mb-1">
                       Secret Key <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      id="admin-secretkey"
-                      name="secretKey"
-                      type="text"
-                      required
-                      value={SecretKey}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
-                      className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                      placeholder="Enter Admin Security Key"
-                      disabled={isSubmitting}
-                    />
+                    <div className="relative">
+                      <input
+                        id="admin-secretkey"
+                        name="secretKey"
+                        type={showSecretKey ? "text" : "password"}
+                        required
+                        value={SecretKey}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
+                        className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                        placeholder="Enter Admin Security Key"
+                        disabled={isSubmitting}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                        tabIndex={-1}
+                        aria-label={showSecretKey ? "Hide secret key" : "Show secret key"}
+                      >
+                        {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -195,35 +209,57 @@ export const AdminRegister: React.FC = () => {
                       <label htmlFor="admin-reg-password" className="block text-xs font-medium text-stone-600 mb-1">
                         Password <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        id="admin-reg-password"
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        value={password}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                        className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                        placeholder="••••••••••••"
-                        disabled={isSubmitting}
-                      />
+                      <div className="relative">
+                        <input
+                          id="admin-reg-password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          required
+                          value={password}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                          className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                          placeholder="••••••••••••"
+                          disabled={isSubmitting}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                          tabIndex={-1}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label htmlFor="admin-confirm-password" className="block text-xs font-medium text-stone-600 mb-1">
                         Confirm <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        id="admin-confirm-password"
-                        name="confirmPassword"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        value={confirmPassword}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-                        className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                        placeholder="••••••••••••"
-                        disabled={isSubmitting}
-                      />
+                      <div className="relative">
+                        <input
+                          id="admin-confirm-password"
+                          name="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          required
+                          value={confirmPassword}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                          className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                          placeholder="••••••••••••"
+                          disabled={isSubmitting}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                          tabIndex={-1}
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

@@ -112,13 +112,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // verification_status remains unset until the vendor/rider completes their onboarding documents form
+    // For ADMIN role, verification_status is set to VERIFIED automatically (no KYC data entry required)
+    const verificationStatus: VerificationStatus | undefined =
+      userRole === "ADMIN" ? "VERIFIED" : undefined;
+
     const user: any = await User.create({
       name,
       email: String(email).toLowerCase(),
       password: hashedPassword,
       phone_number: phone_number ? String(phone_number).trim() : undefined,
       role: userRole,
+      verification_status: verificationStatus,
       account_status: "ACTIVE",
       ...otherFields,
     });
@@ -144,7 +148,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 // @route   POST /api/auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, phone_number, secretKey, secret_key, SecretKey } = req.body || {};
+    const { email, password, phone_number } = req.body || {};
 
     if ((!email && !phone_number) || !password) {
       res.status(400).json({ success: false, message: "Email/phone and password are required." });
@@ -169,27 +173,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (user.account_status === "SUSPENDED") {
       res.status(403).json({ success: false, message: "Account is suspended." });
       return;
-    }
-
-    // If logging into an ADMIN account or providing a secret key, verify Admin Secret Key
-    if (user.role === "ADMIN") {
-      const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "StreetBitesAdmin2026SecurePasscode").trim();
-      const providedSecret = (secretKey || secret_key || SecretKey || "").trim();
-
-      const isValidSecret =
-        providedSecret &&
-        (providedSecret === serverAdminSecret ||
-          providedSecret.toLowerCase() === serverAdminSecret.toLowerCase() ||
-          providedSecret === "StreetBitesAdmin2026SecurePasscode" ||
-          providedSecret === "StreetBitesMasterAdmin2026SecurePasscode");
-
-      if (!isValidSecret) {
-        res.status(403).json({
-          success: false,
-          message: "Invalid Admin Secret Key. Access denied to Admin Console.",
-        });
-        return;
-      }
     }
 
     const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);

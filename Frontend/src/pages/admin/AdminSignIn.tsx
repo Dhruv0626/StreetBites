@@ -1,6 +1,6 @@
 import React, { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { ChevronLeft, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import { useAuth } from '../../context/AuthContext';
 
@@ -9,7 +9,9 @@ export const AdminSignIn: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [SecretKey, setSecretKey] = useState<string>('');
+  const [showSecretKey, setShowSecretKey] = useState<boolean>(false);
   const [trustDevice, setTrustDevice] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -151,35 +153,57 @@ export const AdminSignIn: React.FC = () => {
                   <label htmlFor="admin-password" className="block text-xs font-medium text-stone-600 mb-1">
                     Password <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="admin-password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                    className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                    placeholder="••••••••••"
-                    disabled={isSubmitting}
-                  />
+                  <div className="relative">
+                    <input
+                      id="admin-password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      placeholder="••••••••••"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
                   <label htmlFor="admin-secret" className="block text-xs font-medium text-stone-600 mb-1">
                     Master Admin Secret Key <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="admin-secret"
-                    name="secretKey"
-                    type="password"
-                    required
-                    value={SecretKey}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
-                    className="auth-input text-xs py-3 px-4 rounded-xl w-full"
-                    placeholder="Enter Master Admin Secret Key"
-                    disabled={isSubmitting}
-                  />
+                  <div className="relative">
+                    <input
+                      id="admin-secret"
+                      name="secretKey"
+                      type={showSecretKey ? "text" : "password"}
+                      required
+                      value={SecretKey}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
+                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      placeholder="Enter Master Admin Secret Key"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretKey(!showSecretKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                      tabIndex={-1}
+                      aria-label={showSecretKey ? "Hide secret key" : "Show secret key"}
+                    >
+                      {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2.5 pt-1">

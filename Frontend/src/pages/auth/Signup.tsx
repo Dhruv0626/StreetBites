@@ -1,6 +1,6 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router';
-import { CheckCircle2, ChevronLeft, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import SidePanelImg from '../../assets/images/hero_market.jpg';
 import { FcGoogle } from "react-icons/fc";
@@ -13,6 +13,7 @@ export const Signup: React.FC = () => {
   const { user, isAuthenticated, register, updateProfile, refreshProfile, redirectToGoogleAuth, redirectToFacebookAuth, error, clearError } = useAuth();
 
   const [role, setRole] = useState<string>('Customer');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -367,20 +368,31 @@ export const Signup: React.FC = () => {
                     <label htmlFor="signup-password" className="block text-xs font-medium text-stone-600 mb-1">
                       Create password <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      id="signup-password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      value={formData.password}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setFormData({ ...formData, password: e.target.value })
-                      }
-                      className="auth-input text-xs py-2.5 px-3.5 rounded-xl w-full"
-                      placeholder="••••••••"
-                      disabled={isSubmitting}
-                    />
+                    <div className="relative">
+                      <input
+                        id="signup-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        required
+                        value={formData.password}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          setFormData({ ...formData, password: e.target.value })
+                        }
+                        className="auth-input text-xs py-2.5 pl-3.5 pr-10 rounded-xl w-full"
+                        placeholder="••••••••"
+                        disabled={isSubmitting}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 transition-colors cursor-pointer p-1"
+                        tabIndex={-1}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     <p className="text-[10px] text-stone-400 mt-0.5">Minimum 6 characters</p>
                   </div>
 

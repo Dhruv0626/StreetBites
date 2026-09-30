@@ -4,6 +4,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
+  timeoutMs?: number;
+}
+
+// Warm up server in background on initial page load (prevents Render cold-start delays)
+export const wakeUpBackend = (): void => {
+  try {
+    const healthUrl = `${API_BASE_URL}/health`;
+    fetch(healthUrl, { method: "GET", mode: "cors", credentials: "omit" }).catch(() => {});
+  } catch {}
+};
+
+// Immediately invoke background wake-up
+if (typeof window !== "undefined") {
+  wakeUpBackend();
 }
 
 // Refresh token handler
@@ -39,12 +53,12 @@ const refreshAuthTokens = async (): Promise<boolean> => {
   }
 };
 
-// Main API Request Wrapper
+// Main API Request Wrapper with Timeout Protection
 export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<{ success: boolean; data?: T; message?: string }> {
-  const { requiresAuth = true, headers = {}, ...customConfig } = options;
+  const { requiresAuth = true, headers = {}, timeoutMs = 15000, ...customConfig } = options;
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
 
   const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("streetbites_customer_id") : null;
@@ -54,12 +68,18 @@ export async function apiRequest<T = any>(
     ...(headers as Record<string, string>),
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     let response = await fetch(url, {
       ...customConfig,
       headers: configHeaders,
       credentials: "include", // Automatically send/receive HTTP-only cookies
+      signal: customConfig.signal || controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     // Handle 401 Token Expired -> Attempt refresh
     if (response.status === 401 && requiresAuth) {
@@ -110,6 +130,13 @@ export async function apiRequest<T = any>(
 
     return resJson;
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      return {
+        success: false,
+        message: "Server response timed out. Waking up backend, please retry in a moment.",
+      };
+    }
     console.error(`API Error on [${endpoint}]:`, error);
     return {
       success: false,

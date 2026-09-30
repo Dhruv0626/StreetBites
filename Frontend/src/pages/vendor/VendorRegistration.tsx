@@ -562,11 +562,11 @@ export const VendorRegistration: React.FC = () => {
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5 font-sans">Account Number</label>
                 <input
-                  type="password"
+                  type="text"
                   name="accountNumber"
                   value={formData.accountNumber}
                   onChange={handleInputChange}
-                  className="w-full bg-white border border-[#E7E2D9] rounded-xl px-4 py-3 text-stone-800 text-sm focus:outline-none focus:border-[#D94A38]in  font-sans font-medium"
+                  className="w-full bg-white border border-[#E7E2D9] rounded-xl px-4 py-3 text-stone-800 text-sm focus:outline-none focus:border-[#D94A38] font-sans font-medium"
                   placeholder="Enter bank account number"
                 />
               </div>
