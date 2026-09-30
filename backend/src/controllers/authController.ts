@@ -141,16 +141,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const verificationStatus: VerificationStatus | undefined =
       userRole === "ADMIN" ? "VERIFIED" : undefined;
 
-    const user: any = await User.create({
-      name,
-      email: String(email).toLowerCase(),
+    const userData: any = {
+      name: String(name).trim(),
+      email: String(email).toLowerCase().trim(),
       password: hashedPassword,
-      phone_number: phone_number ? String(phone_number).trim() : undefined,
       role: userRole,
-      verification_status: verificationStatus,
       account_status: "ACTIVE",
-      ...otherFields,
-    });
+    };
+
+    if (verificationStatus) {
+      userData.verification_status = verificationStatus;
+    }
+
+    if (phone_number && String(phone_number).trim()) {
+      userData.phone_number = String(phone_number).trim();
+    }
+
+    const user: any = await User.create(userData);
 
     const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
     user.refresh_token = refreshToken;
