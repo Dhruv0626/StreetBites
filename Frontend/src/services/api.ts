@@ -45,10 +45,9 @@ const refreshAuthTokens = async (): Promise<boolean> => {
       return false;
     }
 
-    const data = await res.json();
-    return !!data.success;
-  } catch (err) {
-    console.error("Token refresh failed:", err);
+    const data = await res.json().catch(() => ({}));
+    return Boolean(data && data.success);
+  } catch {
     return false;
   }
 };

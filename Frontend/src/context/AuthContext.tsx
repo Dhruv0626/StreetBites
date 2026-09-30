@@ -115,13 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const msg = res.message || "Failed to sign in. Please check your credentials.";
         setError(msg);
         setIsLoading(false);
-        return { success: false, message: msg };
+        return { success: false, message: msg, field: (res as any)?.field, data: res.data };
       }
     } catch (err: any) {
       const msg = err.message || "An unexpected error occurred during login.";
       setError(msg);
       setIsLoading(false);
-      return { success: false, message: msg };
+      return { success: false, message: msg, field: err?.field };
     }
   };
 
@@ -143,13 +143,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const msg = res.message || "Registration failed. Please check the details.";
         setError(msg);
         setIsLoading(false);
-        return { success: false, message: msg };
+        return { success: false, message: msg, field: (res as any)?.field, data: res.data };
       }
     } catch (err: any) {
       const msg = err.message || "An unexpected error occurred during registration.";
       setError(msg);
       setIsLoading(false);
-      return { success: false, message: msg };
+      return { success: false, message: msg, field: err?.field };
     }
   };
 

@@ -26,7 +26,8 @@ export const Signup: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<'form' | 'oauth_phone' | 'completed'>('form');
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   // If redirected back from OAuth without a phone number, show the OAuth phone completion step
   useEffect(() => {
@@ -36,41 +37,56 @@ export const Signup: React.FC = () => {
     }
   }, [searchParams, isAuthenticated, user]);
 
+  const clearErrors = () => {
+    setFieldErrors({});
+    setGeneralError(null);
+    clearError();
+  };
+
   const handleRoleChange = (newRole: string) => {
     setRole(newRole);
-    setLocalError(null);
-    clearError();
+    clearErrors();
   };
 
   // Main Registration Submission (Name, Email, Mobile Number, Password)
   const handleRegisterSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLocalError(null);
-    clearError();
+    clearErrors();
+
+    const errors: Record<string, string> = {};
 
     if (!formData.fullName.trim()) {
-      setLocalError('Please enter your full name.');
-      return;
+      errors.name = 'Please enter your full name.';
     }
 
     if (!formData.email.trim()) {
-      setLocalError('Please enter a valid email address.');
-      return;
+      errors.email = 'Please enter your email address.';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        errors.email = 'Please enter a valid email address (e.g. name@example.com).';
+      }
     }
 
     const cleanPhone = formData.phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      setLocalError('Please enter a valid 10-digit mobile number.');
-      return;
+    if (!cleanPhone) {
+      errors.phone = 'Please enter your 10-digit mobile number.';
+    } else if (cleanPhone.length !== 10) {
+      errors.phone = 'Please enter a valid 10-digit mobile number.';
     }
 
-    if (formData.password.length < 6) {
-      setLocalError('Password must be at least 6 characters long.');
-      return;
+    if (!formData.password) {
+      errors.password = 'Please create a password.';
+    } else if (formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters long.';
     }
 
     if (!formData.agreeTerms) {
-      setLocalError('Please agree to the Terms of Service and Privacy Policy.');
+      errors.agreeTerms = 'Please check this box to agree to our Terms and Privacy Policy.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -97,10 +113,15 @@ export const Signup: React.FC = () => {
           }
         }, 1200);
       } else {
-        setLocalError(res.message || 'Registration failed. Please check your information.');
+        const resData = res as any;
+        if (resData.field) {
+          setFieldErrors({ [resData.field]: res.message || 'Please check this field.' });
+        } else {
+          setGeneralError(res.message || 'Registration failed. Please check your information.');
+        }
       }
     } catch (err: any) {
-      setLocalError(err.message || 'Network error connecting to backend.');
+      setGeneralError(err.message || 'Unable to connect to the server. Please check your connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -109,12 +130,11 @@ export const Signup: React.FC = () => {
   // OAuth Missing Phone Number Submit
   const handleOAuthPhoneSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLocalError(null);
-    clearError();
+    clearErrors();
 
     const cleanPhone = formData.phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      setLocalError('Please enter a valid 10-digit mobile number.');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setFieldErrors({ phone: 'Please enter a valid 10-digit mobile number.' });
       return;
     }
 
@@ -269,11 +289,11 @@ export const Signup: React.FC = () => {
                 </div>
               )}
 
-              {/* Error Banner */}
-              {displayError && (
+              {/* Error Banner for General / System Errors */}
+              {generalError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{displayError}</span>
+                  <span>{generalError}</span>
                 </div>
               )}
 
@@ -305,13 +325,24 @@ export const Signup: React.FC = () => {
                       autoComplete="name"
                       required
                       value={formData.fullName}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setFormData({ ...formData, fullName: e.target.value })
-                      }
-                      className="auth-input text-xs py-2.5 px-3.5 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setFormData({ ...formData, fullName: e.target.value });
+                        if (fieldErrors.name || fieldErrors.fullName) {
+                          setFieldErrors((prev) => ({ ...prev, name: '', fullName: '' }));
+                        }
+                      }}
+                      className={`auth-input text-xs py-2.5 px-3.5 rounded-xl w-full transition-colors ${
+                        fieldErrors.name || fieldErrors.fullName ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="Enter your name"
                       disabled={isSubmitting}
                     />
+                    {(fieldErrors.name || fieldErrors.fullName) && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.name || fieldErrors.fullName}</span>
+                      </p>
+                    )}
                   </div>
 
                   {/* Email Address */}
@@ -326,13 +357,24 @@ export const Signup: React.FC = () => {
                       autoComplete="email"
                       required
                       value={formData.email}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
-                      className="auth-input text-xs py-2.5 px-3.5 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        if (fieldErrors.email) {
+                          setFieldErrors((prev) => ({ ...prev, email: '' }));
+                        }
+                      }}
+                      className={`auth-input text-xs py-2.5 px-3.5 rounded-xl w-full transition-colors ${
+                        fieldErrors.email ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="you@gmail.com"
                       disabled={isSubmitting}
                     />
+                    {fieldErrors.email && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.email}</span>
+                      </p>
+                    )}
                   </div>
 
                   {/* Strictly Visible Mobile Number */}
@@ -340,7 +382,13 @@ export const Signup: React.FC = () => {
                     <label htmlFor="signup-phone" className="block text-xs font-medium text-stone-600 mb-1">
                       Mobile number <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative flex items-center bg-white rounded-xl border border-[#E7E2D9] focus-within:border-[#E54B3C] focus-within:ring-3 focus-within:ring-[#E54B3C]/10 transition-all overflow-hidden">
+                    <div
+                      className={`relative flex items-center bg-white rounded-xl border transition-all overflow-hidden ${
+                        fieldErrors.phone || fieldErrors.phone_number
+                          ? 'border-red-500 ring-1 ring-red-500/20'
+                          : 'border-[#E7E2D9] focus-within:border-[#E54B3C] focus-within:ring-3 focus-within:ring-[#E54B3C]/10'
+                      }`}
+                    >
                       <span className="absolute left-3.5 text-xs font-bold text-stone-500 pointer-events-none">
                         +91
                       </span>
@@ -352,15 +400,24 @@ export const Signup: React.FC = () => {
                         autoComplete="tel"
                         required
                         value={formData.phone}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })
-                        }
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') });
+                          if (fieldErrors.phone || fieldErrors.phone_number) {
+                            setFieldErrors((prev) => ({ ...prev, phone: '', phone_number: '' }));
+                          }
+                        }}
                         style={{ paddingLeft: '3.2rem', paddingRight: '1rem' }}
                         className="w-full bg-transparent border-0 outline-none text-xs py-2.5 text-stone-800 font-semibold tracking-wide"
                         placeholder="9876543210"
                         disabled={isSubmitting}
                       />
                     </div>
+                    {(fieldErrors.phone || fieldErrors.phone_number) && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.phone || fieldErrors.phone_number}</span>
+                      </p>
+                    )}
                   </div>
 
                   {/* Password */}
@@ -376,10 +433,15 @@ export const Signup: React.FC = () => {
                         autoComplete="new-password"
                         required
                         value={formData.password}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setFormData({ ...formData, password: e.target.value })
-                        }
-                        className="auth-input text-xs py-2.5 pl-3.5 pr-10 rounded-xl w-full"
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setFormData({ ...formData, password: e.target.value });
+                          if (fieldErrors.password) {
+                            setFieldErrors((prev) => ({ ...prev, password: '' }));
+                          }
+                        }}
+                        className={`auth-input text-xs py-2.5 pl-3.5 pr-10 rounded-xl w-full transition-colors ${
+                          fieldErrors.password ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                        }`}
                         placeholder="••••••••"
                         disabled={isSubmitting}
                       />
@@ -393,31 +455,49 @@ export const Signup: React.FC = () => {
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
-                    <p className="text-[10px] text-stone-400 mt-0.5">Minimum 6 characters</p>
+                    {fieldErrors.password ? (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.password}</span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-stone-400 mt-0.5">Minimum 6 characters</p>
+                    )}
                   </div>
 
                   {/* Terms checkbox */}
-                  <div className="flex items-start gap-2.5 pt-0.5">
-                    <input
-                      type="checkbox"
-                      id="agreeTerms"
-                      name="agreeTerms"
-                      checked={formData.agreeTerms}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                        setFormData({ ...formData, agreeTerms: e.target.checked })
-                      }
-                      className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#E54B3C] focus:ring-[#E54B3C] cursor-pointer"
-                    />
-                    <label htmlFor="agreeTerms" className="text-[11px] text-stone-600 leading-tight">
-                      I agree to the{' '}
-                      <a href="#terms" className="text-[#D94A38] underline">
-                        Terms of Service
-                      </a>{' '}
-                      and{' '}
-                      <a href="#privacy" className="text-[#D94A38] underline">
-                        Privacy Policy
-                      </a>
-                    </label>
+                  <div>
+                    <div className="flex items-start gap-2.5 pt-0.5">
+                      <input
+                        type="checkbox"
+                        id="agreeTerms"
+                        name="agreeTerms"
+                        checked={formData.agreeTerms}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setFormData({ ...formData, agreeTerms: e.target.checked });
+                          if (fieldErrors.agreeTerms) {
+                            setFieldErrors((prev) => ({ ...prev, agreeTerms: '' }));
+                          }
+                        }}
+                        className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#E54B3C] focus:ring-[#E54B3C] cursor-pointer"
+                      />
+                      <label htmlFor="agreeTerms" className="text-[11px] text-stone-600 leading-tight">
+                        I agree to the{' '}
+                        <a href="#terms" className="text-[#D94A38] underline">
+                          Terms of Service
+                        </a>{' '}
+                        and{' '}
+                        <a href="#privacy" className="text-[#D94A38] underline">
+                          Privacy Policy
+                        </a>
+                      </label>
+                    </div>
+                    {fieldErrors.agreeTerms && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.agreeTerms}</span>
+                      </p>
+                    )}
                   </div>
 
                   <button
@@ -446,7 +526,13 @@ export const Signup: React.FC = () => {
                     <label htmlFor="oauth-phone" className="block text-xs font-medium text-stone-600 mb-1">
                       10-Digit Mobile Number <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative flex items-center bg-white rounded-xl border border-[#E7E2D9] focus-within:border-[#E54B3C] focus-within:ring-3 focus-within:ring-[#E54B3C]/10 transition-all overflow-hidden">
+                    <div
+                      className={`relative flex items-center bg-white rounded-xl border transition-all overflow-hidden ${
+                        fieldErrors.phone
+                          ? 'border-red-500 ring-1 ring-red-500/20'
+                          : 'border-[#E7E2D9] focus-within:border-[#E54B3C] focus-within:ring-3 focus-within:ring-[#E54B3C]/10'
+                      }`}
+                    >
                       <span className="absolute left-4 text-xs font-bold text-stone-500 pointer-events-none">
                         +91
                       </span>
@@ -459,15 +545,22 @@ export const Signup: React.FC = () => {
                         required
                         autoFocus
                         value={formData.phone}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })
-                        }
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') });
+                          if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                        }}
                         style={{ paddingLeft: '3.5rem', paddingRight: '1rem' }}
                         className="w-full bg-transparent border-0 outline-none text-sm py-3 text-stone-800 font-bold tracking-wider"
                         placeholder="98765 43210"
                         disabled={isSubmitting}
                       />
                     </div>
+                    {fieldErrors.phone && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.phone}</span>
+                      </p>
+                    )}
                   </div>
 
                   <button

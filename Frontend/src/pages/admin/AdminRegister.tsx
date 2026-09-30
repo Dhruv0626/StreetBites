@@ -18,19 +18,22 @@ export const AdminRegister: React.FC = () => {
   const [agreePolicy, setAgreePolicy] = useState<boolean>(false);
   const [activated, setActivated] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const clearErrors = () => { setFieldErrors({}); setGeneralError(null); };
 
   const handleActivate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMsg(null);
+    clearErrors();
 
     if (password !== confirmPassword) {
-      setErrorMsg('Passwords do not match.');
+      setFieldErrors({ confirmPassword: 'Passwords do not match.' });
       return;
     }
 
     if (!agreePolicy) {
-      setErrorMsg('Please agree to the Admin Acceptable Use Policy.');
+      setGeneralError('Please agree to the Admin Acceptable Use Policy.');
       return;
     }
 
@@ -51,10 +54,16 @@ export const AdminRegister: React.FC = () => {
           navigate('/admin/Dashboard');
         }, 1500);
       } else {
-        setErrorMsg(res.message || 'Admin account creation failed.');
+        // Place error under the specific field if the backend returned a field name
+        const resData = res as any;
+        if (resData.field) {
+          setFieldErrors({ [resData.field]: res.message || 'Please check this field.' });
+        } else {
+          setGeneralError(res.message || 'Admin account creation failed.');
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Server connection error.');
+      setGeneralError(err.message || 'Unable to connect to the server. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -125,10 +134,10 @@ export const AdminRegister: React.FC = () => {
                 </h2>
               </div>
 
-              {errorMsg && (
+              {generalError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{errorMsg}</span>
+                  <span>{generalError}</span>
                 </div>
               )}
 
@@ -140,6 +149,7 @@ export const AdminRegister: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleActivate} className="space-y-4">
+                  {/* Full Name */}
                   <div>
                     <label htmlFor="admin-fullname" className="block text-xs font-medium text-stone-600 mb-1">
                       Full Name <span className="text-red-500">*</span>
@@ -151,13 +161,27 @@ export const AdminRegister: React.FC = () => {
                       autoComplete="name"
                       required
                       value={fullName}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
-                      className="auth-input text-xs py-3 px-4 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setFullName(e.target.value);
+                        if (fieldErrors.name || fieldErrors.fullName) {
+                          setFieldErrors((prev) => ({ ...prev, name: '', fullName: '' }));
+                        }
+                      }}
+                      className={`auth-input text-xs py-3 px-4 rounded-xl w-full transition-colors ${
+                        fieldErrors.name || fieldErrors.fullName ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="Your full name"
                       disabled={isSubmitting}
                     />
+                    {(fieldErrors.name || fieldErrors.fullName) && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.name || fieldErrors.fullName}</span>
+                      </p>
+                    )}
                   </div>
 
+                  {/* Work Email */}
                   <div>
                     <label htmlFor="admin-workemail" className="block text-xs font-medium text-stone-600 mb-1">
                       Enter Work Email <span className="text-red-500">*</span>
@@ -169,13 +193,27 @@ export const AdminRegister: React.FC = () => {
                       autoComplete="email"
                       required
                       value={workEmail}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setWorkEmail(e.target.value)}
-                      className="auth-input text-xs py-3 px-4 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setWorkEmail(e.target.value);
+                        if (fieldErrors.email || fieldErrors.workEmail) {
+                          setFieldErrors((prev) => ({ ...prev, email: '', workEmail: '' }));
+                        }
+                      }}
+                      className={`auth-input text-xs py-3 px-4 rounded-xl w-full transition-colors ${
+                        fieldErrors.email || fieldErrors.workEmail ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="admin@streetbites.com"
                       disabled={isSubmitting}
                     />
+                    {(fieldErrors.email || fieldErrors.workEmail) && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.email || fieldErrors.workEmail}</span>
+                      </p>
+                    )}
                   </div>
 
+                  {/* Secret Key */}
                   <div>
                     <label htmlFor="admin-secretkey" className="block text-xs font-medium text-stone-600 mb-1">
                       Secret Key <span className="text-red-500">*</span>
@@ -187,8 +225,17 @@ export const AdminRegister: React.FC = () => {
                         type={showSecretKey ? "text" : "password"}
                         required
                         value={SecretKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
-                        className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                          setSecretKey(e.target.value);
+                          if (fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key) {
+                            setFieldErrors((prev) => ({ ...prev, secretKey: '', SecretKey: '', secret_key: '' }));
+                          }
+                        }}
+                        className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                          fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key
+                            ? '!border-red-500 !ring-1 !ring-red-500/20'
+                            : ''
+                        }`}
                         placeholder="Enter Admin Security Key"
                         disabled={isSubmitting}
                       />
@@ -202,9 +249,16 @@ export const AdminRegister: React.FC = () => {
                         {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    {(fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key) && (
+                      <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>{fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
+                    {/* Password */}
                     <div>
                       <label htmlFor="admin-reg-password" className="block text-xs font-medium text-stone-600 mb-1">
                         Password <span className="text-red-500">*</span>
@@ -217,8 +271,15 @@ export const AdminRegister: React.FC = () => {
                           autoComplete="new-password"
                           required
                           value={password}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                          className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                            setPassword(e.target.value);
+                            if (fieldErrors.password) {
+                              setFieldErrors((prev) => ({ ...prev, password: '' }));
+                            }
+                          }}
+                          className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                            fieldErrors.password ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                          }`}
                           placeholder="••••••••••••"
                           disabled={isSubmitting}
                         />
@@ -232,7 +293,15 @@ export const AdminRegister: React.FC = () => {
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      {fieldErrors.password && (
+                        <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                          <span>{fieldErrors.password}</span>
+                        </p>
+                      )}
                     </div>
+
+                    {/* Confirm Password */}
                     <div>
                       <label htmlFor="admin-confirm-password" className="block text-xs font-medium text-stone-600 mb-1">
                         Confirm <span className="text-red-500">*</span>
@@ -245,8 +314,15 @@ export const AdminRegister: React.FC = () => {
                           autoComplete="new-password"
                           required
                           value={confirmPassword}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
-                          className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                            setConfirmPassword(e.target.value);
+                            if (fieldErrors.confirmPassword) {
+                              setFieldErrors((prev) => ({ ...prev, confirmPassword: '' }));
+                            }
+                          }}
+                          className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                            fieldErrors.confirmPassword ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                          }`}
                           placeholder="••••••••••••"
                           disabled={isSubmitting}
                         />
@@ -260,6 +336,12 @@ export const AdminRegister: React.FC = () => {
                           {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      {fieldErrors.confirmPassword && (
+                        <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                          <span>{fieldErrors.confirmPassword}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 

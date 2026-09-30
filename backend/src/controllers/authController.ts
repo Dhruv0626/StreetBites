@@ -70,26 +70,49 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password, phone_number, role = "CUSTOMER", ...otherFields } = req.body || {};
 
-    if (!name || !email || !password) {
-      res.status(400).json({ success: false, message: "Name, email, and password are required." });
+    // Field-level validation with user-friendly messages
+    if (!name || !String(name).trim()) {
+      res.status(400).json({ success: false, field: "name", message: "Please enter your full name." });
+      return;
+    }
+
+    if (!email || !String(email).trim()) {
+      res.status(400).json({ success: false, field: "email", message: "Please enter your email address." });
+      return;
+    }
+
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(String(email).trim())) {
+      res.status(400).json({ success: false, field: "email", message: "Please enter a valid email address." });
+      return;
+    }
+
+    if (!password) {
+      res.status(400).json({ success: false, field: "password", message: "Please create a password." });
       return;
     }
 
     if (String(password).length < 6) {
-      res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
+      res.status(400).json({ success: false, field: "password", message: "Password must be at least 6 characters long." });
       return;
     }
 
     const existingUser = await User.findOne({ email: String(email).toLowerCase() });
     if (existingUser) {
-      res.status(400).json({ success: false, message: "An account with this email already exists. Please sign in instead." });
+      res.status(400).json({ success: false, field: "email", message: "This email is already registered. Try signing in instead." });
       return;
     }
 
     if (phone_number) {
-      const existingPhone = await User.findOne({ phone_number: String(phone_number).trim() });
+      const cleanPhone = String(phone_number).trim();
+      if (cleanPhone && !/^\d{10}$/.test(cleanPhone)) {
+        res.status(400).json({ success: false, field: "phone", message: "Please enter a valid 10-digit mobile number." });
+        return;
+      }
+      const existingPhone = await User.findOne({ phone_number: cleanPhone });
       if (existingPhone) {
-        res.status(400).json({ success: false, message: "This phone number is already linked to another account." });
+        res.status(400).json({ success: false, field: "phone", message: "This mobile number is already linked to another account." });
         return;
       }
     }
@@ -98,21 +121,18 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const hashedPassword = await argon2.hash(password);
     const userRole: UserRole = (role ? String(role).toUpperCase() : "CUSTOMER") as UserRole;
 
-    // Enforce Admin Secret Key validation for Admin registration
+    // Enforce Admin Secret Key validation — exact match against ADMIN_SECRET_KEY in .env
     if (userRole === "ADMIN") {
       const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
       const providedSecret = (req.body.secretKey || req.body.secret_key || req.body.SecretKey || "").trim();
 
-      const isValidSecret =
-        providedSecret &&
-        (providedSecret === serverAdminSecret ||
-          providedSecret.toLowerCase() === serverAdminSecret.toLowerCase());
+      if (!providedSecret) {
+        res.status(403).json({ success: false, field: "secretKey", message: "Please enter the Admin Secret Key." });
+        return;
+      }
 
-      if (!isValidSecret) {
-        res.status(403).json({
-          success: false,
-          message: "Invalid Admin Secret Key. Contact your platform administrator for the correct passcode.",
-        });
+      if (providedSecret !== serverAdminSecret) {
+        res.status(403).json({ success: false, field: "secretKey", message: "The secret key you entered is incorrect. Please check with your administrator." });
         return;
       }
     }
@@ -147,23 +167,28 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     console.error("Register Error:", error);
     // Handle MongoDB duplicate key error (race condition: two simultaneous requests with same email/phone)
     if (error?.code === 11000) {
-      const field = Object.keys(error?.keyValue || {})[0] || "field";
-      const fieldLabel = field === "email" ? "email address" : field === "phone_number" ? "phone number" : field;
-      res.status(400).json({
-        success: false,
-        message: `An account with this ${fieldLabel} already exists. Please sign in instead.`,
-      });
+      const field = Object.keys(error?.keyValue || {})[0] || "email";
+      const fieldMap: Record<string, { field: string; message: string }> = {
+        email: { field: "email", message: "This email is already registered. Try signing in instead." },
+        phone_number: { field: "phone", message: "This mobile number is already linked to another account." },
+      };
+      const info = fieldMap[field] || { field: "email", message: "An account with these details already exists." };
+      res.status(400).json({ success: false, field: info.field, message: info.message });
       return;
     }
     // Handle Mongoose validation errors
     if (error?.name === "ValidationError") {
-      const messages = Object.values(error.errors || {})
-        .map((e: any) => e.message)
-        .join(", ");
-      res.status(400).json({ success: false, message: messages || "Validation failed. Please check your input." });
+      const firstError = Object.entries(error.errors || {})[0];
+      if (firstError) {
+        const [fieldName, err]: [string, any] = firstError;
+        const fieldMap: Record<string, string> = { name: "name", email: "email", password: "password", phone_number: "phone" };
+        res.status(400).json({ success: false, field: fieldMap[fieldName] || fieldName, message: err.message });
+        return;
+      }
+      res.status(400).json({ success: false, message: "Please check your input and try again." });
       return;
     }
-    res.status(500).json({ success: false, message: error?.message || "Registration failed. Please try again." });
+    res.status(500).json({ success: false, message: "Something went wrong. Please try again in a moment." });
   }
 };
 
@@ -173,8 +198,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, phone_number } = req.body || {};
 
-    if ((!email && !phone_number) || !password) {
-      res.status(400).json({ success: false, message: "Email/phone and password are required." });
+    if (!email && !phone_number) {
+      res.status(400).json({ success: false, field: "email", message: "Please enter your email address." });
+      return;
+    }
+
+    if (!password) {
+      res.status(400).json({ success: false, field: "password", message: "Please enter your password." });
       return;
     }
 
@@ -182,19 +212,35 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const user: any = await User.findOne(query).select("+password");
 
     if (!user || !user.password) {
-      res.status(401).json({ success: false, message: "Invalid email or password." });
+      res.status(401).json({ success: false, field: "email", message: "No account found with this email. Please check or create a new account." });
       return;
     }
 
     // Verify Argon2 password
     const isMatch = await argon2.verify(user.password, password);
     if (!isMatch) {
-      res.status(401).json({ success: false, message: "Invalid email or password." });
+      res.status(401).json({ success: false, field: "password", message: "Incorrect password. Please try again or reset your password." });
       return;
     }
 
+    // If user is ADMIN, verify Admin Secret Key against .env ADMIN_SECRET_KEY
+    if (user.role === "ADMIN") {
+      const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
+      const providedSecret = (req.body.secretKey || req.body.secret_key || req.body.SecretKey || "").trim();
+
+      if (!providedSecret) {
+        res.status(403).json({ success: false, field: "secretKey", message: "Please enter the Admin Secret Key to access the console." });
+        return;
+      }
+
+      if (providedSecret !== serverAdminSecret) {
+        res.status(403).json({ success: false, field: "secretKey", message: "The secret key you entered is incorrect. Please check with your system administrator." });
+        return;
+      }
+    }
+
     if (user.account_status === "SUSPENDED") {
-      res.status(403).json({ success: false, message: "Account is suspended." });
+      res.status(403).json({ success: false, message: "Your account has been suspended. Please contact support for assistance." });
       return;
     }
 
@@ -211,7 +257,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("Login Error:", error);
-    res.status(500).json({ success: false, message: error?.message || "Login failed." });
+    res.status(500).json({ success: false, message: "Something went wrong. Please try again in a moment." });
   }
 };
 
@@ -222,7 +268,7 @@ export const refreshAccessToken = async (req: Request, res: Response): Promise<v
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!refreshToken) {
-      res.status(400).json({ success: false, message: "Refresh token is required." });
+      res.status(200).json({ success: false, message: "No active session." });
       return;
     }
 
@@ -232,13 +278,13 @@ export const refreshAccessToken = async (req: Request, res: Response): Promise<v
     try {
       decoded = jwt.verify(refreshToken, refreshSecret);
     } catch {
-      res.status(401).json({ success: false, message: "Invalid or expired refresh token." });
+      res.status(200).json({ success: false, message: "Session expired or invalid refresh token." });
       return;
     }
 
     const user: any = await User.findById(decoded.id).select("+refresh_token");
     if (!user || user.refresh_token !== refreshToken) {
-      res.status(401).json({ success: false, message: "Session expired. Please log in again." });
+      res.status(200).json({ success: false, message: "Session expired. Please log in again." });
       return;
     }
 

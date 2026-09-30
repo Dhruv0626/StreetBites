@@ -14,11 +14,33 @@ export const AdminSignIn: React.FC = () => {
   const [showSecretKey, setShowSecretKey] = useState<boolean>(false);
   const [trustDevice, setTrustDevice] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const clearErrors = () => {
+    setFieldErrors({});
+    setGeneralError(null);
+  };
 
   const handleSignIn = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMsg(null);
+    clearErrors();
+
+    if (!email.trim()) {
+      setFieldErrors({ email: 'Please enter your admin email address.' });
+      return;
+    }
+
+    if (!password) {
+      setFieldErrors({ password: 'Please enter your password.' });
+      return;
+    }
+
+    if (!SecretKey.trim()) {
+      setFieldErrors({ secretKey: 'Please enter your Master Admin Secret Key.' });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -30,10 +52,15 @@ export const AdminSignIn: React.FC = () => {
       if (res.success) {
         navigate('/admin/Dashboard');
       } else {
-        setErrorMsg(res.message || 'Admin authentication failed.');
+        const resData = res as any;
+        if (resData.field) {
+          setFieldErrors({ [resData.field]: res.message || 'Please check this field.' });
+        } else {
+          setGeneralError(res.message || 'Admin authentication failed. Please check your credentials.');
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Server connection error.');
+      setGeneralError(err.message || 'Unable to connect to the server. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -123,14 +150,15 @@ export const AdminSignIn: React.FC = () => {
                 </h2>
               </div>
 
-              {errorMsg && (
+              {generalError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-xs">
                   <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                  <span>{errorMsg}</span>
+                  <span>{generalError}</span>
                 </div>
               )}
 
               <form onSubmit={handleSignIn} className="space-y-4">
+                {/* Admin Email */}
                 <div>
                   <label htmlFor="admin-email" className="block text-xs font-medium text-stone-600 mb-1">
                     Admin Email <span className="text-red-500">*</span>
@@ -142,13 +170,25 @@ export const AdminSignIn: React.FC = () => {
                     autoComplete="email"
                     required
                     value={email}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                    className="auth-input text-xs py-3 px-4 rounded-xl w-full"
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      setEmail(e.target.value);
+                      if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: '' }));
+                    }}
+                    className={`auth-input text-xs py-3 px-4 rounded-xl w-full transition-colors ${
+                      fieldErrors.email ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                    }`}
                     placeholder="admin@streetbites.com"
                     disabled={isSubmitting}
                   />
+                  {fieldErrors.email && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{fieldErrors.email}</span>
+                    </p>
+                  )}
                 </div>
 
+                {/* Password */}
                 <div>
                   <label htmlFor="admin-password" className="block text-xs font-medium text-stone-600 mb-1">
                     Password <span className="text-red-500">*</span>
@@ -161,8 +201,13 @@ export const AdminSignIn: React.FC = () => {
                       autoComplete="current-password"
                       required
                       value={password}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setPassword(e.target.value);
+                        if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
+                      }}
+                      className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                        fieldErrors.password ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="••••••••••"
                       disabled={isSubmitting}
                     />
@@ -176,8 +221,15 @@ export const AdminSignIn: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{fieldErrors.password}</span>
+                    </p>
+                  )}
                 </div>
 
+                {/* Secret Key */}
                 <div>
                   <label htmlFor="admin-secret" className="block text-xs font-medium text-stone-600 mb-1">
                     Master Admin Secret Key <span className="text-red-500">*</span>
@@ -189,8 +241,17 @@ export const AdminSignIn: React.FC = () => {
                       type={showSecretKey ? "text" : "password"}
                       required
                       value={SecretKey}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setSecretKey(e.target.value)}
-                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setSecretKey(e.target.value);
+                        if (fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key) {
+                          setFieldErrors((prev) => ({ ...prev, secretKey: '', SecretKey: '', secret_key: '' }));
+                        }
+                      }}
+                      className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                        fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key
+                          ? '!border-red-500 !ring-1 !ring-red-500/20'
+                          : ''
+                      }`}
                       placeholder="Enter Master Admin Secret Key"
                       disabled={isSubmitting}
                     />
@@ -204,6 +265,12 @@ export const AdminSignIn: React.FC = () => {
                       {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {(fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key) && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{fieldErrors.secretKey || fieldErrors.SecretKey || fieldErrors.secret_key}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2.5 pt-1">

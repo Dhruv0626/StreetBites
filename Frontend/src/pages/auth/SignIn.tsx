@@ -20,18 +20,38 @@ export const SignIn: React.FC = () => {
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const clearErrors = () => {
+    setFieldErrors({});
+    setGeneralError(null);
+    clearError();
+  };
 
   const handleRoleChange = (newRole: string) => {
     setRole(newRole);
-    setLocalError(null);
-    clearError();
+    clearErrors();
   };
 
   const handleSignInWithPassword = async (e: FormEvent) => {
     e.preventDefault();
-    setLocalError(null);
-    clearError();
+    clearErrors();
+
+    const errors: Record<string, string> = {};
+    if (!email.trim()) {
+      errors.email = 'Please enter your email address.';
+    }
+
+    if (!password) {
+      errors.password = 'Please enter your password.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -41,10 +61,15 @@ export const SignIn: React.FC = () => {
         const destination = getRoleHomePath(res.user || { role: res.role || role });
         navigate(destination);
       } else {
-        setLocalError(res.message || 'Login failed. Please verify your credentials.');
+        const resData = res as any;
+        if (resData.field) {
+          setFieldErrors({ [resData.field]: res.message || 'Please check this field.' });
+        } else {
+          setGeneralError(res.message || 'Login failed. Please verify your credentials.');
+        }
       }
     } catch (err: any) {
-      setLocalError(err.message || 'Unable to connect to the backend server.');
+      setGeneralError(err.message || 'Unable to connect to the backend server. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -54,7 +79,7 @@ export const SignIn: React.FC = () => {
     try {
       await redirectToGoogleAuth('signin', role.toLowerCase());
     } catch (err: any) {
-      setLocalError(err.message || 'Failed to start Google sign-in.');
+      setGeneralError(err.message || 'Failed to start Google sign-in.');
     }
   };
 
@@ -62,11 +87,11 @@ export const SignIn: React.FC = () => {
     try {
       await redirectToFacebookAuth('signin', role.toLowerCase());
     } catch (err: any) {
-      setLocalError(err.message || 'Failed to start Facebook sign-in.');
+      setGeneralError(err.message || 'Failed to start Facebook sign-in.');
     }
   };
 
-  const displayError = urlError || localError || error;
+  const displayGeneralError = urlError || generalError || error;
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1C1917] flex flex-col font-sans">
@@ -179,14 +204,14 @@ export const SignIn: React.FC = () => {
                 ))}
               </div>
 
-              {/* Error Banner */}
-              {displayError && (
+              {/* Error Banner for General / System Errors */}
+              {displayGeneralError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                    <span>{displayError}</span>
+                    <span>{displayGeneralError}</span>
                   </div>
-                  {displayError.toLowerCase().includes('register first') && (
+                  {displayGeneralError.toLowerCase().includes('register first') && (
                     <Link
                       to={`/signup?role=${role.toLowerCase()}`}
                       className="font-bold underline text-red-800 hover:text-red-950 shrink-0 ml-2"
@@ -199,6 +224,7 @@ export const SignIn: React.FC = () => {
 
               {/* Email / Password Sign In */}
               <form onSubmit={handleSignInWithPassword} className="space-y-4">
+                {/* Email */}
                 <div>
                   <label htmlFor="email" className="block text-xs font-medium text-stone-600 mb-1">
                     Email address <span className="text-red-500">*</span>
@@ -210,13 +236,25 @@ export const SignIn: React.FC = () => {
                     autoComplete="email"
                     required
                     value={email}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                    className="auth-input text-xs py-3 px-4 rounded-xl w-full"
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      setEmail(e.target.value);
+                      if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: '' }));
+                    }}
+                    className={`auth-input text-xs py-3 px-4 rounded-xl w-full transition-colors ${
+                      fieldErrors.email ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                    }`}
                     placeholder="you@gmail.com"
                     disabled={isSubmitting}
                   />
+                  {fieldErrors.email && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{fieldErrors.email}</span>
+                    </p>
+                  )}
                 </div>
 
+                {/* Password */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label htmlFor="password" className="block text-xs font-medium text-stone-600">
@@ -237,8 +275,13 @@ export const SignIn: React.FC = () => {
                       autoComplete="current-password"
                       required
                       value={password}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                      className="auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setPassword(e.target.value);
+                        if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
+                      }}
+                      className={`auth-input text-xs py-3 pl-4 pr-10 rounded-xl w-full transition-colors ${
+                        fieldErrors.password ? '!border-red-500 !ring-1 !ring-red-500/20' : ''
+                      }`}
                       placeholder="••••••••"
                       disabled={isSubmitting}
                     />
@@ -252,6 +295,12 @@ export const SignIn: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                      <span>{fieldErrors.password}</span>
+                    </p>
+                  )}
                 </div>
 
                 <button
