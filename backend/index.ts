@@ -32,14 +32,40 @@ app.set("trust proxy", 1);
 connectDB();
 
 // Global Middlewares
+// Build allowed origins list from CLIENT_URL (supports comma-separated values)
+const rawClientUrl = process.env.CLIENT_URL || "";
+const allowedOrigins: string[] = rawClientUrl
+  .split(",")
+  .map((url) => url.trim().replace(/\/$/, "")) // Strip trailing slashes
+  .filter(Boolean);
+
+// Always allow localhost in development for easier local testing
+if (process.env.NODE_ENV !== "production") {
+  ["http://localhost:5173", "http://localhost:3000", "http://localhost:4173"].forEach((url) => {
+    if (!allowedOrigins.includes(url)) allowedOrigins.push(url);
+  });
+}
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "",
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+      // Normalize the incoming origin by stripping trailing slash
+      const normalizedOrigin = origin.replace(/\/$/, "");
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+      console.warn(`CORS blocked origin: ${origin}`);
+      return callback(null, false);
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-customer-id"],
   })
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "50mb" })); 
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // DDoS & Spam Protection: Apply Global Rate Limiting to all /api routes

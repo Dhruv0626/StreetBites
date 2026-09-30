@@ -75,16 +75,21 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (String(password).length < 6) {
+      res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
+      return;
+    }
+
     const existingUser = await User.findOne({ email: String(email).toLowerCase() });
     if (existingUser) {
-      res.status(400).json({ success: false, message: "User with this email already exists." });
+      res.status(400).json({ success: false, message: "An account with this email already exists. Please sign in instead." });
       return;
     }
 
     if (phone_number) {
       const existingPhone = await User.findOne({ phone_number: String(phone_number).trim() });
       if (existingPhone) {
-        res.status(400).json({ success: false, message: "User with this phone number already exists." });
+        res.status(400).json({ success: false, message: "This phone number is already linked to another account." });
         return;
       }
     }
@@ -106,7 +111,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       if (!isValidSecret) {
         res.status(403).json({
           success: false,
-          message: "Invalid Admin Secret Key. Please use the passcode configured in your .env (StreetBitesAdmin2026SecurePasscode).",
+          message: "Invalid Admin Secret Key. Contact your platform administrator for the correct passcode.",
         });
         return;
       }
@@ -140,7 +145,25 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("Register Error:", error);
-    res.status(500).json({ success: false, message: error?.message || "Registration failed." });
+    // Handle MongoDB duplicate key error (race condition: two simultaneous requests with same email/phone)
+    if (error?.code === 11000) {
+      const field = Object.keys(error?.keyValue || {})[0] || "field";
+      const fieldLabel = field === "email" ? "email address" : field === "phone_number" ? "phone number" : field;
+      res.status(400).json({
+        success: false,
+        message: `An account with this ${fieldLabel} already exists. Please sign in instead.`,
+      });
+      return;
+    }
+    // Handle Mongoose validation errors
+    if (error?.name === "ValidationError") {
+      const messages = Object.values(error.errors || {})
+        .map((e: any) => e.message)
+        .join(", ");
+      res.status(400).json({ success: false, message: messages || "Validation failed. Please check your input." });
+      return;
+    }
+    res.status(500).json({ success: false, message: error?.message || "Registration failed. Please try again." });
   }
 };
 
