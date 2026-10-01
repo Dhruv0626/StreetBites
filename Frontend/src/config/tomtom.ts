@@ -5,8 +5,10 @@
  * Keeps map settings and API keys decoupled from React UI components.
  */
 
-// Retrieve API key safely from Vite environment variables
-export const TOMTOM_API_KEY = import.meta.env.VITE_TOMTOM_API_KEY || '';
+// Retrieve API key safely from Vite environment variables with fallback
+export const TOMTOM_API_KEY =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TOMTOM_API_KEY) ||
+  'pKaNxsGAgRWmxEehTjy8EIxVWGsfSIc3';
 
 /**
  * Validates if a TomTom API Key is configured.

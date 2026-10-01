@@ -5,6 +5,8 @@ import {
   FileText,
   ChevronDown,
   MapPin,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import type { CartItem } from '../../types';
 import { useNavigate } from 'react-router';
@@ -59,6 +61,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       }
     };
     fetchOrders();
+
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, [activeOrder]);
 
   const handleReorder = (orderId: string) => {
@@ -102,7 +110,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       status: o.status === 'DELIVERED' ? 'Delivered' : o.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : 'Preparing',
       rawStatus: o.status,
       payment: o.paymentMethod || 'Online',
-      deliveryOtp: o.deliveryOtp,
+      deliveryOtp: o.status === 'DELIVERED' ? '- - - -' : o.deliveryOtp,
       address: cleanAddress,
       rider: o.rider,
     };
@@ -121,6 +129,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         quantity: it.quantity || 1,
         price: it.price || 0,
         stallName: it.vendorName || it.stallName || 'Food Stall',
+        status: (it as any).status || 'PENDING',
       })),
       stalls: Array.from(new Set(activeOrder.items.map((i) => i.vendorName || i.stallName || 'Food Stall').filter(Boolean))),
       payment: activeOrder.paymentMethod || 'Online',
@@ -185,11 +194,15 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                     >
                       {order.status}
                     </span>
-                    {order.deliveryOtp && (
+                    {order.status === 'Delivered' ? (
+                      <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2 py-0.5 rounded-md font-mono tracking-wider">
+                        OTP: - - - -
+                      </span>
+                    ) : order.deliveryOtp ? (
                       <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-black px-2 py-0.5 rounded-md">
                         OTP: {order.deliveryOtp}
                       </span>
-                    )}
+                    ) : null}
                     <span className="text-xs text-[#8E8B85] font-semibold">{order.date}</span>
                   </div>
                   <h3 className="text-sm font-bold text-[#1C1917] mb-1">
@@ -412,13 +425,23 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                             const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
                             return !itemStall || itemStall === stallTitle;
                           });
+                          const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
+                          const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
+                          const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
+                          const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
+                          const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
+
                           return (
                             <div
                               key={sIdx}
-                              className="flex justify-between items-center p-4 bg-[#FAF7F2] border border-[#EAE4DA] rounded-2xl"
+                              className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${
+                                isRejected ? 'bg-red-50/50 border-red-200 opacity-80' : 'bg-[#FAF7F2] border-[#EAE4DA]'
+                              }`}
                             >
                               <div className="flex gap-3 items-center">
-                                <span className="w-8 h-8 rounded-full bg-[#1C1917] text-white text-xs font-black flex items-center justify-center select-none">
+                                <span className={`w-8 h-8 rounded-full text-xs font-black flex items-center justify-center select-none ${
+                                  isRejected ? 'bg-red-100 text-red-600' : 'bg-[#1C1917] text-white'
+                                }`}>
                                   S{sIdx + 1}
                                 </span>
                                 <div>
@@ -426,19 +449,39 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                                     {stallTitle}
                                   </span>
                                   <span className="text-[10px] text-[#8E8B85] block mt-0.5">
-                                    {stallItems.length > 0
-                                      ? stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : (i.name?.name || 'Item')}`).join(' · ')
-                                      : 'Consolidated Items'}
+                                    {isRejected
+                                      ? 'Item unavailable (Refund processed)'
+                                      : stallItems.length > 0
+                                        ? stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : (i.name?.name || 'Item')}`).join(' · ')
+                                        : 'Consolidated Items'}
                                   </span>
                                 </div>
                               </div>
-                              <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-extrabold px-3 py-1 rounded-full">
-                                Preparing
-                              </span>
+                              {isRejected ? (
+                                <span className="bg-red-50 text-red-700 border border-red-200 text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                  Out of Stock (Refunded)
+                                </span>
+                              ) : isAllReady ? (
+                                <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-[#137333]" /> Ready
+                                </span>
+                              ) : isCooking ? (
+                                <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                  Cooking ({prepMins}m)
+                                </span>
+                              ) : isAccepted ? (
+                                <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                  Accepted
+                                </span>
+                              ) : (
+                                <span className="bg-[#FAF7F2] text-[#8E8B85] border border-[#EAE4DA] text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting for stall...
+                                </span>
+                              )}
                             </div>
                           );
                         })}
-                      </div>
+                          </div>
                     </div>
 
                     {/* Delivery Address Card */}
@@ -482,7 +525,21 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       </div>
 
                       {/* Delivery Verification OTP */}
-                      {currentLiveOrder?.deliveryOtp && (
+                      {currentLiveOrder?.rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered' || currentLiveOrder?.deliveryOtp === '- - - -' ? (
+                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                          <span className="text-[10px] uppercase font-extrabold text-emerald-800 tracking-wider block">
+                            Delivery Completed
+                          </span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-2xl font-mono font-black text-emerald-700 tracking-widest">
+                              - - - -
+                            </span>
+                            <span className="text-[10px] text-emerald-700 font-bold max-w-[140px] text-right flex items-center justify-end gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Verified at Doorstep
+                            </span>
+                          </div>
+                        </div>
+                      ) : currentLiveOrder?.deliveryOtp ? (
                         <div className="p-4 bg-gradient-to-r from-[#FAF0ED] to-[#FFF8F0] border border-[#FCE8E6] rounded-2xl">
                           <span className="text-[10px] uppercase font-extrabold text-[#8E8B85] tracking-wider block">
                             Your 4-Digit Delivery OTP
@@ -496,7 +553,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                             </span>
                           </div>
                         </div>
-                      )}
+                      ) : null}
 
                       {/* Payment summary */}
                       <div className="pt-3 border-t border-[#F5F0E8] flex justify-between items-center text-xs">
@@ -599,14 +656,23 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                   </p>
 
                   {/* OTP display on mobile */}
-                  {currentLiveOrder?.deliveryOtp && (
+                  {currentLiveOrder?.rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered' || currentLiveOrder?.deliveryOtp === '- - - -' ? (
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Delivered:
+                      </span>
+                      <span className="text-lg font-mono font-black text-emerald-700 tracking-widest">
+                        - - - -
+                      </span>
+                    </div>
+                  ) : currentLiveOrder?.deliveryOtp ? (
                     <div className="p-3 bg-[#FAF0ED] rounded-xl border border-[#FCE8E6] flex justify-between items-center">
                       <span className="text-[10px] font-bold text-[#8E8B85] uppercase">Delivery OTP:</span>
                       <span className="text-lg font-mono font-black text-[#D94A38] tracking-widest">
                         {currentLiveOrder?.deliveryOtp}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
@@ -616,10 +682,40 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                   <div className="space-y-2">
                     {liveStalls.map((sName: any, idx: number) => {
                       const stallTitle = typeof sName === 'string' ? sName : (sName?.name || 'Food Stall');
+                      const stallItems = liveItems.filter((it: any) => {
+                        const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
+                        return !itemStall || itemStall === stallTitle;
+                      });
+                      const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
+                      const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
+                      const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
+                      const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
+                      const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
+
                       return (
                         <div key={idx} className="p-3 bg-[#FAF7F2] rounded-xl border border-[#EAE4DA] flex justify-between items-center text-xs">
                           <span className="font-bold text-[#1C1917]">{stallTitle}</span>
-                          <span className="text-[10px] font-bold text-[#D94A38]">Preparing</span>
+                          {isRejected ? (
+                            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
+                              Out of Stock (Refunded)
+                            </span>
+                          ) : isAllReady ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
+                            </span>
+                          ) : isCooking ? (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                              Cooking ({prepMins}m)
+                            </span>
+                          ) : isAccepted ? (
+                            <span className="text-[10px] font-bold text-[#D94A38] bg-[#FAF0ED] px-2.5 py-0.5 rounded-full border border-[#FCE8E6]">
+                              Accepted
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-[#8E8B85] bg-[#FAF7F2] px-2.5 py-0.5 rounded-full border border-[#EAE4DA] flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting for stall...
+                            </span>
+                          )}
                         </div>
                       );
                     })}

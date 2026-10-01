@@ -18,7 +18,10 @@ import { type TomTomMapProps, type MapMarker } from '../../types/map';
 export const TomTomMap: React.FC<TomTomMapProps> = ({
   center = MAP_CONFIG_DEFAULTS.center,
   zoom = MAP_CONFIG_DEFAULTS.zoom,
+  pitch = 0,
+  bearing = 0,
   markers = [],
+  routeCoordinates,
   className = 'w-full h-[450px] rounded-2xl overflow-hidden shadow-sm border border-[#EFEBE4] relative',
   onMapClick,
   onMapLoaded,
@@ -56,7 +59,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
       document.head.appendChild(link);
     }
 
-    // Inject JS SDK Script
+    // Inject JS SDK Script (Maps SDK)
     const scriptId = 'tomtom-maps-js-cdn';
     if (!document.getElementById(scriptId)) {
       const script = document.createElement('script');
@@ -64,6 +67,15 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
       script.src = 'https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js';
       script.async = true;
       script.onload = () => {
+        // After maps-web loads, also load services-web for routing & geocoding services
+        const servicesScriptId = 'tomtom-services-js-cdn';
+        if (!document.getElementById(servicesScriptId)) {
+          const sScript = document.createElement('script');
+          sScript.id = servicesScriptId;
+          sScript.src = 'https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js';
+          sScript.async = true;
+          document.body.appendChild(sScript);
+        }
         setSdkReady(true);
       };
       script.onerror = () => {
@@ -106,6 +118,8 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
         container: mapContainerRef.current,
         center: center,
         zoom: zoom,
+        pitch: pitch,
+        bearing: bearing,
         language: MAP_CONFIG_DEFAULTS.language,
       });
 
@@ -175,9 +189,11 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     };
   }, [sdkReady, apiKeyValid]);
 
-  // ── 3. Dynamic Center / Zoom Updates (Only when props explicitly change) ────────
+  // ── 3. Dynamic Center / Zoom / Pitch / Bearing Updates ────────────────────────
   const lastPropCenterRef = useRef<[number, number]>([center[0], center[1]]);
   const lastPropZoomRef = useRef<number>(zoom);
+  const lastPropPitchRef = useRef<number>(pitch);
+  const lastPropBearingRef = useRef<number>(bearing);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -185,28 +201,40 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
     const centerChanged =
       !lastPropCenterRef.current ||
-      Math.abs(lastPropCenterRef.current[0] - center[0]) > 0.0001 ||
-      Math.abs(lastPropCenterRef.current[1] - center[1]) > 0.0001;
+      Math.abs(lastPropCenterRef.current[0] - center[0]) > 0.00005 ||
+      Math.abs(lastPropCenterRef.current[1] - center[1]) > 0.00005;
 
     const zoomChanged =
       lastPropZoomRef.current === undefined ||
       Math.abs(lastPropZoomRef.current - zoom) > 0.1;
 
-    if (centerChanged || zoomChanged) {
+    const pitchChanged =
+      lastPropPitchRef.current === undefined ||
+      Math.abs((lastPropPitchRef.current || 0) - (pitch || 0)) > 1;
+
+    const bearingChanged =
+      lastPropBearingRef.current === undefined ||
+      Math.abs((lastPropBearingRef.current || 0) - (bearing || 0)) > 2;
+
+    if (centerChanged || zoomChanged || pitchChanged || bearingChanged) {
       lastPropCenterRef.current = [center[0], center[1]];
       lastPropZoomRef.current = zoom;
+      lastPropPitchRef.current = pitch;
+      lastPropBearingRef.current = bearing;
 
       try {
-        map.flyTo({
+        map.easeTo({
           center: center,
           zoom: zoom,
-          duration: 800,
+          pitch: pitch !== undefined ? pitch : 0,
+          bearing: bearing !== undefined ? bearing : 0,
+          duration: 500,
         });
       } catch (err) {
-        console.warn('TomTom flyTo error:', err);
+        console.warn('TomTom easeTo error:', err);
       }
     }
-  }, [center?.[0], center?.[1], zoom]);
+  }, [center?.[0], center?.[1], zoom, pitch, bearing]);
 
   // ── 4. Marker Synchronization & Smooth Animation Updates ─────────────────────
   useEffect(() => {
@@ -230,21 +258,32 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
       if (existingMarker) {
         existingMarker.setLngLat(markerData.position);
+        const markerEl = existingMarker.getElement();
+        if (markerEl) {
+          markerEl.className = getMarkerElementClass(markerData.type);
+          markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id, markerData.heading);
+        }
+        if (markerData.type === 'rider' && typeof markerData.heading === 'number') {
+          const arrowEl = existingMarker.getElement()?.querySelector('.navigator-arrow-graphic') as HTMLElement;
+          if (arrowEl) {
+            arrowEl.style.transform = `rotate(${markerData.heading}deg)`;
+          }
+        }
       } else {
         const markerEl = document.createElement('div');
         markerEl.className = getMarkerElementClass(markerData.type);
-        markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id);
+        markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id, markerData.heading);
 
-        const isCluster = markerData.type === 'cluster';
+        const isBottomAnchored = markerData.type === 'cluster' || markerData.type === 'stall' || markerData.type === 'customer';
         const markerInstance = new ttSDK.Marker({
           element: markerEl,
-          anchor: isCluster ? 'bottom' : 'center',
+          anchor: isBottomAnchored ? 'bottom' : 'center',
         }).setLngLat(markerData.position);
 
         const popupHtml = markerData.popupHtml || createDefaultPopupHtml(markerData);
         if (popupHtml && ttSDK.Popup) {
           const popup = new ttSDK.Popup({
-            offset: isCluster ? [0, -48] : 16,
+            offset: isBottomAnchored ? [0, -44] : [0, -24],
             closeButton: true,
             closeOnClick: false,
             className: 'streetbites-tomtom-popup',
@@ -272,6 +311,102 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
       }
     });
   }, [markers, apiKeyValid, sdkReady, showMarkers]);
+
+  // ── 5. Route Polyline Synchronization & Dynamic Bounds Fitting ────────────────
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const ttSDK = (window as any).tt;
+    if (!map || !apiKeyValid || !sdkReady || !ttSDK) return;
+
+    const sourceId = 'streetbites-route-source';
+    const casingLayerId = 'streetbites-route-casing';
+    const lineLayerId = 'streetbites-route-line';
+
+    const clearRouteLayers = () => {
+      try {
+        if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+        if (map.getLayer(casingLayerId)) map.removeLayer(casingLayerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+      } catch {
+        // Ignored if layer didn't exist
+      }
+    };
+
+    if (!routeCoordinates || routeCoordinates.length < 2) {
+      clearRouteLayers();
+      return;
+    }
+
+    const geojsonData: any = {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: routeCoordinates,
+      },
+      properties: {},
+    };
+
+    const drawRoute = () => {
+      try {
+        if (map.getSource(sourceId)) {
+          map.getSource(sourceId).setData(geojsonData);
+        } else {
+          map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojsonData,
+          });
+
+          // Route outer casing / glow
+          map.addLayer({
+            id: casingLayerId,
+            type: 'line',
+            source: sourceId,
+            paint: {
+              'line-color': '#FFFFFF',
+              'line-width': 7,
+              'line-opacity': 0.9,
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+            },
+          });
+
+          // Route inner line (StreetBites Brand Red)
+          map.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            paint: {
+              'line-color': '#E54B3C',
+              'line-width': 4.5,
+              'line-opacity': 0.95,
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+            },
+          });
+        }
+
+        // Auto-fit map bounds to encompass the route
+        if (ttSDK.LngLatBounds && routeCoordinates.length > 0) {
+          const bounds = new ttSDK.LngLatBounds();
+          routeCoordinates.forEach((pt) => bounds.extend(pt));
+          map.fitBounds(bounds, { padding: 50, maxZoom: 16, duration: 600 });
+        }
+      } catch (err) {
+        console.warn('TomTom route draw error:', err);
+      }
+    };
+
+    const isReady = (typeof map.isStyleLoaded === 'function' && map.isStyleLoaded()) || (typeof map.loaded === 'function' && map.loaded());
+    if (isReady) {
+      drawRoute();
+    } else {
+      map.once('load', drawRoute);
+    }
+  }, [routeCoordinates, apiKeyValid, sdkReady]);
 
   // ── Render Fallback Banner if TomTom API Key is missing ──────────────────────
   if (!apiKeyValid) {
@@ -387,21 +522,30 @@ function getMarkerElementClass(type?: string): string {
   if (type === 'stall') {
     return 'streetbites-stall-marker-root cursor-pointer z-25 select-none';
   }
-
-  const base = 'cursor-pointer transition-transform duration-200 hover:scale-110 flex items-center justify-center shadow-md border-2 border-white';
-  switch (type) {
-    case 'customer':
-      return `${base} w-8 h-8 rounded-full bg-gradient-to-tr from-[#059669] to-[#10B981] text-white z-20`;
-    case 'rider':
-      return `${base} w-9 h-9 rounded-full bg-gradient-to-tr from-[#D97706] to-[#F59E0B] text-white animate-pulse z-25`;
-    default:
-      return `${base} w-7 h-7 rounded-full bg-[#1C1917] text-white z-10`;
+  if (type === 'customer') {
+    return 'streetbites-customer-marker-root cursor-pointer z-28 select-none';
   }
+  if (type === 'rider') {
+    return 'streetbites-rider-marker-root cursor-pointer z-35 select-none';
+  }
+
+  return 'cursor-pointer transition-transform duration-200 hover:scale-110 flex items-center justify-center shadow-md border-2 border-white w-7 h-7 rounded-full bg-[#1C1917] text-white z-10';
 }
 
-function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
+function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: number = 0): string {
   const safeId = (id || 'pin').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const safeTitle = escapeHtml(title || 'Khau Galli');
+  const safeTitle = escapeHtml(title || 'Point');
+
+  // Extract checkpoint letter (e.g. A, B, C) if available in id or title
+  let checkpointLetter = '';
+  if (id) {
+    const match = id.match(/stop-([a-zA-Z0-9]+)/i);
+    if (match) {
+      checkpointLetter = match[1].toUpperCase();
+    } else if (id.length <= 2 && /^[a-zA-Z0-9]+$/.test(id)) {
+      checkpointLetter = id.toUpperCase();
+    }
+  }
 
   // Attractive, Rich & Meaningful Cluster / Khau Galli Food Hub Pin
   if (type === 'cluster') {
@@ -433,16 +577,10 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
               </radialGradient>
             </defs>
 
-            <!-- Teardrop Pin Outer Base Shell -->
             <path d="M22 0C9.85 0 0 9.85 0 22C0 35.8 18.6 51.6 21.2 53.7C21.66 54.1 22.34 54.1 22.8 53.7C25.4 51.6 44 35.8 44 22C44 9.85 34.15 0 22 0Z" fill="url(#clusterGrad-${safeId})" stroke="#FFFFFF" stroke-width="2.6" />
-
-            <!-- Ambient Shimmer Glow -->
             <ellipse cx="22" cy="14" rx="15" ry="8" fill="url(#innerGlow-${safeId})" />
-
-            <!-- Inner Contrast Shield Circle -->
             <circle cx="22" cy="20" r="14.5" fill="#1C1917" fill-opacity="0.22" stroke="#FFFFFF" stroke-width="1.2" />
 
-            <!-- Khau Galli Food Street Emblem -->
             <path d="M12 15.5L14.5 10H29.5L32 15.5H12Z" fill="url(#goldAccent-${safeId})" stroke="#FFFFFF" stroke-width="0.8" stroke-linejoin="round"/>
             <path d="M17 10L16 15.5M22 10V15.5M27 10L28 15.5" stroke="#D94A38" stroke-width="0.9" stroke-linecap="round"/>
             <path d="M12 15.5C13.2 16.6 14.8 16.6 16 15.5C17.2 16.6 18.8 16.6 20 15.5C21.2 16.6 22.8 16.6 24 15.5C25.2 16.6 26.8 16.6 28 15.5C29.2 16.6 30.8 16.6 32 15.5" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round" fill="none"/>
@@ -454,26 +592,23 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
           </svg>
         </div>
 
-        <!-- Ground Pulsing Radar Wave Beacon -->
         <div class="cluster-ground-ripple" style="position: absolute; bottom: -3px; width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(217, 74, 56, 0.75) 0%, rgba(217, 74, 56, 0) 75%); animation: clusterPulseRipple 2.2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
       </div>
     `;
   }
 
-  // Dedicated Food Stall Pin with Canopy Logo & Mini Floating Stall Name
+  // Dedicated Food Stall Pin with Canopy Logo & Mini Floating Stall Name & Stop Badge
   if (type === 'stall') {
     return `
       <div class="streetbites-stall-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
         
-        <!-- Floating Mini Stall Tag -->
-        <div class="stall-name-tag" style="position: absolute; bottom: 44px; white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
-          <span style="width: 6px; height: 6px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 6px #22C55E; flex-shrink: 0;"></span>
+        <div class="stall-name-tag" style="position: absolute; bottom: 46px; white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
+          ${checkpointLetter ? `<span style="background: #D94A38; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 6px #22C55E; flex-shrink: 0;"></span>`}
           <span style="max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
         </div>
 
-        <!-- 3D Food Stall Teardrop Pin -->
-        <div class="stall-pin-graphic" style="position: relative; width: 34px; height: 42px; filter: drop-shadow(0 6px 12px rgba(217, 74, 56, 0.45));">
-          <svg width="34" height="42" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div class="stall-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(217, 74, 56, 0.45));">
+          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="stallGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#FF7043" />
@@ -483,24 +618,95 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string): string {
             <path d="M22 0C9.85 0 0 9.85 0 22C0 35.8 18.6 51.6 21.2 53.7C21.66 54.1 22.34 54.1 22.8 53.7C25.4 51.6 44 35.8 44 22C44 9.85 34.15 0 22 0Z" fill="url(#stallGrad-${safeId})" stroke="#FFFFFF" stroke-width="2.6" />
             <circle cx="22" cy="20" r="13" fill="#FFFFFF" fill-opacity="0.25" />
             
-            <!-- Food Shop Canopy Icon -->
-            <path d="M13 14H31L29 23H15L13 14Z" fill="#FFFFFF" />
-            <path d="M15 23V27H29V23" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" />
-            <rect x="19" y="20" width="6" height="5" fill="#D94A38" rx="0.5" />
+            ${checkpointLetter ? `
+              <circle cx="22" cy="20" r="11" fill="#FFFFFF" />
+              <text x="22" y="24.5" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="900" font-size="13" fill="#D94A38" text-anchor="middle">${checkpointLetter}</text>
+            ` : `
+              <path d="M13 14H31L29 23H15L13 14Z" fill="#FFFFFF" />
+              <path d="M15 23V27H29V23" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" />
+              <rect x="19" y="20" width="6" height="5" fill="#D94A38" rx="0.5" />
+            `}
           </svg>
         </div>
       </div>
     `;
   }
 
-  switch (type) {
-    case 'customer':
-      return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-    case 'rider':
-      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>`;
-    default:
-      return `<span style="font-size: 10px; font-weight: 800;">${safeId.toUpperCase().slice(0, 2) || '•'}</span>`;
+  // Dedicated Customer Delivery Drop Location Pin with Emerald Theme
+  if (type === 'customer') {
+    return `
+      <div class="streetbites-customer-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+        
+        <div class="customer-name-tag" style="position: absolute; bottom: 46px; white-space: nowrap; background: rgba(6, 78, 59, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 28;">
+          ${checkpointLetter ? `<span style="background: #059669; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #34D399; display: inline-block; box-shadow: 0 0 6px #34D399; flex-shrink: 0;"></span>`}
+          <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
+        </div>
+
+        <div class="customer-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(5, 150, 105, 0.45));">
+          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="customerGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#34D399" />
+                <stop offset="60%" stop-color="#059669" />
+                <stop offset="100%" stop-color="#064E3B" />
+              </linearGradient>
+            </defs>
+            <path d="M22 0C9.85 0 0 9.85 0 22C0 35.8 18.6 51.6 21.2 53.7C21.66 54.1 22.34 54.1 22.8 53.7C25.4 51.6 44 35.8 44 22C44 9.85 34.15 0 22 0Z" fill="url(#customerGrad-${safeId})" stroke="#FFFFFF" stroke-width="2.6" />
+            <circle cx="22" cy="20" r="13" fill="#FFFFFF" fill-opacity="0.22" />
+            
+            ${checkpointLetter ? `
+              <circle cx="22" cy="20" r="11" fill="#FFFFFF" />
+              <text x="22" y="24.5" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="900" font-size="13" fill="#059669" text-anchor="middle">${checkpointLetter}</text>
+            ` : `
+              <!-- Destination Pin Icon -->
+              <path d="M22 12C18.13 12 15 15.13 15 19C15 24.25 22 30 22 30C22 30 29 24.25 29 19C29 15.13 25.87 12 22 12ZM22 21.5C20.62 21.5 19.5 20.38 19.5 19C19.5 17.62 20.62 16.5 22 16.5C23.38 16.5 24.5 17.62 24.5 19C24.5 20.38 23.38 21.5 22 21.5Z" fill="#FFFFFF" />
+            `}
+          </svg>
+        </div>
+
+        <div class="customer-ground-ripple" style="position: absolute; bottom: -2px; width: 22px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(5, 150, 105, 0.75) 0%, rgba(5, 150, 105, 0) 75%); animation: clusterPulseRipple 2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+      </div>
+    `;
   }
+
+  // Dedicated Live Rider Navigation Direction Arrow Puck
+  if (type === 'rider') {
+    const deg = typeof heading === 'number' && !isNaN(heading) ? heading : 0;
+    return `
+      <div class="streetbites-rider-nav-puck" style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+        
+        <!-- 3D Glowing Navigation Direction Arrow Puck with Dynamic Heading Rotation -->
+        <div class="navigator-arrow-graphic" style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; transform-origin: center center; filter: drop-shadow(0 4px 14px rgba(2, 132, 199, 0.65)); transform: rotate(${deg}deg); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);">
+          <svg width="42" height="42" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="navPuckGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#38BDF8" />
+                <stop offset="50%" stop-color="#0284C7" />
+                <stop offset="100%" stop-color="#1E40AF" />
+              </linearGradient>
+              <radialGradient id="navPuckGlow-${safeId}" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.4" />
+                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+
+            <!-- Outer Shield Ring -->
+            <circle cx="22" cy="22" r="20" fill="url(#navPuckGrad-${safeId})" stroke="#FFFFFF" stroke-width="2.8" />
+            <circle cx="22" cy="22" r="16" fill="url(#navPuckGlow-${safeId})" />
+            
+            <!-- Crisp 3D Navigator Direction Arrow (Pointing in Route Bearing) -->
+            <path d="M22 8L32 32L22 26L12 32L22 8Z" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.2" stroke-linejoin="round" />
+            <path d="M22 8V26L32 32L22 8Z" fill="#E0F2FE" />
+          </svg>
+        </div>
+
+        <!-- Ground Concentric Radar Wave -->
+        <div class="rider-radar-ripple" style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(2, 132, 199, 0) 70%); animation: clusterPulseRipple 1.8s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+      </div>
+    `;
+  }
+
+  return `<div style="width: 28px; height: 28px; border-radius: 50%; background: #1C1917; color: #FFF; display: flex; items-center; justify-content: center; font-size: 10px; font-weight: 800; border: 2px solid #FFF; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">${safeId.toUpperCase().slice(0, 2) || '•'}</div>`;
 }
 
 function createDefaultPopupHtml(marker: MapMarker): string {
@@ -520,11 +726,11 @@ function createDefaultPopupHtml(marker: MapMarker): string {
           ${escapeHtml(marker.title)}
         </div>
         ${marker.description
-          ? `<div style="font-size: 11px; color: #57534E; line-height: 1.45; margin-bottom: 8px;">${escapeHtml(
-            marker.description
-          )}</div>`
-          : ''
-        }
+        ? `<div style="font-size: 11px; color: #57534E; line-height: 1.45; margin-bottom: 8px;">${escapeHtml(
+          marker.description
+        )}</div>`
+        : ''
+      }
         <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-family: monospace; color: #78716C; background: #FAF7F2; border: 1px solid #EAE4DA; padding: 4px 8px; border-radius: 8px;">
           <span>📍 ${(Number(marker.position?.[1]) || 0).toFixed(4)}° N, ${(Number(marker.position?.[0]) || 0).toFixed(4)}° E</span>
           <span style="font-weight: 700; color: #D94A38;">Ahmedabad</span>

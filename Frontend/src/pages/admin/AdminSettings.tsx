@@ -49,8 +49,8 @@ export const AdminSettings: React.FC = () => {
       const res = await settingService.getPlatformSettings();
       if (res.success && res.data) {
         const s = res.data;
-        setBaseDeliveryFee(String(s.base_delivery_fee ?? 25));
-        setExtraStallFee(String(s.extra_stall_fee ?? 5));
+        setBaseDeliveryFee(String(s.base_delivery_fee ?? 22));
+        setExtraStallFee(String(s.extra_stall_fee ?? 10));
         setVendorCommission(String(s.vendor_commission_percentage ?? 5));
         setTaxPercentage(String(s.tax_percentage ?? 5));
         setRiderCashLimit(String(s.rider_cash_limit ?? 0));
@@ -77,7 +77,7 @@ export const AdminSettings: React.FC = () => {
     setErrorMessage(null);
 
     const payload = {
-      base_delivery_fee: Number(baseDeliveryFee) || 25,
+      base_delivery_fee: Number(baseDeliveryFee) || 22,
       extra_stall_fee: Number(extraStallFee) >= 0 ? Number(extraStallFee) : 10,
       vendor_commission_percentage: Number(vendorCommission) || 5,
       tax_percentage: Number(taxPercentage) || 5,
@@ -111,7 +111,7 @@ export const AdminSettings: React.FC = () => {
         const res = await settingService.resetPlatformSettings();
         if (res.success && res.data) {
           const s = res.data;
-          setBaseDeliveryFee(String(s.base_delivery_fee ?? 25));
+          setBaseDeliveryFee(String(s.base_delivery_fee ?? 22));
           setExtraStallFee(String(s.extra_stall_fee ?? 10));
           setVendorCommission(String(s.vendor_commission_percentage ?? 5));
           setTaxPercentage(String(s.tax_percentage ?? 5));

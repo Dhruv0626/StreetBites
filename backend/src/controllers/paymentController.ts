@@ -7,6 +7,8 @@ import Stall from "../models/Stall.ts";
 import Cart from "../models/Cart.ts";
 import Transaction from "../models/Transaction.ts";
 import User from "../models/User.ts";
+import Address from "../models/Address.ts";
+import { geocodeAddressBackend } from "./addressController.ts";
 
 /**
  * Helper to resolve user from auth or request query/body
@@ -119,6 +121,7 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       items,
       delivery_fee = 0,
       delivery_address,
+      delivery_coordinates,
       delivery_notes = "",
     } = req.body;
 
@@ -154,6 +157,49 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
     // Generate 4-digit Delivery OTP
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
+    // Helper to check if coords are missing or city center defaults
+    const isCentralDefault = (coords?: [number, number] | null) => {
+      if (!coords || !Array.isArray(coords) || coords.length !== 2) return true;
+      const [lng, lat] = coords;
+      if (lng === 0 && lat === 0) return true;
+      if (Math.abs(lng - 72.5714) < 0.003 && Math.abs(lat - 23.0225) < 0.003) return true;
+      if (Math.abs(lng - 72.5873) < 0.003 && Math.abs(lat - 23.0248) < 0.003) return true;
+      return false;
+    };
+
+    // Parse exact customer delivery coordinates [lng, lat]
+    let parsedCoords: [number, number] | null = null;
+
+    if (Array.isArray(delivery_coordinates) && delivery_coordinates.length === 2 && !isCentralDefault(delivery_coordinates as any)) {
+      parsedCoords = [Number(delivery_coordinates[0]), Number(delivery_coordinates[1])];
+    } else if (delivery_coordinates && typeof (delivery_coordinates as any).lng === 'number' && typeof (delivery_coordinates as any).lat === 'number') {
+      parsedCoords = [Number((delivery_coordinates as any).lng), Number((delivery_coordinates as any).lat)];
+    }
+
+    // Check customer saved address in DB if missing or central default
+    if (!parsedCoords || isCentralDefault(parsedCoords)) {
+      const customerAddr = await Address.findOne({ customer_id: user._id }).sort({ is_primary: -1, createdAt: -1 });
+      if (customerAddr?.lat_lng?.coordinates?.length === 2 && !isCentralDefault(customerAddr.lat_lng.coordinates as any)) {
+        parsedCoords = [Number(customerAddr.lat_lng.coordinates[0]), Number(customerAddr.lat_lng.coordinates[1])];
+      }
+    }
+
+    // Geocode delivery address text if still missing or central default
+    if ((!parsedCoords || isCentralDefault(parsedCoords)) && delivery_address) {
+      try {
+        const geocoded = await geocodeAddressBackend({ detail: delivery_address });
+        if (geocoded) {
+          parsedCoords = [geocoded.lng, geocoded.lat];
+        }
+      } catch (err) {
+        console.warn("Payment order geocoding error:", err);
+      }
+    }
+
+    if (!parsedCoords || (parsedCoords[0] === 0 && parsedCoords[1] === 0)) {
+      parsedCoords = [72.5815, 23.1118];
+    }
+
     // 1. Create Master Parent Order
     const masterOrder = await Order.create({
       customer_id: user._id,
@@ -169,6 +215,10 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       razorpay_signature: razorpay_signature || `sig_${Date.now()}`,
       status: "PREPARING",
       delivery_address: delivery_address || "Customer Address",
+      delivery_coordinates: {
+        type: "Point",
+        coordinates: parsedCoords,
+      },
       delivery_notes,
       delivery_otp: deliveryOtp,
       platform_fee_earned: 0, // will compute below from items
@@ -212,7 +262,7 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
         item_id: item.item_id || item.id || new mongoose.Types.ObjectId(),
         quantity: qty,
         vendor_earned_amount: vendorEarnedAmount,
-        stall_status: "ACCEPTED",
+        stall_status: "PENDING",
       });
     }
 
@@ -288,6 +338,7 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       items,
       delivery_fee = 0,
       delivery_address,
+      delivery_coordinates,
       delivery_notes = "",
     } = req.body;
 
@@ -300,6 +351,39 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
     const taxAmount = Math.round(foodItemsTotal * 0.05 * 10) / 10;
     const totalAmount = Math.round((foodItemsTotal + Number(delivery_fee) + taxAmount) * 10) / 10;
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Parse exact customer delivery coordinates [lng, lat]
+    let parsedCoords: [number, number] | null = null;
+
+    if (Array.isArray(delivery_coordinates) && delivery_coordinates.length === 2 && !isCentralDefault(delivery_coordinates as any)) {
+      parsedCoords = [Number(delivery_coordinates[0]), Number(delivery_coordinates[1])];
+    } else if (delivery_coordinates && typeof (delivery_coordinates as any).lng === 'number' && typeof (delivery_coordinates as any).lat === 'number') {
+      parsedCoords = [Number((delivery_coordinates as any).lng), Number((delivery_coordinates as any).lat)];
+    }
+
+    // Check customer saved address in DB if missing or central default
+    if (!parsedCoords || isCentralDefault(parsedCoords)) {
+      const customerAddr = await Address.findOne({ customer_id: user._id }).sort({ is_primary: -1, createdAt: -1 });
+      if (customerAddr?.lat_lng?.coordinates?.length === 2 && !isCentralDefault(customerAddr.lat_lng.coordinates as any)) {
+        parsedCoords = [Number(customerAddr.lat_lng.coordinates[0]), Number(customerAddr.lat_lng.coordinates[1])];
+      }
+    }
+
+    // Geocode delivery address text if still missing or central default
+    if ((!parsedCoords || isCentralDefault(parsedCoords)) && delivery_address) {
+      try {
+        const geocoded = await geocodeAddressBackend({ detail: delivery_address });
+        if (geocoded) {
+          parsedCoords = [geocoded.lng, geocoded.lat];
+        }
+      } catch (err) {
+        console.warn("COD order geocoding error:", err);
+      }
+    }
+
+    if (!parsedCoords || (parsedCoords[0] === 0 && parsedCoords[1] === 0)) {
+      parsedCoords = [72.5815, 23.1118];
+    }
 
     // Create Master Order
     const masterOrder = await Order.create({
@@ -315,6 +399,10 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       cod_amount_held: totalAmount,
       status: "PREPARING",
       delivery_address: delivery_address || "Customer Address",
+      delivery_coordinates: {
+        type: "Point",
+        coordinates: parsedCoords,
+      },
       delivery_notes,
       delivery_otp: deliveryOtp,
       platform_fee_earned: 0,
@@ -356,7 +444,7 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
         item_id: item.item_id || item.id || new mongoose.Types.ObjectId(),
         quantity: qty,
         vendor_earned_amount: vendorEarnedAmount,
-        stall_status: "ACCEPTED",
+        stall_status: "PENDING",
       });
     }
 
@@ -651,7 +739,8 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
             quantity: so.quantity || 1,
             price: itemPrice || Math.round(so.vendor_earned_amount / 0.95),
             stallName: so.stall_id?.name || "Street Stall",
-            status: so.stall_status || "PREPARING",
+            status: so.stall_status || "PENDING",
+            prepTimeMinutes: so.estimated_prep_time_minutes || 15,
           };
         });
 

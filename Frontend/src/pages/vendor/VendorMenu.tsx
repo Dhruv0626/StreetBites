@@ -1,5 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Menu as MenuIcon, Plus, Search, MoreVertical, X, Upload, Loader2, AlertCircle, CheckCircle2, Image as ImageIcon} from 'lucide-react';
+import {
+  Menu as MenuIcon,
+  Plus,
+  Search,
+  MoreVertical,
+  X,
+  Upload,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Image as ImageIcon,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { vendorMenuService, type VendorMenuItem } from '../../services/vendorMenuService';
 import { Skeleton } from '../../components/Skeleton';
 import { CustomSelect } from '../../components/CustomSelect';
@@ -22,6 +35,7 @@ export const VendorMenuPage: React.FC = () => {
   // Modals state
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Form states
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -36,6 +50,18 @@ export const VendorMenuPage: React.FC = () => {
     price: '',
     imageUrl: '',
   });
+
+  // Edit item form state
+  const [editingItem, setEditingItem] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    base_price: string;
+    price: string;
+    imageUrl: string;
+    is_available: boolean;
+  } | null>(null);
 
   // Dropdown state
   const [activeDropdownMenu, setActiveDropdownMenu] = useState<string | null>(null);
@@ -258,6 +284,96 @@ export const VendorMenuPage: React.FC = () => {
     }
   };
 
+  // Open Edit Modal and pre-populate current food values
+  const handleOpenEditModal = (item: VendorMenuItem) => {
+    setEditingItem({
+      id: item.id || item._id || '',
+      name: item.name || '',
+      description: item.description || '',
+      category: item.category || availableCategoriesForAdding[0] || 'General',
+      base_price: String(item.base_price || item.price || ''),
+      price: item.price ? String(item.price) : '',
+      imageUrl: item.image_url || item.imageUrl || '',
+      is_available: item.is_available ?? item.available ?? true,
+    });
+    setShowEditModal(true);
+    setActiveDropdownMenu(null);
+  };
+
+  // Image Upload handler for Edit Modal
+  const handleEditItemImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const MAX_SIZE = 1 * 1024 * 1024;
+      if (file.size >= MAX_SIZE) {
+        showAlert(
+          `Image size must be less than 1MB. Selected file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Please choose a smaller image.`,
+          'warning'
+        );
+        e.target.value = '';
+        return;
+      }
+      try {
+        const compressed = await compressImage(file);
+        setEditingItem(prev => (prev ? { ...prev, imageUrl: compressed } : null));
+      } catch {
+        const reader = new FileReader();
+        reader.onloadend = () =>
+          setEditingItem(prev => (prev ? { ...prev, imageUrl: reader.result as string } : null));
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  // Save changes to existing menu item in MongoDB
+  const handleUpdateItem = async () => {
+    if (!editingItem) return;
+
+    if (!editingItem.name.trim()) {
+      showAlert("Please enter the food item name.", "warning");
+      return;
+    }
+
+    const basePriceNum = parseFloat(editingItem.base_price);
+    if (isNaN(basePriceNum) || basePriceNum <= 0) {
+      showAlert("Please enter a valid base price greater than 0.", "warning");
+      return;
+    }
+
+    const customerPriceNum = editingItem.price ? parseFloat(editingItem.price) : Math.round(basePriceNum * 1.10);
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const res = await vendorMenuService.updateMenuItem(editingItem.id, {
+        name: editingItem.name.trim(),
+        description: editingItem.description.trim(),
+        base_price: basePriceNum,
+        price: customerPriceNum,
+        category: editingItem.category || 'General',
+        image_url: editingItem.imageUrl || undefined,
+        is_available: editingItem.is_available,
+      });
+
+      if (res.success && res.data) {
+        const updated = res.data;
+        setMenuItems(prev =>
+          prev.map(i => (i.id === updated.id ? { ...i, ...updated, available: updated.is_available } : i))
+        );
+        toast.success(`Food item "${updated.name}" updated successfully!`);
+        setShowEditModal(false);
+        setEditingItem(null);
+        loadMenu();
+      } else {
+        setErrorMessage(res.message || "Failed to update food item.");
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Error updating food item.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Toggle item availability in MongoDB
   const handleToggleAvailability = async (item: VendorMenuItem) => {
     try {
@@ -451,27 +567,38 @@ export const VendorMenuPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Actions dropdown */}
-                    <div className="relative shrink-0">
-                      <button
-                        onClick={() => setActiveDropdownMenu(activeDropdownMenu === item.id ? null : item.id)}
-                        className="text-stone-400 hover:text-stone-700 transition-colors bg-stone-50 hover:bg-stone-100 p-1.5 rounded-xl cursor-pointer"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {activeDropdownMenu === item.id && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownMenu(null)} />
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-2xl shadow-xl border border-[#E7E2D9] py-1.5 z-20 animate-scaleIn origin-top-right">
-                            <button
-                              onClick={() => handleDeleteItem(item.id)}
-                              className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            >
-                              Delete Variety
-                            </button>
-                          </div>
-                        </>
-                      )}
+                    <div className="flex items-center gap-1 shrink-0">
+
+
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveDropdownMenu(activeDropdownMenu === item.id ? null : item.id)}
+                          className="text-stone-400 hover:text-stone-700 transition-colors bg-stone-50 hover:bg-stone-100 p-1.5 rounded-xl cursor-pointer"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        {activeDropdownMenu === item.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownMenu(null)} />
+                            <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-2xl shadow-xl border border-[#E7E2D9] py-1.5 z-20 animate-scaleIn origin-top-right overflow-hidden">
+                              <button
+                                onClick={() => handleOpenEditModal(item)}
+                                className="w-full text-left px-3.5 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-[#D94A38]" />
+                                <span>Edit Variety</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="w-full text-left px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                <span>Delete Variety</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -755,6 +882,189 @@ export const VendorMenuPage: React.FC = () => {
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 <span>Add Variety to Stall Menu</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Edit Variety (Menu Item) Modal */}
+      {showEditModal && editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-scaleIn border border-[#E7E2D9]">
+            <div className="p-5 border-b border-[#E7E2D9] flex justify-between items-center bg-stone-50/70 sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-base font-bold text-stone-900">Edit Food Variety</h3>
+                <p className="text-[11px] text-stone-500">Update dish pricing, details and availability</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingItem(null);
+                }}
+                className="text-stone-400 hover:text-stone-700 bg-white p-1.5 rounded-xl shadow-3xs cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Variety Name */}
+              <div>
+                <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
+                  Variety Name *
+                </label>
+                <input
+                  type="text"
+                  value={editingItem.name}
+                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                  placeholder="e.g. Cheese Burst Pav Bhaji"
+                  className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-2.5 text-sm font-semibold text-stone-900 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
+                  Dish Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingItem.description}
+                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  placeholder="Describe your dish ingredients or specialty..."
+                  className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-2 text-xs text-stone-900 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors resize-none"
+                />
+              </div>
+
+              {/* Category and Base Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
+                    Category *
+                  </label>
+                  <CustomSelect
+                    value={editingItem.category || (availableCategoriesForAdding[0] || 'General')}
+                    onChange={(val) => setEditingItem({ ...editingItem, category: val })}
+                    options={
+                      availableCategoriesForAdding.length === 0
+                        ? ['General']
+                        : availableCategoriesForAdding
+                    }
+                    placeholder="Select category"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
+                    Base Price (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    value={editingItem.base_price}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const num = parseFloat(val);
+                      setEditingItem({
+                        ...editingItem,
+                        base_price: val,
+                        price: num > 0 ? String(Math.round(num * 1.10)) : ''
+                      });
+                    }}
+                    placeholder="e.g. 120"
+                    className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-stone-900 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Availability Switch */}
+              <div className="flex items-center justify-between p-3.5 bg-stone-50 rounded-2xl border border-[#E7E2D9]">
+                <div>
+                  <span className="text-xs font-bold text-stone-900 block">In-Stock Status</span>
+                  <span className="text-[11px] text-stone-500">
+                    {editingItem.is_available ? 'Available for live customer orders' : 'Marked as Sold Out / Inactive'}
+                  </span>
+                </div>
+                <div
+                  onClick={() => setEditingItem({ ...editingItem, is_available: !editingItem.is_available })}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer shadow-inner ${editingItem.is_available ? 'bg-[#D94A38]' : 'bg-stone-300'
+                    }`}
+                >
+                  <div
+                    className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform shadow-xs ${editingItem.is_available ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                  />
+                </div>
+              </div>
+
+              {/* Photo Upload / Update */}
+              <div>
+                <label className="block text-xs font-bold text-stone-600 uppercase tracking-wider mb-1.5">
+                  Dish Photo
+                </label>
+                {editingItem.imageUrl ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 group h-32">
+                    <img
+                      src={editingItem.imageUrl}
+                      alt="Edit Dish Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <label className="cursor-pointer bg-white text-stone-800 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-stone-100 transition-colors shadow-sm flex items-center gap-1">
+                        <Upload className="w-3.5 h-3.5 text-[#D94A38]" /> Change Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEditItemImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setEditingItem(prev => (prev ? { ...prev, imageUrl: '' } : null))}
+                        className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
+                        title="Remove"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-[#E7E2D9] hover:border-[#D94A38] rounded-2xl p-5 flex flex-col items-center justify-center bg-stone-50 cursor-pointer hover:bg-[#FFF8F6] transition-colors text-center group">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditItemImageUpload}
+                      className="hidden"
+                    />
+                    <Upload className="w-6 h-6 text-stone-400 group-hover:text-[#D94A38] mb-1.5 transition-colors" />
+                    <span className="text-xs font-bold text-stone-700 group-hover:text-[#D94A38] transition-colors">
+                      Upload new food dish photo
+                    </span>
+                    <span className="text-[10px] text-stone-400 mt-0.5">PNG, JPG, WEBP strictly under 1MB</span>
+                  </label>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingItem(null);
+                  }}
+                  className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold py-3.5 rounded-xl transition-colors text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUpdateItem}
+                  disabled={isSubmitting}
+                  className="flex-2 bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold py-3.5 rounded-xl transition-all text-xs shadow-sm disabled:opacity-75 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Save Changes</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

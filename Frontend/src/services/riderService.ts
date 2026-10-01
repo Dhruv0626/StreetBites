@@ -4,6 +4,9 @@ export interface RiderStats {
   riderId: string;
   name: string;
   isOnline: boolean;
+  deliveryRangeKm?: number;
+  autoAccept?: boolean;
+  pushNotifications?: boolean;
   todayEarnings: number;
   completedTripsCount: number;
   timeOnline: string;
@@ -39,14 +42,18 @@ export interface QueueOrder {
   id: string;
   rawId: string;
   timeLeft: number;
+  expiresAt?: string;
   stalls: number;
   items: number;
   distance: string;
+  distanceKm?: number;
   cluster: string;
   drop: string;
   payout: string;
   totalAmount: number;
   paymentMethod: string;
+  status?: string;
+  prepTimeMinutes?: number;
 }
 
 export interface ActiveRouteData {
@@ -89,9 +96,73 @@ export const riderService = {
     return apiRequest<RiderStats>(`/rider/stats${qs}`);
   },
 
-  // Get live orders available in queue
-  getQueue: async () => {
-    return apiRequest<QueueOrder[]>("/rider/queue");
+  // Toggle online / offline duty status
+  toggleOnlineStatus: async (
+    isOnline?: boolean,
+    params?: { riderId?: string; email?: string; lat?: number; lng?: number }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{
+      riderId: string;
+      isOnline: boolean;
+      deliveryRangeKm: number;
+      coordinates?: [number, number];
+    }>(`/rider/toggle-online${qs}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        isOnline,
+        lat: params?.lat,
+        lng: params?.lng,
+      }),
+    });
+  },
+
+  // Update rider settings (delivery radius range, auto-accept, push notifications)
+  updateSettings: async (
+    settings: {
+      deliveryRangeKm?: number;
+      autoAccept?: boolean;
+      pushNotifications?: boolean;
+      lat?: number;
+      lng?: number;
+    },
+    params?: { riderId?: string; email?: string }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{
+      riderId: string;
+      isOnline: boolean;
+      deliveryRangeKm: number;
+      autoAccept: boolean;
+      pushNotifications: boolean;
+    }>(`/rider/settings${qs}`, {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    });
+  },
+
+  // Get live orders available in queue (Online riders within configured radius only)
+  getQueue: async (params?: {
+    riderId?: string;
+    email?: string;
+    lat?: number;
+    lng?: number;
+    range?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    if (params?.lat !== undefined) query.append("lat", String(params.lat));
+    if (params?.lng !== undefined) query.append("lng", String(params.lng));
+    if (params?.range !== undefined) query.append("range", String(params.range));
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<QueueOrder[]>(`/rider/queue${qs}`);
   },
 
   // Accept an order from queue
@@ -101,6 +172,17 @@ export const riderService = {
     if (params?.email) query.append("email", params.email);
     const qs = query.toString() ? `?${query.toString()}` : "";
     return apiRequest<any>(`/rider/orders/${orderId}/accept${qs}`, {
+      method: "PUT",
+    });
+  },
+
+  // Decline / Skip an order from queue (Immediately forwards to next available rider)
+  declineOrder: async (orderId: string, params?: { riderId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<any>(`/rider/orders/${orderId}/decline${qs}`, {
       method: "PUT",
     });
   },
@@ -132,6 +214,25 @@ export const riderService = {
     return apiRequest<{ settledAmount: number; remainingDebt: number }>(
       `/rider/settle-debt${qs}`,
       { method: "POST" }
+    );
+  },
+
+  // Verify OTP and Mark Order Delivered
+  verifyOtpAndComplete: async (
+    orderId: string,
+    otp: string,
+    params?: { riderId?: string; email?: string }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{ message: string; data: any }>(
+      `/rider/orders/${orderId}/verify-otp${qs}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ otp }),
+      }
     );
   },
 };

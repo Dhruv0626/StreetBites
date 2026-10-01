@@ -101,7 +101,7 @@ export const CustomerHeader: React.FC = () => {
   // Format real display labels for header location
   const locationTitle = activeAddress ? activeAddress.label : 'Select Location';
   const locationSubtitle = activeAddress
-    ? (activeAddress.landmark ? `${activeAddress.landmark}, ${activeAddress.detail}` : activeAddress.detail)
+    ? (activeAddress.detail ? `${activeAddress.detail}` : "")
     : 'Add delivery address';
 
   return (
@@ -174,8 +174,8 @@ export const CustomerHeader: React.FC = () => {
                         key={addr.id || addr._id}
                         onClick={() => handleSelectAddress(addr)}
                         className={`w-full text-left p-2.5 rounded-xl border flex items-start gap-2.5 transition-all cursor-pointer ${isSelected
-                            ? 'border-[#D94A38] bg-[#FAF0ED]/50'
-                            : 'border-transparent hover:border-[#EAE4DA] hover:bg-[#FAF7F2]'
+                          ? 'border-[#D94A38] bg-[#FAF0ED]/50'
+                          : 'border-transparent hover:border-[#EAE4DA] hover:bg-[#FAF7F2]'
                           }`}
                       >
                         <div className="w-7 h-7 rounded-lg bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center shrink-0 mt-0.5">
@@ -191,11 +191,6 @@ export const CustomerHeader: React.FC = () => {
                           <p className="text-[10px] text-[#8E8B85] truncate leading-tight mt-0.5">
                             {addr.detail}
                           </p>
-                          {addr.landmark && (
-                            <p className="text-[9px] text-[#5C5954] truncate">
-                              Near {addr.landmark}
-                            </p>
-                          )}
                         </div>
                       </button>
                     );

@@ -27,13 +27,22 @@ export interface IOrder extends Document {
   razorpay_signature?: string | null;
   status: OrderStatus;
   delivery_address: string;
+  delivery_coordinates?: {
+    type?: "Point";
+    coordinates: [number, number];
+  };
   delivery_notes?: string;
   rider_id?: mongoose.Types.ObjectId | null;
   rider_earned_fee?: number;
   platform_fee_earned?: number;
+  current_dispatched_rider_id?: mongoose.Types.ObjectId | null;
+  dispatch_expires_at?: Date | null;
+  rejected_rider_ids?: mongoose.Types.ObjectId[];
   delivery_otp: string;
   cod_amount_held?: number;
   cod_deposit_status?: CodDepositStatus | null;
+  refunded_amount?: number;
+  rejection_note?: string;
   delivered_at?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -109,6 +118,17 @@ const OrderSchema = new mongoose.Schema<IOrder>(
       type: String,
       required: [true, "Delivery address is required"],
     },
+    delivery_coordinates: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [72.5873, 23.0248],
+      },
+    },
     delivery_notes: {
       type: String,
       default: "",
@@ -117,6 +137,19 @@ const OrderSchema = new mongoose.Schema<IOrder>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+    current_dispatched_rider_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    dispatch_expires_at: {
+      type: Date,
+      default: null,
+    },
+    rejected_rider_ids: {
+      type: [mongoose.Schema.Types.ObjectId],
+      default: [],
     },
     rider_earned_fee: {
       type: Number,
@@ -137,6 +170,14 @@ const OrderSchema = new mongoose.Schema<IOrder>(
     cod_deposit_status: {
       type: String,
       enum: ["PENDING_DEPOSIT", "DEPOSITED_TO_ADMIN"],
+      default: null,
+    },
+    refunded_amount: {
+      type: Number,
+      default: 0,
+    },
+    rejection_note: {
+      type: String,
       default: null,
     },
     delivered_at: {

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import onboardingService from '../../services/onboardingService';
+import riderService from '../../services/riderService';
 import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
 export const RiderProfilePage: React.FC = () => {
@@ -20,6 +21,8 @@ export const RiderProfilePage: React.FC = () => {
   const [autoAccept, setAutoAccept] = useState(false);
   const [pushNotifs, setPushNotifs] = useState(true);
   const [radius, setRadius] = useState(5);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsSaveMsg, setSettingsSaveMsg] = useState<string | null>(null);
   const [selectedDocPreview, setSelectedDocPreview] = useState<{ title: string; url: string } | null>(null);
 
   useEffect(() => {
@@ -28,16 +31,26 @@ export const RiderProfilePage: React.FC = () => {
       try {
         setIsLoading(true);
         setFetchError(null);
-        const res = await onboardingService.getRiderDetails({
-          userId: user?._id || user?.id,
-          email: user?.email,
-        });
+        const [onboardRes, statsRes] = await Promise.allSettled([
+          onboardingService.getRiderDetails({
+            userId: user?._id || user?.id,
+            email: user?.email,
+          }),
+          riderService.getStats({
+            riderId: user?._id || user?.id,
+            email: user?.email,
+          }),
+        ]);
 
         if (isMounted) {
-          if (res?.success) {
-            setRiderData(res.data || null);
-          } else {
-            setRiderData(null);
+          if (onboardRes.status === 'fulfilled' && onboardRes.value?.success) {
+            setRiderData(onboardRes.value.data || null);
+          }
+          if (statsRes.status === 'fulfilled' && statsRes.value?.success && statsRes.value.data) {
+            const stats = statsRes.value.data;
+            if (stats.deliveryRangeKm) setRadius(stats.deliveryRangeKm);
+            if (stats.autoAccept !== undefined) setAutoAccept(Boolean(stats.autoAccept));
+            if (stats.pushNotifications !== undefined) setPushNotifs(stats.pushNotifications !== false);
           }
         }
       } catch (err: any) {
@@ -57,6 +70,32 @@ export const RiderProfilePage: React.FC = () => {
       isMounted = false;
     };
   }, [user]);
+
+  const handleSaveSettings = async (newRadius = radius, newAuto = autoAccept, newPush = pushNotifs) => {
+    try {
+      setIsSavingSettings(true);
+      setSettingsSaveMsg(null);
+      const res = await riderService.updateSettings(
+        {
+          deliveryRangeKm: newRadius,
+          autoAccept: newAuto,
+          pushNotifications: newPush,
+        },
+        {
+          riderId: user?._id || user?.id,
+          email: user?.email,
+        }
+      );
+      if (res.success) {
+        setSettingsSaveMsg('Settings updated successfully!');
+        setTimeout(() => setSettingsSaveMsg(null), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -288,8 +327,18 @@ export const RiderProfilePage: React.FC = () => {
             </div>
 
             {/* Dispatch Settings */}
-            <div className="bg-white border border-[#EFEBE4] rounded-3xl p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-stone-900 mb-6">Dispatch & Delivery Settings</h3>
+            <div className="bg-white border border-[#EFEBE4] rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900">Dispatch & Delivery Settings</h3>
+                  <p className="text-xs text-stone-500">Configure your order reception radius and preferences.</p>
+                </div>
+                {settingsSaveMsg && (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full animate-fadeIn">
+                    ✓ {settingsSaveMsg}
+                  </span>
+                )}
+              </div>
 
               <div className="space-y-6">
                 {/* Toggles */}
@@ -303,7 +352,11 @@ export const RiderProfilePage: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setAutoAccept(!autoAccept)}
+                    onClick={() => {
+                      const next = !autoAccept;
+                      setAutoAccept(next);
+                      handleSaveSettings(radius, next, pushNotifs);
+                    }}
                     className={`relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0 ${autoAccept ? 'bg-[#D94A38]' : 'bg-stone-200'}`}
                   >
                     <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform ${autoAccept ? 'translate-x-5' : 'translate-x-0'} shadow-sm`} />
@@ -320,7 +373,11 @@ export const RiderProfilePage: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setPushNotifs(!pushNotifs)}
+                    onClick={() => {
+                      const next = !pushNotifs;
+                      setPushNotifs(next);
+                      handleSaveSettings(radius, autoAccept, next);
+                    }}
                     className={`relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0 ${pushNotifs ? 'bg-[#D94A38]' : 'bg-stone-200'}`}
                   >
                     <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform ${pushNotifs ? 'translate-x-5' : 'translate-x-0'} shadow-sm`} />
@@ -332,21 +389,42 @@ export const RiderProfilePage: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Map className="w-4 h-4 text-stone-500" />
-                      <h4 className="font-bold text-stone-900 text-sm">Max Delivery Radius</h4>
+                      <div>
+                        <h4 className="font-bold text-stone-900 text-sm">Max Delivery Radius</h4>
+                        <span className="text-[11px] text-stone-500">Only orders within this distance from your location will be shown.</span>
+                      </div>
                     </div>
-                    <span className="font-black text-[#D94A38]">{radius} km</span>
+                    <span className="font-black text-[#D94A38] text-base px-2.5 py-1 bg-red-50 rounded-lg border border-red-100">{radius} km</span>
                   </div>
                   <input
                     type="range"
-                    min="2" max="15" step="1"
+                    min="1" max="25" step="1"
                     value={radius}
-                    onChange={(e) => setRadius(parseInt(e.target.value))}
-                    className="w-full accent-[#D94A38] h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setRadius(val);
+                    }}
+                    onMouseUp={() => handleSaveSettings(radius, autoAccept, pushNotifs)}
+                    onTouchEnd={() => handleSaveSettings(radius, autoAccept, pushNotifs)}
+                    className="w-full accent-[#D94A38] h-2.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
                   />
                   <div className="flex justify-between text-xs font-bold text-stone-400 mt-2">
-                    <span>2 km (Local Cluster)</span>
-                    <span>15 km (Extended City)</span>
+                    <span>1 km (Local Cluster only)</span>
+                    <span>10 km (Standard)</span>
+                    <span>25 km (Whole City)</span>
                   </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveSettings(radius, autoAccept, pushNotifs)}
+                    disabled={isSavingSettings}
+                    className="bg-stone-900 hover:bg-black text-white text-xs font-bold py-2.5 px-5 rounded-xl transition-colors flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                  >
+                    {isSavingSettings ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {isSavingSettings ? 'Saving...' : 'Save Settings'}
+                  </button>
                 </div>
 
               </div>

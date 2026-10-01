@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User as UserIcon,
   Settings,
@@ -17,6 +17,7 @@ import {
   Navigation,
   Loader2,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
@@ -36,6 +37,10 @@ export const Profile: React.FC = () => {
   const { user, isAuthenticated, logout, updateProfile, refreshProfile } = useAuth();
   const { favorites } = useFavorites();
   const [openSection, setOpenSection] = useState<string | null>(null);
+
+  const profileHouseNoRef = useRef<HTMLInputElement | null>(null);
+  const profileLandmarkRef = useRef<HTMLInputElement | null>(null);
+  const [newAddressGpsCoords, setNewAddressGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   // Editable Personal Details State
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
@@ -207,7 +212,22 @@ export const Profile: React.FC = () => {
   };
 
   const handleSaveAddress = async () => {
-    if (!editingAddressId || (!editAddressData.area.trim() && !editAddressData.house_no.trim())) return;
+    if (!editingAddressId) return;
+
+    if (!editAddressData.house_no.trim()) {
+      setAddressWarning('Please enter your House no / Apartment / Building name.');
+      return;
+    }
+    if (!editAddressData.landmark.trim()) {
+      setAddressWarning('Please enter a nearby Landmark for easy delivery.');
+      return;
+    }
+    if (!editAddressData.area.trim()) {
+      setAddressWarning('Please enter your Area or Locality.');
+      return;
+    }
+
+    setAddressWarning(null);
 
     let geocodedLat: number | undefined;
     let geocodedLng: number | undefined;
@@ -226,12 +246,15 @@ export const Profile: React.FC = () => {
       // Backend fallback geocoding will handle it
     }
 
+    const cleanCityPin = editAddressData.pincode.trim()
+      ? `${editAddressData.city.trim() || 'Ahmedabad'} - ${editAddressData.pincode.trim()}`
+      : editAddressData.city.trim() || 'Ahmedabad';
+
     const fullDetail = [
       editAddressData.house_no.trim(),
       editAddressData.landmark.trim(),
       editAddressData.area.trim(),
-      editAddressData.city.trim(),
-      editAddressData.pincode.trim(),
+      cleanCityPin,
     ]
       .filter(Boolean)
       .join(', ');
@@ -240,10 +263,10 @@ export const Profile: React.FC = () => {
       label: editAddressData.label || 'Home',
       detail: fullDetail,
       house_no: editAddressData.house_no.trim(),
+      landmark: editAddressData.landmark.trim(),
       area: editAddressData.area.trim(),
       city: editAddressData.city.trim() || 'Ahmedabad',
       pincode: editAddressData.pincode.trim(),
-      landmark: editAddressData.landmark ? editAddressData.landmark.trim() : undefined,
       lat: geocodedLat,
       lng: geocodedLng,
     });
@@ -252,31 +275,52 @@ export const Profile: React.FC = () => {
   };
 
   const handleAddNewAddress = async () => {
-    if (!newAddressData.area.trim() && !newAddressData.house_no.trim()) return;
-
-    let geocodedLat: number | undefined;
-    let geocodedLng: number | undefined;
-    try {
-      const geo = await geocodeAddressText({
-        area: newAddressData.area.trim(),
-        city: newAddressData.city.trim() || 'Ahmedabad',
-        pincode: newAddressData.pincode.trim(),
-        landmark: newAddressData.landmark.trim(),
-      });
-      if (geo) {
-        geocodedLat = geo.lat;
-        geocodedLng = geo.lng;
-      }
-    } catch {
-      // Backend fallback geocoding will handle it
+    if (!newAddressData.house_no.trim()) {
+      setAddressWarning('Add the House no./apartment and landmark for get easy delivery');
+      profileHouseNoRef.current?.focus();
+      return;
     }
+    if (!newAddressData.landmark.trim()) {
+      setAddressWarning('Please add a landmark to complete your address and get easy delivery.');
+      profileLandmarkRef.current?.focus();
+      return;
+    }
+    if (!newAddressData.area.trim()) {
+      setAddressWarning('Please enter your Area or Locality.');
+      return;
+    }
+
+    setAddressWarning(null);
+
+    let finalLat = newAddressGpsCoords?.lat;
+    let finalLng = newAddressGpsCoords?.lng;
+
+    if (!finalLat || !finalLng) {
+      try {
+        const geo = await geocodeAddressText({
+          area: newAddressData.area.trim(),
+          city: newAddressData.city.trim() || 'Ahmedabad',
+          pincode: newAddressData.pincode.trim(),
+          landmark: newAddressData.landmark.trim(),
+        });
+        if (geo) {
+          finalLat = geo.lat;
+          finalLng = geo.lng;
+        }
+      } catch {
+        // Backend fallback geocoding will handle it
+      }
+    }
+
+    const cleanCityPin = newAddressData.pincode.trim()
+      ? `${newAddressData.city.trim() || 'Ahmedabad'} - ${newAddressData.pincode.trim()}`
+      : newAddressData.city.trim() || 'Ahmedabad';
 
     const fullDetail = [
       newAddressData.house_no.trim(),
       newAddressData.landmark.trim(),
       newAddressData.area.trim(),
-      newAddressData.city.trim(),
-      newAddressData.pincode.trim(),
+      cleanCityPin,
     ]
       .filter(Boolean)
       .join(', ');
@@ -285,13 +329,13 @@ export const Profile: React.FC = () => {
       label: newAddressData.label || 'Home',
       detail: fullDetail,
       house_no: newAddressData.house_no.trim(),
+      landmark: newAddressData.landmark.trim(),
       area: newAddressData.area.trim(),
       city: newAddressData.city.trim() || 'Ahmedabad',
       pincode: newAddressData.pincode.trim(),
-      landmark: newAddressData.landmark.trim() ? newAddressData.landmark.trim() : undefined,
       is_primary: addresses.length === 0,
-      lat: geocodedLat,
-      lng: geocodedLng,
+      lat: finalLat,
+      lng: finalLng,
     });
     setNewAddressData({
       label: 'Home',
@@ -301,11 +345,14 @@ export const Profile: React.FC = () => {
       city: 'Ahmedabad',
       pincode: '',
     });
+    setNewAddressGpsCoords(null);
+    setProfileGpsNotice(null);
     setIsAddingAddress(false);
     await loadAddresses();
   };
 
   const [isGpsLocatingProfile, setIsGpsLocatingProfile] = useState(false);
+  const [profileGpsNotice, setProfileGpsNotice] = useState<string | null>(null);
 
   const handleAddGpsAddressProfile = () => {
     const isEnabled = localStorage.getItem('streetbites_location_enabled') === 'true';
@@ -325,29 +372,39 @@ export const Profile: React.FC = () => {
       async (position) => {
         const detectedLat = position.coords.latitude;
         const detectedLng = position.coords.longitude;
+        setNewAddressGpsCoords({ lat: detectedLat, lng: detectedLng });
         localStorage.setItem('streetbites_location_permission', 'granted');
         localStorage.setItem('streetbites_location_enabled', 'true');
 
-        // Reverse geocode to get clean Area & City (e.g. "Chandkheda, Ahmedabad")
+        // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
         const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
-        const detectedArea = geoInfo.area;
-        const detectedCity = geoInfo.city;
-        const detectedPincode = geoInfo.pincode;
-        const formattedAddress = geoInfo.formattedAddress;
+        const detectedArea = geoInfo.area || '';
+        const detectedCity = geoInfo.city || 'Ahmedabad';
+        const detectedPincode = geoInfo.pincode || '';
 
-        await createCustomerAddress({
-          label: 'Home',
-          detail: formattedAddress,
+        // Auto-fill Area, City & Pincode in form - DO NOT SAVE DIRECTLY!
+        setNewAddressData((prev) => ({
+          ...prev,
           area: detectedArea,
           city: detectedCity,
           pincode: detectedPincode,
-          is_primary: addresses.length === 0,
-          lat: detectedLat,
-          lng: detectedLng,
-        });
+        }));
+
         setIsGpsLocatingProfile(false);
-        setIsAddingAddress(false);
-        await loadAddresses();
+        const pinText = detectedPincode ? ` - ${detectedPincode}` : '';
+        setProfileGpsNotice(
+          `📍 GPS Location detected: ${detectedArea}, ${detectedCity}${pinText}. Add the House no./apartment and landmark for get easy delivery.`
+        );
+
+        // Auto-focus House No. input for immediate entry
+        setTimeout(() => {
+          profileHouseNoRef.current?.focus();
+        }, 150);
+
+        // Hide notice after 8 seconds
+        setTimeout(() => {
+          setProfileGpsNotice(null);
+        }, 8000);
       },
       (err) => {
         setIsGpsLocatingProfile(false);
@@ -691,11 +748,7 @@ export const Profile: React.FC = () => {
                                 )}
                               </div>
                               <p className="text-[11px] text-[#8E8B85] leading-relaxed">{addr.detail}</p>
-                              {addr.landmark && (
-                                <p className="text-[10px] text-stone-500 mt-0.5">
-                                  <span className="font-semibold">Landmark:</span> {addr.landmark}
-                                </p>
-                              )}
+                             
                               <div className="flex gap-3 mt-2">
                                 {!addr.is_primary && (
                                   <button
@@ -760,7 +813,7 @@ export const Profile: React.FC = () => {
                           {isGpsLocatingProfile ? (
                             <>
                               <Loader2 className="w-3 h-3 animate-spin" />
-                              <span>Saving GPS...</span>
+                              <span>Locating GPS...</span>
                             </>
                           ) : (
                             <>
@@ -770,6 +823,14 @@ export const Profile: React.FC = () => {
                           )}
                         </button>
                       </div>
+
+                      {/* GPS Detected Notice (Visible for 8s after live GPS detection) */}
+                      {profileGpsNotice && (
+                        <div className="p-3 text-xs bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-xl font-medium flex items-start gap-2.5 shadow-3xs animate-fadeIn">
+                          <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div className="flex-1 leading-relaxed">{profileGpsNotice}</div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
@@ -804,6 +865,7 @@ export const Profile: React.FC = () => {
                           Flat / House / Building Name <span className="text-[#D94A38]">*</span>
                         </label>
                         <input
+                          ref={profileHouseNoRef}
                           type="text"
                           value={newAddressData.house_no}
                           onChange={(e) => setNewAddressData({ ...newAddressData, house_no: e.target.value })}
@@ -812,12 +874,13 @@ export const Profile: React.FC = () => {
                         />
                       </div>
 
-                      {/* Landmark (Optional - no asterisk, no Optional text) */}
+                      {/* Landmark */}
                       <div>
                         <label className="text-[10px] text-[#8E8B85] uppercase tracking-wider block font-bold mb-1">
-                          Landmark
+                          Landmark <span className="text-[#D94A38]">*</span>
                         </label>
                         <input
+                          ref={profileLandmarkRef}
                           type="text"
                           value={newAddressData.landmark}
                           onChange={(e) => setNewAddressData({ ...newAddressData, landmark: e.target.value })}

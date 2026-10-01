@@ -50,31 +50,26 @@ export const getAddresses = async (req: AuthenticatedRequest, res: Response): Pr
     const formatted = addresses.map((addr: any) => {
       const userRef = addr.customer_id && typeof addr.customer_id === "object" ? addr.customer_id : null;
 
-      // Strip any legacy 'Live GPS Location (lat, lng)' coordinates from user-facing detail
-      let displayDetail = (addr.detail || "").replace(/Live GPS Location\s*\([^)]*\),?\s*/gi, "").trim();
+      // Strip legacy 'Live GPS Location' and Taluka tokens from user-facing detail
+      let displayDetail = (addr.detail || "")
+        .replace(/Live GPS Location\s*\([^)]*\),?\s*/gi, "")
+        .replace(/\b\w+\s+taluka\b,?\s*/gi, "")
+        .replace(/\btaluka\b,?\s*/gi, "")
+        .replace(/,\s*,/g, ", ")
+        .trim();
       if (displayDetail.startsWith(",")) displayDetail = displayDetail.substring(1).trim();
 
-      // If displayDetail is only city name or empty, combine Area and City
+      // If displayDetail is empty or just city name, construct standard format: House no, Landmark, Area, City - Pincode
       if (!displayDetail || displayDetail.toLowerCase() === (addr.city || "ahmedabad").toLowerCase()) {
-        const parts = [addr.house_no, addr.landmark, addr.area, addr.city, addr.pincode]
+        const cityPin = addr.pincode ? `${addr.city || "Ahmedabad"} - ${addr.pincode}` : addr.city || "Ahmedabad";
+        const parts = [addr.house_no, addr.landmark, addr.area, cityPin]
           .map((p: any) => (p || "").trim())
           .filter(Boolean);
         const unique: string[] = [];
         for (const p of parts) {
           if (!unique.includes(p)) unique.push(p);
         }
-        displayDetail = unique.join(", ") || `${addr.area ? `${addr.area}, ` : ""}${addr.city || "Ahmedabad"}`;
-      } else if (addr.area && addr.area.toLowerCase() !== (addr.city || "").toLowerCase() && !displayDetail.toLowerCase().includes(addr.area.toLowerCase())) {
-        displayDetail = `${addr.area}, ${displayDetail}`;
-      }
-
-      // If displayDetail contains a Taluka name but lacks the city name, append the city name
-      const cityName = addr.city || "Ahmedabad";
-      if (
-        displayDetail.toLowerCase().includes("taluka") &&
-        !displayDetail.toLowerCase().includes(cityName.toLowerCase())
-      ) {
-        displayDetail = `${displayDetail}, ${cityName}`;
+        displayDetail = unique.join(", ") || `${addr.area ? `${addr.area}, ` : ""}${cityPin}`;
       }
 
       return {
@@ -110,10 +105,63 @@ export const getAddresses = async (req: AuthenticatedRequest, res: Response): Pr
   }
 };
 
+export const AHMEDABAD_LOCALITIES: Record<string, [number, number]> = {
+  "manek chowk": [72.5873, 23.0248],
+  "chandkheda": [72.5815, 23.1118],
+  "vastrapur": [72.5284, 23.0360],
+  "prahlad nagar": [72.5085, 23.0076],
+  "prahladnagar": [72.5085, 23.0076],
+  "law garden": [72.5574, 23.0272],
+  "bodakdev": [72.5074, 23.0373],
+  "satellite": [72.5204, 23.0180],
+  "thaltej": [72.5042, 23.0505],
+  "navrangpura": [72.5567, 23.0370],
+  "naranpura": [72.5508, 23.0560],
+  "memnagar": [72.5358, 23.0514],
+  "gota": [72.5385, 23.1098],
+  "bopal": [72.4645, 23.0338],
+  "south bopal": [72.4600, 23.0200],
+  "maninagar": [72.6034, 22.9978],
+  "paldi": [72.5620, 23.0125],
+  "motera": [72.5960, 23.0988],
+  "sabarmati": [72.5828, 23.0768],
+  "nikol": [72.6685, 23.0450],
+  "naroda": [72.6560, 23.0694],
+  "shahibaug": [72.5938, 23.0563],
+  "sola": [72.5180, 23.0780],
+  "science city": [72.4980, 23.0750],
+  "ghatlodia": [72.5360, 23.0710],
+  "ranip": [72.5680, 23.0790],
+  "vejalpur": [72.5230, 23.0060],
+  "jodhpur": [72.5200, 23.0240],
+  "ambawadi": [72.5480, 23.0210],
+  "usmanpura": [72.5710, 23.0470],
+  "chandlodiya": [72.5450, 23.0800],
+  "gulbai tekra": [72.5450, 23.0280],
+  "sg highway": [72.5050, 23.0350],
+  "s.g. highway": [72.5050, 23.0350],
+  "hirawadi": [72.6450, 23.0540],
+  "bapunagar": [72.6320, 23.0370],
+  "odhav": [72.6620, 23.0180],
+  "vastral": [72.6580, 22.9980],
+  "c.g. road": [72.5560, 23.0300],
+  "cg road": [72.5560, 23.0300],
+  "ashram road": [72.5720, 23.0380],
+  "drive in road": [72.5320, 23.0480],
+  "sindhu bhavan": [72.4970, 23.0450],
+  "sindhubhavan": [72.4970, 23.0450],
+  "shilaj": [72.4700, 23.0600],
+  "iscon": [72.5060, 23.0260],
+  "iskcon": [72.5060, 23.0260],
+  "gurukul": [72.5310, 23.0500],
+  "panjrapole": [72.5460, 23.0260],
+  "iim": [72.5360, 23.0310],
+};
+
 /**
- * Helper to geocode address text using TomTom (with Nominatim fallback)
+ * Helper to geocode address text using TomTom (with Nominatim & Localities fallback)
  */
-const geocodeAddressBackend = async (options: {
+export const geocodeAddressBackend = async (options: {
   area?: string;
   city?: string;
   pincode?: string;
@@ -122,6 +170,19 @@ const geocodeAddressBackend = async (options: {
 }): Promise<{ lat: number; lng: number } | null> => {
   const { area, city = "Ahmedabad", pincode, landmark, detail } = options;
 
+  const combinedText = `${detail || ""} ${area || ""} ${landmark || ""}`.toLowerCase();
+
+  // 1. Instant Locality Dictionary Match
+  for (const [localityName, coords] of Object.entries(AHMEDABAD_LOCALITIES)) {
+    if (combinedText.includes(localityName)) {
+      return {
+        lng: coords[0],
+        lat: coords[1],
+      };
+    }
+  }
+
+  // 2. Build candidate queries from most specific clean locality
   const candidateQueries: string[] = [];
 
   if (area && area.trim()) {
@@ -131,12 +192,17 @@ const geocodeAddressBackend = async (options: {
     candidateQueries.push([landmark.trim(), area?.trim(), city, "Gujarat, India"].filter(Boolean).join(", "));
   }
   if (detail && detail.trim()) {
+    // Strip flat/house number prefix e.g. "Flat 102, Shivalik..."
+    const cleanDetail = detail.replace(/^(flat|house|block|room|plot|shop|b-\d+|a-\d+|\d+)[^,]*,\s*/i, "").trim();
+    if (cleanDetail && cleanDetail !== detail) {
+      candidateQueries.push([cleanDetail, city, "Gujarat, India"].filter(Boolean).join(", "));
+    }
     candidateQueries.push([detail.trim(), city, "Gujarat, India"].filter(Boolean).join(", "));
   }
 
   if (candidateQueries.length === 0) return null;
 
-  const tomtomKey = process.env.TOMTOM_API_KEY || "";
+  const tomtomKey = process.env.TOMTOM_API_KEY || "pKaNxsGAgRWmxEehTjy8EIxVWGsfSIc3";
 
   for (const q of candidateQueries) {
     try {
@@ -196,15 +262,21 @@ export const createAddress = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    // Clean and build full detail without repeating coordinates or duplicate tokens
-    let cleanDetail = (detail || "").replace(/Live GPS Location\s*\([^)]*\),?\s*/gi, "").trim();
+    // Clean and build full detail without repeating coordinates, Taluka, or duplicate tokens
+    let cleanDetail = (detail || "")
+      .replace(/Live GPS Location\s*\([^)]*\),?\s*/gi, "")
+      .replace(/\b\w+\s+taluka\b,?\s*/gi, "")
+      .replace(/\btaluka\b,?\s*/gi, "")
+      .replace(/,\s*,/g, ", ")
+      .trim();
     if (cleanDetail.startsWith(",")) cleanDetail = cleanDetail.substring(1).trim();
 
     let fullDetail = "";
     if (cleanDetail && (cleanDetail.includes(area || "") || !area)) {
       fullDetail = cleanDetail;
     } else {
-      const parts = [house_no, landmark, cleanDetail, area, city, pincode]
+      const cityPin = pincode ? `${city || "Ahmedabad"} - ${pincode}` : city || "Ahmedabad";
+      const parts = [house_no, landmark, area, cityPin]
         .map((p) => (p || "").trim())
         .filter(Boolean);
       const uniqueParts: string[] = [];
@@ -217,15 +289,6 @@ export const createAddress = async (req: AuthenticatedRequest, res: Response): P
     }
     if (!fullDetail) {
       fullDetail = [area, city].filter(Boolean).join(", ") || "Ahmedabad, Gujarat";
-    }
-
-    // If fullDetail contains a Taluka name but missing city name, append city name
-    const resolvedCity = (city || "Ahmedabad").trim();
-    if (
-      fullDetail.toLowerCase().includes("taluka") &&
-      !fullDetail.toLowerCase().includes(resolvedCity.toLowerCase())
-    ) {
-      fullDetail = `${fullDetail}, ${resolvedCity}`;
     }
 
     if (!label || (!detail && !area)) {

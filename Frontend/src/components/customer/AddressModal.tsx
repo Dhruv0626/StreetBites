@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, MapPin, Navigation, Home, Briefcase, Loader2, Check, AlertTriangle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, MapPin, Navigation, Home, Briefcase, Loader2, Check, AlertTriangle, Sparkles } from 'lucide-react';
 import { createCustomerAddress } from '../../services/addressService';
 import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding';
 import type { AddressItem } from '../../types';
@@ -30,20 +30,23 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   const [lat, setLat] = useState<number>(23.0225);
   const [lng, setLng] = useState<number>(72.5714);
   const [hasGpsLocked, setHasGpsLocked] = useState<boolean>(false);
-  const [isGpsSaving, setIsGpsSaving] = useState(false);
+  const [isGpsDetecting, setIsGpsDetecting] = useState(false);
   const [gpsStatusMessage, setGpsStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
 
+  const houseNoInputRef = useRef<HTMLInputElement | null>(null);
+  const landmarkInputRef = useRef<HTMLInputElement | null>(null);
+
   if (!isOpen) return null;
 
-  // 1-Tap Live GPS: Pinpoints device coordinates, reverse geocodes, and drops entry directly in MongoDB
-  const handleSaveFromGpsDirectly = () => {
+  // 1-Tap Live GPS: Pinpoints device coordinates, auto-fills Area, City & Pincode (without Taluka), and focuses House No.
+  const handleDetectGpsAndAutoFill = () => {
     // Check if user has enabled live location in App Settings
     const isLocationEnabled = localStorage.getItem('streetbites_location_enabled') === 'true';
     if (!isLocationEnabled) {
-      setWarningMsg('Enable the Live location first from your Profile -> App Settings, or enter your address manually.');
+      setWarningMsg('Enable Live location first from your Profile -> App Settings, or enter your address manually.');
       setErrorMsg(null);
       return;
     }
@@ -54,7 +57,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
       return;
     }
 
-    setIsGpsSaving(true);
+    setIsGpsDetecting(true);
     setErrorMsg(null);
     setWarningMsg(null);
     setGpsStatusMessage('Pinpointing your live GPS coordinates...');
@@ -69,41 +72,36 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         localStorage.setItem('streetbites_location_permission', 'granted');
         localStorage.setItem('streetbites_location_enabled', 'true');
 
-        // Reverse geocode to get clean Area & City (e.g. "Chandkheda, Ahmedabad")
+        // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
         const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
-        const detectedArea = geoInfo.area;
-        const detectedCity = geoInfo.city;
-        const detectedPincode = geoInfo.pincode;
-        const formattedAddress = geoInfo.formattedAddress;
+        const detectedArea = geoInfo.area || '';
+        const detectedCity = geoInfo.city || 'Ahmedabad';
+        const detectedPincode = geoInfo.pincode || '';
 
-        setGpsStatusMessage(`📍 Located: ${formattedAddress}. Saving to database...`);
+        // Auto-fill Area, City, and Pincode
+        if (detectedArea) setArea(detectedArea);
+        if (detectedCity) setCity(detectedCity);
+        if (detectedPincode) setPincode(detectedPincode);
 
-        try {
-          const savedAddress = await createCustomerAddress({
-            label: 'Home',
-            detail: formattedAddress,
-            area: detectedArea,
-            city: detectedCity,
-            pincode: detectedPincode,
-            lat: detectedLat,
-            lng: detectedLng,
-            is_primary: true,
-          });
+        const pinText = detectedPincode ? ` - ${detectedPincode}` : '';
+        setGpsStatusMessage(
+          `📍 GPS Location detected: ${detectedArea}, ${detectedCity}${pinText}. Add the House no./apartment and landmark for get easy delivery.`
+        );
 
-          if (savedAddress) {
-            onAddressCreated(savedAddress);
-            onClose();
-          } else {
-            setErrorMsg('Failed to save GPS address to database. Please enter manually.');
-          }
-        } catch (saveErr: any) {
-          setErrorMsg(saveErr?.message || 'Failed to save address in database.');
-        } finally {
-          setIsGpsSaving(false);
-        }
+        setIsGpsDetecting(false);
+
+        // Auto-focus House No. input for immediate manual entry
+        setTimeout(() => {
+          houseNoInputRef.current?.focus();
+        }, 150);
+
+        // Auto-dismiss GPS status message after 8 seconds
+        setTimeout(() => {
+          setGpsStatusMessage(null);
+        }, 8000);
       },
       (err) => {
-        setIsGpsSaving(false);
+        setIsGpsDetecting(false);
         console.warn('GPS detection error:', err);
         localStorage.setItem('streetbites_location_permission', 'denied');
         setErrorMsg('GPS access denied or unavailable. Please allow permission or enter address manually.');
@@ -114,12 +112,19 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!area.trim()) {
-      setErrorMsg('Please enter your Area or Locality.');
+
+    if (!houseNo.trim()) {
+      setErrorMsg('Add the House no./apartment and landmark for get easy delivery');
+      houseNoInputRef.current?.focus();
       return;
     }
-    if (!houseNo.trim()) {
-      setErrorMsg('Please enter your House / Flat / Building number for delivery.');
+    if (!landmark.trim()) {
+      setErrorMsg('Please add a landmark to complete your address and get easy delivery.');
+      landmarkInputRef.current?.focus();
+      return;
+    }
+    if (!area.trim()) {
+      setErrorMsg('Please enter or GPS-detect your Area / Locality.');
       return;
     }
 
@@ -147,7 +152,17 @@ export const AddressModal: React.FC<AddressModalProps> = ({
       }
     }
 
-    const fullDetail = [houseNo.trim(), landmark.trim(), area.trim(), city.trim(), pincode.trim()]
+    // Format: House no/appartment , landmark , area , city - pincode
+    const cleanCityPin = pincode.trim()
+      ? `${city.trim() || 'Ahmedabad'} - ${pincode.trim()}`
+      : city.trim() || 'Ahmedabad';
+
+    const fullDetail = [
+      houseNo.trim(),
+      landmark.trim(),
+      area.trim(),
+      cleanCityPin,
+    ]
       .filter(Boolean)
       .join(', ');
 
@@ -156,10 +171,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         label,
         detail: fullDetail,
         house_no: houseNo.trim(),
+        landmark: landmark.trim(),
         area: area.trim(),
         city: city.trim() || 'Ahmedabad',
         pincode: pincode.trim(),
-        landmark: landmark.trim() ? landmark.trim() : undefined,
         lat: finalLat,
         lng: finalLng,
         is_primary: isPrimary,
@@ -174,6 +189,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         setLandmark('');
         setPincode('');
         setHasGpsLocked(false);
+        setGpsStatusMessage(null);
       } else {
         setErrorMsg('Could not save address. Please check your connection and try again.');
       }
@@ -231,19 +247,19 @@ export const AddressModal: React.FC<AddressModalProps> = ({
             <div className="p-3.5 text-xs bg-amber-50 text-amber-900 border border-amber-300 rounded-xl font-medium flex items-start gap-2.5 shadow-3xs animate-fadeIn">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <strong className="font-bold block text-amber-950 mb-0.5">Enable the Live location first</strong>
+                <strong className="font-bold block text-amber-950 mb-0.5">Enable Live Location</strong>
                 <span>{warningMsg}</span>
               </div>
             </div>
           )}
 
           {errorMsg && (
-            <div className="p-3 text-xs bg-red-50 text-red-700 border border-red-200 rounded-xl font-medium">
+            <div className="p-3 text-xs bg-red-50 text-red-700 border border-red-200 rounded-xl font-medium animate-fadeIn">
               {errorMsg}
             </div>
           )}
 
-          {/* ─── Dedicated Separate Option: Live GPS ─── */}
+          {/* ─── 1-Tap Live GPS Auto-Fill Banner ─── */}
           <div className="bg-[#FAF0ED] border-2 border-[#D94A38]/30 rounded-2xl p-4 transition-all hover:border-[#D94A38] shadow-3xs">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -254,21 +270,24 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <h4 className="text-xs font-black text-[#1C1917] flex items-center gap-1.5">
                     <span>Use Live GPS Location</span>
                     <span className="text-[9px] bg-[#D94A38] text-white font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
-                      Auto
+                      Auto-Fill
                     </span>
                   </h4>
+                  <p className="text-[11px] text-[#8E8B85] mt-0.5">
+                    Auto-fills Area, City & Pin code · Locks exact GPS
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={handleSaveFromGpsDirectly}
-                disabled={isGpsSaving}
+                onClick={handleDetectGpsAndAutoFill}
+                disabled={isGpsDetecting}
                 className="bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer border-0 disabled:opacity-50"
               >
-                {isGpsSaving ? (
+                {isGpsDetecting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Saving...</span>
+                    <span>Locating...</span>
                   </>
                 ) : (
                   <>
@@ -278,23 +297,18 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                 )}
               </button>
             </div>
+
+            {/* GPS Detection Confirmation Banner */}
             {gpsStatusMessage && (
-              <p className="mt-2 text-[10px] text-[#2E7D32] font-bold flex items-center gap-1 bg-white/80 p-2 rounded-lg border border-[#D94A38]/20">
-                {gpsStatusMessage}
-              </p>
+              <div className="mt-3 text-[11px] text-[#166534] font-medium flex items-start gap-2 bg-[#F0FDF4] p-2.5 rounded-xl border border-[#BBF7D0] animate-fadeIn">
+                <Sparkles className="w-4 h-4 text-[#16A34A] shrink-0 mt-0.5" />
+                <span>{gpsStatusMessage}</span>
+              </div>
             )}
           </div>
 
-          {/* Divider */}
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-[#EAE4DA]"></div>
-            <span className="shrink-0 mx-3 text-[10px] font-black tracking-wider text-[#A09B90] uppercase">
-              Or Enter Details Manually
-            </span>
-            <div className="flex-grow border-t border-[#EAE4DA]"></div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4 pt-1">
             {/* Label Type Selector */}
             <div>
               <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-2">
@@ -340,11 +354,50 @@ export const AddressModal: React.FC<AddressModalProps> = ({
               </div>
             </div>
 
-            {/* 1. Area / Locality (Compulsory *) */}
+            {/* 1. Flat / House No / Building (Compulsory * - Filled manually by user) */}
             <div>
               <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-1.5">
-                Area / Locality / Sector <span className="text-[#D94A38]">*</span>
+                Flat / House / Building Name <span className="text-[#D94A38]">*</span>
               </label>
+              <input
+                ref={houseNoInputRef}
+                type="text"
+                value={houseNo}
+                onChange={(e) => setHouseNo(e.target.value)}
+                placeholder="e.g. Flat 402, Block B, Shivalik Heights"
+                required
+                className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all font-medium"
+              />
+            </div>
+
+            {/* 2. Landmark (Compulsory * - Filled manually by user) */}
+            <div>
+              <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-1.5">
+                Landmark <span className="text-[#D94A38]">*</span>
+              </label>
+              <input
+                ref={landmarkInputRef}
+                type="text"
+                value={landmark}
+                onChange={(e) => setLandmark(e.target.value)}
+                placeholder="e.g. Near Swaminarayan Temple, Opp Lake"
+                required
+                className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all font-medium"
+              />
+            </div>
+
+            {/* 3. Area / Locality (Auto-filled by GPS or typed manually) */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider">
+                  Area / Locality <span className="text-[#D94A38]">*</span>
+                </label>
+                {hasGpsLocked && (
+                  <span className="text-[9px] font-bold text-[#16A34A] bg-[#DCFCE7] px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Check className="w-2.5 h-2.5" /> GPS Locked
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={area}
@@ -352,42 +405,13 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   setArea(e.target.value);
                   setHasGpsLocked(false);
                 }}
-                placeholder="e.g. Vastrapur, Prahlad Nagar, Bodakdev"
+                placeholder="e.g. Vastrapur, Bodakdev, Prahlad Nagar"
                 required
                 className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] font-semibold placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all"
               />
             </div>
 
-            {/* 2. Flat / House No / Building (Compulsory *) */}
-            <div>
-              <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-1.5">
-                Flat / House / Floor / Building <span className="text-[#D94A38]">*</span>
-              </label>
-              <input
-                type="text"
-                value={houseNo}
-                onChange={(e) => setHouseNo(e.target.value)}
-                placeholder="e.g. Flat 402, Block B, Shivalik Heights"
-                required
-                className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all"
-              />
-            </div>
-
-            {/* 3. Landmark & Street (Optional - No asterisk, No "Optional" text) */}
-            <div>
-              <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-1.5">
-                Nearby Landmark / Street
-              </label>
-              <input
-                type="text"
-                value={landmark}
-                onChange={(e) => setLandmark(e.target.value)}
-                placeholder="e.g. Near Alpha One Mall, Opposite Vastrapur Lake"
-                className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all"
-              />
-            </div>
-
-            {/* 4. City & Pincode in 2 Columns (Optional / pre-filled - No asterisk, No "Optional" text) */}
+            {/* 4. City & Pincode in 2 Columns (Auto-filled by GPS or edited manually) */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-[#8E8B85] uppercase tracking-wider mb-1.5">
@@ -411,9 +435,22 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
                   placeholder="e.g. 380015"
-                  className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all"
+                  className="w-full bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl px-3 py-2.5 text-xs text-[#1C1917] placeholder-[#A09B90] focus:outline-none focus:ring-1 focus:ring-[#D94A38] focus:bg-white transition-all font-semibold"
                 />
               </div>
+            </div>
+
+            {/* Address Format Preview */}
+            <div className="p-3 bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl text-[11px] text-stone-600">
+              <span className="font-bold text-stone-800 block mb-0.5">Address Preview:</span>
+              <span className="font-medium text-stone-700">
+                {[
+                  houseNo.trim() || 'House No.',
+                  landmark.trim() || 'Landmark',
+                  area.trim() || 'Area',
+                  `${city.trim() || 'Ahmedabad'}${pincode.trim() ? ` - ${pincode.trim()}` : ''}`,
+                ].join(', ')}
+              </span>
             </div>
 
             {/* Make Primary Checkbox */}

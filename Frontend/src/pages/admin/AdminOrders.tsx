@@ -17,6 +17,8 @@ interface OrderItem {
   position: LngLatTuple;
 }
 
+import { calculateTomTomRoute } from '../../services/tomtomRoutingService';
+
 export const AdminOrders: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -24,6 +26,7 @@ export const AdminOrders: React.FC = () => {
   const [mapZoom, setMapZoom] = useState<number>(13);
   const [activeOrders, setActiveOrders] = useState<OrderItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [selectedRouteCoords, setSelectedRouteCoords] = useState<[number, number][] | undefined>(undefined);
 
   const fetchOrders = async () => {
     setIsLoading(true);
@@ -67,32 +70,44 @@ export const AdminOrders: React.FC = () => {
     }
   };
 
-  const handleSelectOrder = (order: OrderItem) => {
+  const handleSelectOrder = async (order: OrderItem) => {
     setSelectedOrderId(order.id);
     setMapCenter(order.position);
     setMapZoom(15);
+
+    // Calculate a road route sample between hub and order point if coordinates available
+    try {
+      const routeRes = await calculateTomTomRoute([AHMEDABAD_CENTER, order.position], {
+        travelMode: 'motorcycle',
+        traffic: true,
+      });
+      if (routeRes.success && routeRes.coordinates) {
+        setSelectedRouteCoords(routeRes.coordinates);
+      }
+    } catch {
+      setSelectedRouteCoords(undefined);
+    }
   };
 
-  // Convert active global orders to TomTom Map Markers
+  // Convert active global orders to TomTom Map Markers with authentic tags
   const orderMarkers: MapMarker[] = activeOrders.map((order) => {
-    const badgeColor =
-      order.status === 'Delayed'
-        ? '#D97706'
-        : order.status === 'In Transit'
-          ? '#2563EB'
-          : '#059669';
+    const isSelected = selectedOrderId === order.id;
+    const markerType = order.status === 'In Transit' || order.status === 'Delayed' ? 'rider' : 'stall';
 
     return {
       id: order.id,
       position: order.position,
-      title: `${order.id} - ${order.vendor}`,
+      title: `${order.id} · ${order.vendor}`,
       description: `Rider: ${order.rider} • Status: ${order.status}`,
-      type: order.status === 'Delayed' ? 'rider' : 'stall',
+      type: markerType,
       onClick: () => handleSelectOrder(order),
       popupHtml: `
-        <div style="font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; padding: 4px; max-width: 220px;">
-          <div style="display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; margin-bottom: 4px; background: ${badgeColor}; color: #ffffff;">
-            ${order.status.toUpperCase()}
+        <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px; min-width: 200px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
+            <span style="font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: ${order.status === 'Delayed' ? '#FEF3C7' : '#D1FAE5'}; color: ${order.status === 'Delayed' ? '#B45309' : '#047857'};">
+              ${order.status.toUpperCase()}
+            </span>
+            ${isSelected ? '<span style="font-size: 9px; font-weight: 800; color: #D94A38;">SELECTED</span>' : ''}
           </div>
           <div style="font-weight: 800; font-size: 13px; color: #1c1917; margin-bottom: 2px;">
             ${order.id} (${order.vendor})
@@ -100,10 +115,7 @@ export const AdminOrders: React.FC = () => {
           <div style="font-size: 11px; color: #6b7280;">
             Rider: <strong>${order.rider}</strong>
           </div>
-          ${order.issue
-          ? `<div style="font-size: 10px; font-weight: 700; color: #b45309; margin-top: 4px;">⚠️ ${order.issue}</div>`
-          : ''
-        }
+          ${order.issue ? `<div style="font-size: 10px; font-weight: 700; color: #b45309; margin-top: 4px;">⚠️ ${order.issue}</div>` : ''}
         </div>
       `,
     };
@@ -229,6 +241,7 @@ export const AdminOrders: React.FC = () => {
             center={mapCenter}
             zoom={mapZoom}
             markers={orderMarkers}
+            routeCoordinates={selectedRouteCoords}
             className="w-full h-full rounded-3xl overflow-hidden relative"
           />
         </div>

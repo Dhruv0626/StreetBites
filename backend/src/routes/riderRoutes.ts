@@ -3,11 +3,15 @@ import fs from "fs";
 import path from "path";
 import {
   getRiderStats,
+  toggleRiderOnlineStatus,
+  updateRiderSettings,
   getRiderQueue,
   acceptQueueOrder,
+  declineQueueOrder,
   getActiveRoute,
   getRiderHistory,
   settleRiderDebt,
+  completeDeliveryWithOtp,
 } from "../controllers/riderController.ts";
 
 const router = Router();
@@ -37,15 +41,19 @@ router.get("/default-avatar", (_req: Request, res: Response) => {
   }
 });
 
-// Dashboard Stats & Earnings
+// Dashboard Stats & Duty / Settings
 router.get("/stats", getRiderStats);
+router.put("/toggle-online", toggleRiderOnlineStatus);
+router.put("/settings", updateRiderSettings);
 
-// Queue
+// Queue (Online riders only + distance range filter)
 router.get("/queue", getRiderQueue);
 router.put("/orders/:id/accept", acceptQueueOrder);
+router.put("/orders/:id/decline", declineQueueOrder);
 
-// Active Route
+// Active Route & OTP Verification
 router.get("/active-route", getActiveRoute);
+router.post("/orders/:id/verify-otp", completeDeliveryWithOtp);
 
 // History
 router.get("/history", getRiderHistory);

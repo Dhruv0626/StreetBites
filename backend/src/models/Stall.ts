@@ -29,6 +29,10 @@ export interface IStall extends Document {
   pan_image_url?: string | null;
   open_till?: string;
   is_accepting_orders: boolean;
+  consecutive_missed_orders?: number;
+  auto_offline_until?: Date | null;
+  total_orders_received?: number;
+  total_orders_accepted?: number;
   last_opened_at?: Date | null;
   menu_items: IMenuItem[];
   status: StallStatus;
@@ -138,6 +142,22 @@ const StallSchema = new mongoose.Schema<IStall>(
     is_accepting_orders: {
       type: Boolean,
       default: false,
+    },
+    consecutive_missed_orders: {
+      type: Number,
+      default: 0,
+    },
+    auto_offline_until: {
+      type: Date,
+      default: null,
+    },
+    total_orders_received: {
+      type: Number,
+      default: 0,
+    },
+    total_orders_accepted: {
+      type: Number,
+      default: 0,
     },
     last_opened_at: {
       type: Date,

@@ -1,6 +1,6 @@
 import mongoose, { type Document, type Model } from "mongoose";
 
-export type StallOrderStatus = "ACCEPTED" | "PREPARING" | "READY";
+export type StallOrderStatus = "PENDING" | "ACCEPTED" | "PREPARING" | "READY" | "REJECTED";
 
 // Interface for SubOrder (Table 7: Sub_Order / Stall-Level Breakdown)
 export interface ISubOrder extends Document {
@@ -10,6 +10,8 @@ export interface ISubOrder extends Document {
   quantity: number;
   vendor_earned_amount: number; // 95% of vendor base price * quantity
   stall_status: StallOrderStatus;
+  estimated_prep_time_minutes?: number;
+  rejection_reason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +30,7 @@ const SubOrderSchema = new mongoose.Schema<ISubOrder>(
     },
     item_id: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: "MenuItem",
       required: [true, "Menu item ID is required"],
     },
     quantity: {
@@ -42,8 +45,17 @@ const SubOrderSchema = new mongoose.Schema<ISubOrder>(
     },
     stall_status: {
       type: String,
-      enum: ["ACCEPTED", "PREPARING", "READY"],
-      default: "ACCEPTED",
+      enum: ["PENDING", "ACCEPTED", "PREPARING", "READY", "REJECTED"],
+      default: "PENDING",
+    },
+    estimated_prep_time_minutes: {
+      type: Number,
+      default: 15,
+      min: [1, "Preparation time must be at least 1 minute"],
+    },
+    rejection_reason: {
+      type: String,
+      default: null,
     },
   },
   {

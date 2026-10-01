@@ -1,4 +1,5 @@
 import { apiRequest } from "./api";
+import logoImg from "../assets/Logo/Logo.png";
 
 /**
  * Dynamically loads the official Razorpay Checkout SDK
@@ -52,6 +53,7 @@ export interface PlaceOrderPayload {
   }>;
   delivery_fee: number;
   delivery_address: string;
+  delivery_coordinates?: [number, number];
   delivery_notes?: string;
 }
 
@@ -73,6 +75,7 @@ export const razorpayService = {
     items: any[];
     delivery_fee: number;
     delivery_address: string;
+    delivery_coordinates?: [number, number];
     delivery_notes?: string;
   }) => {
     return apiRequest<{
@@ -198,9 +201,7 @@ export const razorpayService = {
             <!-- Header -->
             <div style="background:linear-gradient(135deg, #FAF0ED, #FFF8F0);padding:20px 24px;border-bottom:1px solid #FCE8E6;display:flex;align-items:center;justify-content:space-between;">
               <div style="display:flex;align-items:center;gap:10px;">
-                <div style="width:34px;height:34px;background:#D94A38;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:16px;box-shadow:0 3px 8px rgba(217,74,56,0.25);">
-                  ⚡
-                </div>
+                <img src="${logoImg}" alt="StreetBites" style="width:36px;height:36px;border-radius:10px;object-fit:cover;box-shadow:0 3px 8px rgba(217,74,56,0.25);" />
                 <div>
                   <h4 style="margin:0;font-size:15px;font-weight:900;color:#1C1917;letter-spacing:-0.2px;">StreetBites Test Gateway</h4>
                   <span style="font-size:11px;color:#8E8B85;font-weight:600;">Razorpay Sandbox Simulator</span>
@@ -289,13 +290,17 @@ export const razorpayService = {
     }
 
     try {
+      const absoluteLogoUrl = typeof window !== "undefined"
+        ? (logoImg.startsWith("http") ? logoImg : new URL(logoImg, window.location.origin).href)
+        : logoImg;
+
       const rzpOptions = {
         key: options.key,
         amount: options.amount,
         currency: options.currency || "INR",
         name: options.name || "StreetBites",
         description: options.description || "Multi-Stall Street Food Checkout",
-        image: "https://res.cloudinary.com/dcf55qcn4/image/upload/v1740000000/streetbites_logo.png",
+        image: (options as any).image || absoluteLogoUrl,
         order_id: options.order_id,
         handler: function (response: any) {
           options.onSuccess({

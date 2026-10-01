@@ -430,6 +430,110 @@ export const toggleItemAvailability = async (req: AuthRequest, res: Response): P
 };
 
 /**
+ * @desc    Update an existing food item variety in vendor's stall
+ * @route   PUT /api/vendor/menu/item/:id
+ * @access  Private (Vendor)
+ */
+export const updateMenuItem = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    const { id } = req.params;
+    const { name, description, base_price, price, image_url, imageUrl, is_available, category } = req.body;
+
+    const stall = await resolveVendorStall(userId);
+    if (!stall) {
+      res.status(404).json({ success: false, message: "Stall not found." });
+      return;
+    }
+
+    const item = stall.menu_items.find((m: any) => m._id?.toString() === id);
+    if (!item) {
+      res.status(404).json({ success: false, message: "Menu item not found in your stall." });
+      return;
+    }
+
+    if (name && typeof name === "string" && name.trim()) {
+      item.name = name.trim();
+    }
+
+    if (description !== undefined) {
+      item.description = String(description).trim();
+    }
+
+    if (base_price !== undefined || price !== undefined) {
+      const basePriceNum = Number(base_price) || Number(price) || item.base_price;
+      if (basePriceNum > 0) {
+        item.base_price = basePriceNum;
+        item.price = Number(price) || Math.round(basePriceNum * 1.10);
+      }
+    }
+
+    let finalImageUrl = image_url || imageUrl;
+    if (finalImageUrl) {
+      if (finalImageUrl.startsWith("data:")) {
+        try {
+          finalImageUrl = await uploadToCloudinary(finalImageUrl, "streetbites/menu_items", {
+            label: "Food Item Image",
+            maxSizeBytes: 5 * 1024 * 1024,
+            allowedExtensions: ["JPG", "JPEG", "PNG", "WEBP"]
+          });
+        } catch (uploadErr: any) {
+          console.warn("Cloudinary upload fallback:", uploadErr?.message);
+        }
+      }
+      item.image_url = finalImageUrl;
+    }
+
+    if (category && typeof category === "string" && category !== "All") {
+      try {
+        let masterItem = await FoodItem.findOne({ name: category.trim() });
+        if (!masterItem) {
+          masterItem = await FoodItem.create({
+            name: category.trim(),
+            image_url: item.image_url || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&auto=format&fit=crop&q=80",
+            status: "Review_pending"
+          });
+        }
+        if (masterItem?._id) {
+          item.food_item_id = masterItem._id as mongoose.Types.ObjectId;
+        }
+      } catch (catErr) {
+        console.warn("Category update error in item edit:", catErr);
+      }
+    }
+
+    if (is_available !== undefined) {
+      item.is_available = Boolean(is_available);
+    }
+
+    await stall.save();
+    memoryCache.invalidateClusters();
+
+    res.status(200).json({
+      success: true,
+      message: "Food item updated successfully.",
+      data: {
+        id: item._id?.toString(),
+        name: item.name,
+        description: item.description,
+        base_price: item.base_price,
+        price: item.price,
+        image_url: item.image_url,
+        category: category || "General",
+        is_available: item.is_available,
+        available: item.is_available,
+      }
+    });
+  } catch (error: any) {
+    console.error("Update Menu Item Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to update menu item."
+    });
+  }
+};
+
+/**
  * @desc    Delete food item variety from stall
  * @route   DELETE /api/vendor/menu/item/:id
  * @access  Private (Vendor)

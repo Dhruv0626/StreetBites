@@ -52,11 +52,18 @@ const refreshAuthTokens = async (): Promise<boolean> => {
   }
 };
 
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  [key: string]: any;
+}
+
 // Main API Request Wrapper with Timeout Protection
 export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestOptions = {}
-): Promise<{ success: boolean; data?: T; message?: string }> {
+): Promise<ApiResponse<T>> {
   const { requiresAuth = true, headers = {}, timeoutMs = 15000, ...customConfig } = options;
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
 

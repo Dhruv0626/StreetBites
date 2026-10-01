@@ -18,7 +18,7 @@ const PlatformSettingSchema = new mongoose.Schema<IPlatformSetting>(
   {
     base_delivery_fee: {
       type: Number,
-      default: 25.0,
+      default: 22.0,
       min: [0, "Base delivery fee cannot be negative"],
     },
     extra_stall_fee: {

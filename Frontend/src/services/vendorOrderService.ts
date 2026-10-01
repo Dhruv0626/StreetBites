@@ -7,6 +7,7 @@ export interface VendorOrderItem {
   price: number;
   quantity?: number;
   status?: string;
+  prepTimeMinutes?: number;
 }
 
 export interface VendorOrder {
@@ -23,6 +24,7 @@ export interface VendorOrder {
   net: number;
   commission: number;
   createdAt: string;
+  prepTimeMinutes?: number;
 }
 
 export interface VendorOrderMetrics {
@@ -45,16 +47,38 @@ export const vendorOrderService = {
     });
   },
 
-  // 2. Update order preparation/ready status
-  updateOrderStatus: async (orderId: string, status: 'Preparing' | 'Completed' | 'Cancelled') => {
-    return apiRequest<{ message: string }>(`/vendor/orders/${orderId}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
+  // 2. Update order preparation/ready status with optional manual ETA
+  updateOrderStatus: async (
+    orderId: string,
+    status: 'Preparing' | 'Completed' | 'Cancelled',
+    prepTimeMinutes?: number
+  ) => {
+    return apiRequest<{ message: string; estimated_prep_time_minutes?: number }>(
+      `/vendor/orders/${orderId}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status, prepTimeMinutes }),
+        requiresAuth: true,
+      }
+    );
+  },
+
+  // 3. Reject order with reason (triggers auto item stockout and customer refund)
+  rejectOrder: async (orderId: string, reason: string, itemOutStock?: boolean) => {
+    return apiRequest<{
+      message: string;
+      orderStatus?: string;
+      refundedAmount?: number;
+      consecutiveMissedOrders?: number;
+      isStallOffline?: boolean;
+    }>(`/vendor/orders/${orderId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason, itemOutStock }),
       requiresAuth: true,
     });
   },
 
-  // 3. Fast metrics for navbar badge
+  // 4. Fast metrics for navbar badge
   getMetrics: async () => {
     return apiRequest<{ liveCount: number }>('/vendor/orders/metrics', {
       method: 'GET',
@@ -62,3 +86,5 @@ export const vendorOrderService = {
     });
   },
 };
+
+export default vendorOrderService;

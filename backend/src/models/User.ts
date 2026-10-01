@@ -21,6 +21,9 @@ export interface IUser {
   verification_status: VerificationStatus;
   account_status: AccountStatus;
   is_online: boolean;
+  delivery_range_km?: number;
+  auto_accept?: boolean;
+  push_notifications?: boolean;
   current_coordinates?: {
     type: string;
     coordinates: [number, number]; // [longitude, latitude]
@@ -121,6 +124,21 @@ const UserSchema = new mongoose.Schema<IUser>(
     },
     is_online: {
       type: Boolean,
+      default: false,
+    },
+    delivery_range_km: {
+      type: Number,
+      default: 10,
+      min: [1, "Delivery range must be at least 1 km"],
+      max: [50, "Delivery range cannot exceed 50 km"],
+    },
+    auto_accept: {
+      type: Boolean,
+      default: false,
+    },
+    push_notifications: {
+      type: Boolean,
+      default: true,
     },
     current_coordinates: {
       type: PointSchema,

@@ -11,8 +11,8 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
 
     if (!settings) {
       settings = await PlatformSetting.create({
-        base_delivery_fee: 25.0,
-        extra_stall_fee: 5.0,
+        base_delivery_fee: 22.0,
+        extra_stall_fee: 10.0,
         vendor_commission_percentage: 5.0,
         tax_percentage: 5.0,
         rider_cash_limit: 0,
@@ -118,7 +118,7 @@ export const createPlatformSettings = async (req: Request, res: Response): Promi
       await settings.save();
     } else {
       settings = await PlatformSetting.create({
-        base_delivery_fee: base_delivery_fee ?? 25.0,
+        base_delivery_fee: base_delivery_fee ?? 22.0,
         extra_stall_fee: extra_stall_fee ?? 10.0,
         vendor_commission_percentage: vendor_commission_percentage ?? 5.0,
         tax_percentage: tax_percentage ?? 5.0,
@@ -151,7 +151,7 @@ export const deletePlatformSettings = async (_req: Request, res: Response): Prom
   try {
     await PlatformSetting.deleteMany({});
     const defaultSettings = await PlatformSetting.create({
-      base_delivery_fee: 25.0,
+      base_delivery_fee: 22.0,
       extra_stall_fee: 10.0,
       vendor_commission_percentage: 5.0,
       tax_percentage: 5.0,

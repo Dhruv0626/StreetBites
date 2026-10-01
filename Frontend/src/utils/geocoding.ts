@@ -1,3 +1,5 @@
+import { TOMTOM_API_KEY } from '../config/tomtom';
+
 /**
  * Forward & Reverse Geocoding Utility for StreetBites
  * Resolves real [lat, lng] coordinates from typed user address strings.
@@ -65,7 +67,7 @@ export async function geocodeAddressText(
     return null;
   }
 
-  const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || "";
+  const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || TOMTOM_API_KEY;
 
   // 1. Try TomTom Geocoding API across candidate queries
   for (const query of candidateQueries) {
@@ -129,11 +131,10 @@ export interface ReverseGeocodeResult {
  */
 export async function reverseGeocodeCoords(lat: number, lng: number): Promise<ReverseGeocodeResult> {
   let detectedArea = '';
-  let detectedTaluka = '';
   let detectedCity = 'Ahmedabad';
   let detectedPincode = '';
 
-  // 1. Primary: Nominatim (has granular suburb/neighbourhood mappings for Ahmedabad/Gujarat)
+  // 1. Primary: Nominatim (granular suburb/neighbourhood mappings)
   try {
     const nomUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
     const nomRes = await fetch(nomUrl, {
@@ -153,12 +154,6 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
           addr.road ||
           '';
 
-        if (addr.county && addr.county.toLowerCase().includes('taluka')) {
-          detectedTaluka = addr.county;
-        } else if (addr.subdistrict && addr.subdistrict.toLowerCase().includes('taluka')) {
-          detectedTaluka = addr.subdistrict;
-        }
-
         const rawCity = addr.city || addr.town || addr.municipality || addr.state_district || addr.district || '';
         if (rawCity && !rawCity.toLowerCase().includes('taluka')) {
           detectedCity = rawCity;
@@ -176,7 +171,7 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
   // 2. Secondary: TomTom reverse geocode if area not found or identical to city
   if (!detectedArea || detectedArea.toLowerCase() === detectedCity.toLowerCase()) {
     try {
-      const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || "";
+      const tomtomKey = import.meta.env.VITE_TOMTOM_API_KEY || TOMTOM_API_KEY;
       const tomtomUrl = `https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${tomtomKey}`;
       const tomtomRes = await fetch(tomtomUrl);
       if (tomtomRes.ok) {
@@ -205,45 +200,30 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<Re
     }
   }
 
-  // Clean up area/taluka/city strings
-  detectedArea = (detectedArea || '').trim();
-  detectedTaluka = (detectedTaluka || '').trim();
-  detectedCity = (detectedCity || 'Ahmedabad').trim();
+  // Clean up area string: Remove any "Taluka" substring
+  detectedArea = (detectedArea || '')
+    .replace(/\b\w+\s+taluka\b/gi, '')
+    .replace(/\btaluka\b/gi, '')
+    .replace(/,\s*,/g, ',')
+    .trim()
+    .replace(/^,\s*|,\s*$/g, '');
 
-  // If area is empty, fallback to taluka or city
-  if (!detectedArea) {
-    detectedArea = detectedTaluka || detectedCity;
+  detectedCity = (detectedCity || 'Ahmedabad')
+    .replace(/\b\w+\s+taluka\b/gi, '')
+    .replace(/\btaluka\b/gi, '')
+    .trim();
+
+  // If area is empty or equal to city, fallback to Ahmedabad default locality
+  if (!detectedArea || detectedArea.toLowerCase() === detectedCity.toLowerCase()) {
+    detectedArea = 'Central Ahmedabad';
   }
 
-  // Build clean formatted parts (Area, Taluka, City)
   const parts: string[] = [];
-  if (detectedArea && detectedArea.toLowerCase() !== detectedCity.toLowerCase()) {
-    parts.push(detectedArea);
-  }
-  if (
-    detectedTaluka &&
-    !parts.some((p) => p.toLowerCase() === detectedTaluka.toLowerCase()) &&
-    detectedTaluka.toLowerCase() !== detectedCity.toLowerCase()
-  ) {
-    parts.push(detectedTaluka);
-  }
-  // ALWAYS append City name at the end (e.g. after Taluka name)
-  if (detectedCity && !parts.some((p) => p.toLowerCase() === detectedCity.toLowerCase())) {
-    parts.push(detectedCity);
-  }
+  if (detectedArea) parts.push(detectedArea);
+  if (detectedCity && !parts.includes(detectedCity)) parts.push(detectedCity);
 
-  let formattedAddress = parts.join(', ');
-  if (!formattedAddress) {
-    formattedAddress = detectedCity || 'Ahmedabad';
-  }
-
-  // Extra safety: If Taluka is present in string, ensure City name is appended after it
-  if (
-    formattedAddress.toLowerCase().includes('taluka') &&
-    !formattedAddress.toLowerCase().includes(detectedCity.toLowerCase())
-  ) {
-    formattedAddress = `${formattedAddress}, ${detectedCity}`;
-  }
+  const cityWithPin = detectedPincode ? `${detectedCity} - ${detectedPincode}` : detectedCity;
+  const formattedAddress = detectedArea ? `${detectedArea}, ${cityWithPin}` : cityWithPin;
 
   return {
     area: detectedArea,

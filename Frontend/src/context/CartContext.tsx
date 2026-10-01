@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { CartItem } from '../types';
 import { cartService } from '../services/cartService';
+import { clusterService } from '../services/clusterService';
 import { KhauGalliConflictModal } from '../components/KhauGalliConflictModal';
 import { useAuth } from './AuthContext';
 
@@ -205,11 +206,20 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       khauGalliName: incomingKhauGalliName,
     };
 
+    const incomingCoords =
+      (item as any)?.coordinates ||
+      (item as any)?.khauGalliCoordinates ||
+      clusterService.getCachedClusters()?.find((c: any) => String(c.id) === String(incomingKhauGalliId) || String(c._id) === String(incomingKhauGalliId))?.coordinates;
+
     if (options?.replace) {
       // Discard previous cart and start fresh with this item
       setCartItems([normalizedItem]);
       if (incomingKhauGalliId) {
-        setActiveKhauGalli({ id: incomingKhauGalliId, name: incomingKhauGalliName });
+        setActiveKhauGalli({
+          id: incomingKhauGalliId,
+          name: incomingKhauGalliName,
+          coordinates: incomingCoords,
+        });
       }
     } else {
       // Same Khau Galli (or empty cart) -> Add or increment
@@ -228,7 +238,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       if (incomingKhauGalliId && !activeKhauGalli) {
-        setActiveKhauGalli({ id: incomingKhauGalliId, name: incomingKhauGalliName });
+        setActiveKhauGalli({
+          id: incomingKhauGalliId,
+          name: incomingKhauGalliName,
+          coordinates: incomingCoords,
+        });
       }
     }
 

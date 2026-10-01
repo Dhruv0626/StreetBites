@@ -20,12 +20,15 @@ export interface MapMarker {
   isLive?: boolean;
   clusterName?: string;
   stallId?: string;
+  heading?: number; // Compass heading in degrees (0-360) for directional navigation arrows
   onClick?: (markerId: string) => void;
 }
 
 export interface TomTomMapProps {
   center?: LngLatTuple;
   zoom?: number;
+  pitch?: number;
+  bearing?: number;
   markers?: MapMarker[];
   routeCoordinates?: LngLatTuple[];
   className?: string;

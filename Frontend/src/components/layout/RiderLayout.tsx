@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Navigate } from 'react-router';
-import { Compass, FileText, Wallet, HelpCircle, User, CreditCard, AlertCircle, FileWarning, ShieldAlert, Lock, LogOut } from 'lucide-react';
+import {
+  Compass,
+  FileText,
+  Wallet,
+  HelpCircle,
+  User,
+  CreditCard,
+  AlertCircle,
+  FileWarning,
+  ShieldAlert,
+  Lock,
+  LogOut,
+  MapPin,
+} from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 // @ts-ignore
 import { Joyride as OriginalJoyride, STATUS } from 'react-joyride';
@@ -8,7 +21,6 @@ const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { useAuth } from '../../context/AuthContext';
 import { useLocationPermission } from '../../hooks/useLocationPermission';
-import { MapPin } from 'lucide-react';
 import riderService from '../../services/riderService';
 import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
@@ -16,7 +28,11 @@ export const RiderLayout: React.FC = () => {
   const { user, logout } = useAuth();
   const { isGranted, requestLocation, isLocating } = useLocationPermission();
   const [showLocationAlert, setShowLocationAlert] = useState(false);
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    const saved = localStorage.getItem('sb_rider_online');
+    if (saved !== null) return saved === 'true';
+    return Boolean((user as any)?.is_online);
+  });
   const [runTour, setRunTour] = useState(false);
   const [tourKey, setTourKey] = useState(0);
   const [riderDebt, setRiderDebt] = useState<number>(0);
@@ -29,18 +45,41 @@ export const RiderLayout: React.FC = () => {
   const isVerified = user?.verification_status === 'VERIFIED';
 
   const handleToggleOnline = async () => {
-    if (!isOnline) {
-      if (!isGranted) {
-        const coords = await requestLocation();
-        if (!coords) {
-          setShowLocationAlert(true);
-          return;
+    try {
+      let lat: number | undefined;
+      let lng: number | undefined;
+
+      if (!isOnline) {
+        if (!isGranted) {
+          const coords = await requestLocation();
+          if (!coords) {
+            setShowLocationAlert(true);
+            return;
+          }
+          lat = coords.lat;
+          lng = coords.lng;
         }
+        setShowLocationAlert(false);
       }
-      setShowLocationAlert(false);
-      setIsOnline(true);
-    } else {
-      setIsOnline(false);
+
+      const nextStatus = !isOnline;
+      setIsOnline(nextStatus);
+      localStorage.setItem('sb_rider_online', String(nextStatus));
+
+      const res = await riderService.toggleOnlineStatus(nextStatus, {
+        riderId: user?._id || user?.id,
+        email: user?.email,
+        lat,
+        lng,
+      });
+
+      if (res.success && res.data) {
+        const resolvedOnline = Boolean(res.data.isOnline);
+        setIsOnline(resolvedOnline);
+        localStorage.setItem('sb_rider_online', String(resolvedOnline));
+      }
+    } catch (err) {
+      console.error('Failed to toggle online status:', err);
     }
   };
 
@@ -50,11 +89,14 @@ export const RiderLayout: React.FC = () => {
       try {
         const [statsRes, queueRes] = await Promise.allSettled([
           riderService.getStats({ riderId: user?._id || user?.id, email: user?.email }),
-          riderService.getQueue(),
+          riderService.getQueue({ riderId: user?._id || user?.id, email: user?.email }),
         ]);
         if (!isMounted) return;
         if (statsRes.status === 'fulfilled' && statsRes.value.success && statsRes.value.data) {
           setRiderDebt(statsRes.value.data.currentCodDebt || 0);
+          const onlineState = Boolean(statsRes.value.data.isOnline);
+          setIsOnline(onlineState);
+          localStorage.setItem('sb_rider_online', String(onlineState));
         }
         if (queueRes.status === 'fulfilled' && queueRes.value.success && Array.isArray(queueRes.value.data)) {
           setQueueCount(queueRes.value.data.length);

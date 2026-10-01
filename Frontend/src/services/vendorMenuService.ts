@@ -62,6 +62,27 @@ export const vendorMenuService = {
     });
   },
 
+  // 2b. Update an existing food item variety
+  updateMenuItem: async (
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      base_price?: number;
+      price?: number;
+      image_url?: string;
+      imageUrl?: string;
+      category?: string;
+      is_available?: boolean;
+    }
+  ) => {
+    return apiRequest<VendorMenuItem>(`/vendor/menu/item/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      requiresAuth: true,
+    });
+  },
+
   // 3. Add a new food item category in master FoodItem list
   addCategory: async (data: { name: string; image_url?: string; imageUrl?: string }) => {
     return apiRequest<{ id: string; name: string; image_url: string }>("/vendor/menu/category", {
