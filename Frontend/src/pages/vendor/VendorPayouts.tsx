@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
 import { useAlert } from '../../context/AlertContext';
 
+import { vendorOrderService } from '../../services/vendorOrderService';
+
 export interface PayoutTransaction {
   id: string;
   date: string;
@@ -20,17 +22,41 @@ export const VendorPayoutsPage: React.FC = () => {
   const [vendorData, setVendorData] = useState<{ user?: any; stall?: any } | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-
-  // Real transactions list (initialized empty)
-  const [transactions] = useState<PayoutTransaction[]>([]);
+  const [transactions, setTransactions] = useState<PayoutTransaction[]>([]);
+  const [pendingSettlement, setPendingSettlement] = useState<number>(0);
 
   useEffect(() => {
     let isMounted = true;
     const fetchDetails = async () => {
       try {
-        const res = await onboardingService.getVendorDetails();
-        if (isMounted && res.success && res.data) {
-          setVendorData(res.data);
+        const [detailsRes, ordersRes] = await Promise.allSettled([
+          onboardingService.getVendorDetails(),
+          vendorOrderService.getOrders(),
+        ]);
+
+        if (isMounted && detailsRes.status === 'fulfilled' && detailsRes.value?.success && detailsRes.value.data) {
+          setVendorData(detailsRes.value.data);
+        }
+
+        if (isMounted && ordersRes.status === 'fulfilled' && ordersRes.value?.success && ordersRes.value.data) {
+          const orders = ordersRes.value.data.orders || [];
+          let pendingTotal = 0;
+          const orderTxns: PayoutTransaction[] = orders.map((o: any) => {
+            const isCompleted = o.status === 'Completed';
+            if (!isCompleted && o.status !== 'Cancelled') {
+              pendingTotal += Number(o.net || o.total * 0.95) || 0;
+            }
+            return {
+              id: o.orderId || o.id,
+              date: o.time || o.createdAt ? new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+              amount: `+₹${Math.round((Number(o.net || o.total * 0.95) || 0) * 100) / 100}`,
+              status: isCompleted ? 'completed' : 'pending',
+              type: `Food Sales (${o.items?.length || 1} items)`,
+            };
+          });
+
+          setTransactions(orderTxns);
+          setPendingSettlement(Math.round(pendingTotal * 100) / 100);
         }
       } catch (err) {
         // Fall back gracefully to user context
@@ -44,7 +70,6 @@ export const VendorPayoutsPage: React.FC = () => {
 
   const currentUser = vendorData?.user || user;
   const availableBalance = currentUser?.wallet_balance ?? 0;
-  const pendingSettlement = 0;
   const bankName = currentUser?.bank_name;
   const bankAccountNo = currentUser?.bank_account_no;
 

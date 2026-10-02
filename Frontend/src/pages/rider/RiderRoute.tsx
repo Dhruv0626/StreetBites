@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TomTomMap } from '../../components/map/TomTomMap';
-import { type MapMarker, type LngLatTuple } from '../../types/map';
+import { type MapMarker } from '../../types/map';
 import {
   Compass,
   CheckCircle2,
@@ -373,9 +373,27 @@ export const RiderRoute: React.FC = () => {
     return list;
   }, [checkpoints, activeStopIndex, riderLiveLocation, riderHeading]);
 
-  const handleNextCheckpoint = () => {
+  const handleNextCheckpoint = async () => {
     if (activeStopIndex < checkpoints.length - 1) {
-      setActiveStopIndex(prev => prev + 1);
+      const nextIdx = activeStopIndex + 1;
+      setActiveStopIndex(nextIdx);
+
+      if (activeRoute) {
+        try {
+          const targetOrderId = activeRoute.rawId || activeRoute.orderId;
+          await riderService.collectCheckpoint(
+            targetOrderId,
+            nextIdx,
+            checkpoints.length,
+            {
+              riderId: user?._id || user?.id,
+              email: user?.email,
+            }
+          );
+        } catch (err) {
+          console.warn('Failed to sync checkpoint progress:', err);
+        }
+      }
     }
   };
 
@@ -678,7 +696,7 @@ export const RiderRoute: React.FC = () => {
                         </div>
 
                         {cp.type === 'pickup' ? (
-                          cp.isReady || (cp as any).status === 'READY' ? (
+                          cp.isReady || cp.status === 'READY' ? (
                             <div className="mt-3 space-y-2">
                               <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -735,7 +753,7 @@ export const RiderRoute: React.FC = () => {
                 }
 
                 const isPickupPending = cp.type === 'pickup';
-                const isReadyPending = cp.isReady || (cp as any).status === 'READY';
+                const isReadyPending = cp.isReady || cp.status === 'READY';
 
                 return (
                   <div key={cp.id} className="bg-white border border-[#EFEBE4] rounded-2xl p-4 flex gap-4 opacity-75">

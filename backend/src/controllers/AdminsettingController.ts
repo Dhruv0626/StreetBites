@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { PlatformSetting } from "../models/PlatformSetting.ts";
+import User from "../models/User.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 /**
  * @desc    Get Public Platform Settings
@@ -63,6 +65,9 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
       settings = new PlatformSetting();
     }
 
+    const prevWeatherSurge = settings.is_weather_surge_enabled;
+    const prevFestivalIncentive = settings.is_festival_incentive_enabled;
+
     if (base_delivery_fee !== undefined) settings.base_delivery_fee = base_delivery_fee;
     if (extra_stall_fee !== undefined) settings.extra_stall_fee = extra_stall_fee;
     if (tax_percentage !== undefined) settings.tax_percentage = tax_percentage;
@@ -73,6 +78,36 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
     if (is_maintenance_mode !== undefined) settings.is_maintenance_mode = is_maintenance_mode;
 
     await settings.save();
+
+    // ─── Broadcast Notification to Riders on Incentive Activation ───
+    if (
+      (is_weather_surge_enabled === true && !prevWeatherSurge) ||
+      (is_festival_incentive_enabled === true && !prevFestivalIncentive)
+    ) {
+      try {
+        const riders = await User.find({ role: "RIDER" }).select("_id name");
+        for (const rider of riders) {
+          if (is_weather_surge_enabled === true && !prevWeatherSurge) {
+            await createNotification({
+              userId: rider._id,
+              title: "🌧️ Weather Surge Pricing Active!",
+              message: "Bad weather surge pricing is enabled by Admin. Earn extra bonus delivery payout on all orders today!",
+              type: "PROMO",
+            });
+          }
+          if (is_festival_incentive_enabled === true && !prevFestivalIncentive) {
+            await createNotification({
+              userId: rider._id,
+              title: "🎉 Festival Incentive Bonus Live!",
+              message: "Festival bonus is active! Complete delivery runs now to earn festive extra income payouts.",
+              type: "PROMO",
+            });
+          }
+        }
+      } catch (riderNotifErr) {
+        console.warn("Failed to broadcast rider surge notifications:", riderNotifErr);
+      }
+    }
 
     res.status(200).json({
       success: true,

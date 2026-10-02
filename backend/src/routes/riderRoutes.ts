@@ -9,6 +9,7 @@ import {
   acceptQueueOrder,
   declineQueueOrder,
   getActiveRoute,
+  collectRouteCheckpoint,
   getRiderHistory,
   settleRiderDebt,
   completeDeliveryWithOtp,
@@ -53,6 +54,7 @@ router.put("/orders/:id/decline", declineQueueOrder);
 
 // Active Route & OTP Verification
 router.get("/active-route", getActiveRoute);
+router.post("/orders/:id/collect-checkpoint", collectRouteCheckpoint);
 router.post("/orders/:id/verify-otp", completeDeliveryWithOtp);
 
 // History

@@ -73,6 +73,10 @@ export interface ActiveRouteData {
     dist: string;
     amount: string;
     position: [number, number];
+    isReady?: boolean;
+    status?: string;
+    items?: any[];
+    stallName?: string;
   }[];
 }
 
@@ -214,6 +218,26 @@ export const riderService = {
     return apiRequest<{ settledAmount: number; remainingDebt: number }>(
       `/rider/settle-debt${qs}`,
       { method: "POST" }
+    );
+  },
+
+  // Mark checkpoint collected / advance route
+  collectCheckpoint: async (
+    orderId: string,
+    checkpointIndex: number,
+    totalCheckpoints: number,
+    params?: { riderId?: string; email?: string }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{ message: string; orderStatus: string }>(
+      `/rider/orders/${orderId}/collect-checkpoint${qs}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ checkpointIndex, totalCheckpoints }),
+      }
     );
   },
 

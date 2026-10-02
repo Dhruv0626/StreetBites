@@ -5,6 +5,9 @@ export interface INotification extends Document {
   user_id: mongoose.Types.ObjectId;
   title: string;
   message: string;
+  type: "ORDER" | "PAYOUT" | "DELIVERY" | "PROMO" | "SYSTEM";
+  order_id?: mongoose.Types.ObjectId;
+  amount?: number;
   is_read: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +29,20 @@ const NotificationSchema = new mongoose.Schema<INotification>(
       type: String,
       required: [true, "Notification message body is required"],
       trim: true,
+    },
+    type: {
+      type: String,
+      enum: ["ORDER", "PAYOUT", "DELIVERY", "PROMO", "SYSTEM"],
+      default: "SYSTEM",
+    },
+    order_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
+    amount: {
+      type: Number,
+      default: null,
     },
     is_read: {
       type: Boolean,

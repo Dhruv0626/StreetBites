@@ -18,12 +18,14 @@ import { getCustomerAddresses, updateCustomerAddress } from '../../services/addr
 import { AddressModal } from '../customer/AddressModal';
 import type { AddressItem } from '../../types';
 import logoImg from '../../assets/Logo/Logo.png';
+import { notificationService } from '../../services/notificationService';
 
 export const CustomerHeader: React.FC = () => {
   const navigate = useNavigate();
   const { cartItems } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
 
   // Real Database Addresses State
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
@@ -56,6 +58,26 @@ export const CustomerHeader: React.FC = () => {
   useEffect(() => {
     loadAddresses();
   }, [user]);
+
+  // Load unread notifications count
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadNotifsCount(0);
+      return;
+    }
+    const checkUnread = async () => {
+      try {
+        const res = await notificationService.getUnreadCount();
+        if (res.success && typeof res.count === 'number') {
+          setUnreadNotifsCount(res.count);
+        }
+      } catch (e) {}
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 8000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -236,7 +258,11 @@ export const CustomerHeader: React.FC = () => {
             >
               <div className="relative w-8 h-8 rounded-full bg-[#F0ECE4] flex items-center justify-center group-hover:bg-[#FCE8E6]">
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-0 right-0 w-2 h-2 bg-[#D94A38] rounded-full border border-white"></span>
+                {unreadNotifsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#D94A38] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full border border-white">
+                    {unreadNotifsCount > 9 ? '9+' : unreadNotifsCount}
+                  </span>
+                )}
               </div>
             </button>
 
@@ -286,7 +312,11 @@ export const CustomerHeader: React.FC = () => {
             className="relative w-9 h-9 rounded-full bg-[#E5E0D8] text-[#4B5563] flex items-center justify-center border border-[#DCD6CC]"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#D94A38] rounded-full border border-white"></span>
+            {unreadNotifsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#D94A38] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full border border-white">
+                {unreadNotifsCount > 9 ? '9+' : unreadNotifsCount}
+              </span>
+            )}
           </button>
 
           <button

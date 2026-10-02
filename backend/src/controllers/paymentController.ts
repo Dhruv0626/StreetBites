@@ -9,14 +9,29 @@ import Transaction from "../models/Transaction.ts";
 import User from "../models/User.ts";
 import Address from "../models/Address.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 /**
  * Helper to resolve user from auth or request query/body
  */
 const resolveCustomer = async (req: Request) => {
-  const userId = (req as any).user?.id || (req as any).user?._id || req.body?.customer_id;
+  const userId =
+    (req as any).user?.id ||
+    (req as any).user?._id ||
+    req.body?.customer_id ||
+    (req.query?.customer_id as string);
   if (!userId) return null;
   return User.findById(userId);
+};
+
+// Helper to check if coords are missing or city center defaults
+const isCentralDefault = (coords?: [number, number] | null) => {
+  if (!coords || !Array.isArray(coords) || coords.length !== 2) return true;
+  const [lng, lat] = coords;
+  if (lng === 0 && lat === 0) return true;
+  if (Math.abs(lng - 72.5714) < 0.003 && Math.abs(lat - 23.0225) < 0.003) return true;
+  if (Math.abs(lng - 72.5873) < 0.003 && Math.abs(lat - 23.0248) < 0.003) return true;
+  return false;
 };
 
 /**
@@ -157,16 +172,6 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
     // Generate 4-digit Delivery OTP
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // Helper to check if coords are missing or city center defaults
-    const isCentralDefault = (coords?: [number, number] | null) => {
-      if (!coords || !Array.isArray(coords) || coords.length !== 2) return true;
-      const [lng, lat] = coords;
-      if (lng === 0 && lat === 0) return true;
-      if (Math.abs(lng - 72.5714) < 0.003 && Math.abs(lat - 23.0225) < 0.003) return true;
-      if (Math.abs(lng - 72.5873) < 0.003 && Math.abs(lat - 23.0248) < 0.003) return true;
-      return false;
-    };
-
     // Parse exact customer delivery coordinates [lng, lat]
     let parsedCoords: [number, number] | null = null;
 
@@ -227,17 +232,29 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
     let totalPlatformFee = 0;
     let totalVendorPayout = 0;
 
-    // 2. Create Sub-Orders for each item with exact (95% Vendor Base, 15% Platform Profit)
+    // 2. Create Sub-Orders and Aggregate Vendor Payouts
+    const stallPayoutMap = new Map<string, { stall_id: any; vendor_id?: any; stall_name: string; amount: number }>();
+
     for (const item of items) {
+      const sId = String(item.stall_id || item.stallId);
       const qty = Number(item.quantity) || 1;
       const customerPrice = Number(item.price) || 0;
 
       // Check stall for registered base_price
       let basePrice = Math.round((customerPrice / 1.1) * 100) / 100;
+      let stallName = "Street Food Stall";
+      let vendorId: any = null;
+
       try {
-        if (item.stall_id || item.stallId) {
-          const stall = await Stall.findById(item.stall_id || item.stallId);
+        if (sId) {
+          const stall = await Stall.findById(sId);
           if (stall) {
+            stallName = stall.name || "Street Food Stall";
+            vendorId = stall.vendor_id || null;
+            if (!vendorId) {
+              const vUser = await User.findOne({ stall_id: stall._id, role: "VENDOR" });
+              if (vUser) vendorId = vUser._id;
+            }
             const foundItem = stall.menu_items.find(
               (m: any) => m._id?.toString() === String(item.item_id || item.id) || m.name === item.name
             );
@@ -256,6 +273,19 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       totalPlatformFee += platformGain;
       totalVendorPayout += vendorEarnedAmount;
 
+      if (!stallPayoutMap.has(sId)) {
+        stallPayoutMap.set(sId, {
+          stall_id: new mongoose.Types.ObjectId(sId),
+          vendor_id: vendorId,
+          stall_name: stallName,
+          amount: vendorEarnedAmount,
+        });
+      } else {
+        const existing = stallPayoutMap.get(sId)!;
+        existing.amount += vendorEarnedAmount;
+        stallPayoutMap.set(sId, existing);
+      }
+
       await SubOrder.create({
         order_id: masterOrder._id,
         stall_id: item.stall_id || item.stallId,
@@ -270,26 +300,52 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
     masterOrder.platform_fee_earned = Math.round(totalPlatformFee * 100) / 100;
     await masterOrder.save();
 
-    // 3. Record Global Platform Ledger & Vendor Payout Entries
-    // PLATFORM_FEE: Global system financial entry (user_id: null)
-    await Transaction.create({
-      user_id: null,
-      order_id: masterOrder._id,
-      amount: Math.round(totalPlatformFee * 100) / 100,
-      type: "PLATFORM_FEE",
-      status: "COMPLETED",
-      note: `15% platform profit on online Order MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`,
-    });
+    const orderNum = `MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`;
 
-    // VENDOR_PAYOUT: Aggregate vendor share
-    await Transaction.create({
-      user_id: null,
-      order_id: masterOrder._id,
-      amount: Math.round(totalVendorPayout * 100) / 100,
-      type: "VENDOR_PAYOUT",
-      status: "PENDING",
-      note: `95% base food revenue payable to vendors for Order MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`,
-    });
+    // 3. Record Consolidated Single-Entry Transaction for the Order
+    const vendorPayoutsList = Array.from(stallPayoutMap.values()).map((vp) => ({
+      stall_id: vp.stall_id,
+      vendor_id: vp.vendor_id,
+      stall_name: vp.stall_name,
+      amount: Math.round(vp.amount * 100) / 100,
+      status: "PENDING" as const,
+      collected_at: null,
+      payout_at: null,
+    }));
+
+    const deliveryFeeNum = Number(delivery_fee) || 0;
+
+    await Transaction.findOneAndUpdate(
+      { order_id: masterOrder._id },
+      {
+        order_id: masterOrder._id,
+        order_number: orderNum,
+        customer_id: user._id,
+        payment_method: "ONLINE",
+        payment_status: "PAID",
+        total_order_amount: totalAmount,
+        vendor_payouts: vendorPayoutsList,
+        rider_payout: {
+          rider_id: null,
+          amount: deliveryFeeNum,
+          status: "PENDING",
+          cod_cash_collected: 0,
+          cod_cash_debt: 0,
+          payout_at: null,
+        },
+        platform_revenue: {
+          vendor_commission_amount: Math.round(totalPlatformFee * (0.05 / 0.15) * 100) / 100,
+          customer_markup_amount: Math.round(totalPlatformFee * (0.10 / 0.15) * 100) / 100,
+          total_platform_fee: Math.round(totalPlatformFee * 100) / 100,
+          tax_amount: taxAmount,
+          status: "PENDING",
+          realized_at: null,
+        },
+        settlement_status: "PENDING",
+        note: `Online payment authorized via Razorpay for Order ${orderNum}`,
+      },
+      { upsert: true, new: true }
+    );
 
     // 4. Clear Customer's Cart Document
     try {
@@ -301,12 +357,46 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       console.warn("Could not clear cart after order:", cartErr);
     }
 
+    // 5. Send In-App Notification to Customer
+    await createNotification({
+      userId: user._id,
+      title: "Order Confirmed! 🍕",
+      message: `Your Order #${orderNum} has been placed successfully. Participating food stalls are preparing your fresh items!`,
+      type: "ORDER",
+      orderId: masterOrder._id,
+      amount: masterOrder.total_amount,
+    });
+
+    // 6. Send In-App Notifications to Each Vendor Stall
+    const distinctStalls = Array.from(new Set(items.map((i: any) => i.stall_id || i.stallId).filter(Boolean)));
+    for (const sId of distinctStalls) {
+      try {
+        const stall = await Stall.findById(sId);
+        let targetVendorId = stall?.vendor_id;
+        if (!targetVendorId) {
+          const vUser = await User.findOne({ stall_id: sId, role: "VENDOR" });
+          targetVendorId = vUser?._id;
+        }
+        if (targetVendorId) {
+          await createNotification({
+            userId: targetVendorId,
+            title: "New Order Received! 🍳",
+            message: `New order #${orderNum} received for your stall (${stall?.name || "Street Stall"}). Please prepare items.`,
+            type: "ORDER",
+            orderId: masterOrder._id,
+          });
+        }
+      } catch (err) {
+        console.warn("Vendor order notification error:", err);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Payment verified and order placed successfully!",
       data: {
         orderId: masterOrder._id,
-        orderNumber: `MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`,
+        orderNumber: orderNum,
         status: masterOrder.status,
         totalAmount: masterOrder.total_amount,
         deliveryOtp: masterOrder.delivery_otp,
@@ -410,16 +500,26 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
 
     let totalPlatformFee = 0;
     let totalVendorPayout = 0;
+    const stallPayoutMap = new Map<string, { stall_id: any; vendor_id?: any; stall_name: string; amount: number }>();
 
     for (const item of items) {
+      const sId = String(item.stall_id || item.stallId);
       const qty = Number(item.quantity) || 1;
       const customerPrice = Number(item.price) || 0;
       let basePrice = Math.round((customerPrice / 1.1) * 100) / 100;
+      let stallName = "Street Food Stall";
+      let vendorId: any = null;
 
       try {
-        if (item.stall_id || item.stallId) {
-          const stall = await Stall.findById(item.stall_id || item.stallId);
+        if (sId) {
+          const stall = await Stall.findById(sId);
           if (stall) {
+            stallName = stall.name || "Street Food Stall";
+            vendorId = stall.vendor_id || null;
+            if (!vendorId) {
+              const vUser = await User.findOne({ stall_id: stall._id, role: "VENDOR" });
+              if (vUser) vendorId = vUser._id;
+            }
             const foundItem = stall.menu_items.find(
               (m: any) => m._id?.toString() === String(item.item_id || item.id) || m.name === item.name
             );
@@ -438,6 +538,19 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       totalPlatformFee += platformGain;
       totalVendorPayout += vendorEarnedAmount;
 
+      if (!stallPayoutMap.has(sId)) {
+        stallPayoutMap.set(sId, {
+          stall_id: new mongoose.Types.ObjectId(sId),
+          vendor_id: vendorId,
+          stall_name: stallName,
+          amount: vendorEarnedAmount,
+        });
+      } else {
+        const existing = stallPayoutMap.get(sId)!;
+        existing.amount += vendorEarnedAmount;
+        stallPayoutMap.set(sId, existing);
+      }
+
       await SubOrder.create({
         order_id: masterOrder._id,
         stall_id: item.stall_id || item.stallId,
@@ -451,6 +564,54 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
     masterOrder.platform_fee_earned = Math.round(totalPlatformFee * 100) / 100;
     await masterOrder.save();
 
+    const orderNum = `MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`;
+
+    // Record Consolidated Single-Entry Transaction for COD Order
+    const vendorPayoutsList = Array.from(stallPayoutMap.values()).map((vp) => ({
+      stall_id: vp.stall_id,
+      vendor_id: vp.vendor_id,
+      stall_name: vp.stall_name,
+      amount: Math.round(vp.amount * 100) / 100,
+      status: "PENDING" as const,
+      collected_at: null,
+      payout_at: null,
+    }));
+
+    const deliveryFeeNum = Number(delivery_fee) || 0;
+    const codDebtNum = Math.max(0, Math.round((totalAmount - deliveryFeeNum) * 100) / 100);
+
+    await Transaction.findOneAndUpdate(
+      { order_id: masterOrder._id },
+      {
+        order_id: masterOrder._id,
+        order_number: orderNum,
+        customer_id: user._id,
+        payment_method: "COD",
+        payment_status: "PENDING",
+        total_order_amount: totalAmount,
+        vendor_payouts: vendorPayoutsList,
+        rider_payout: {
+          rider_id: null,
+          amount: deliveryFeeNum,
+          status: "PENDING",
+          cod_cash_collected: totalAmount,
+          cod_cash_debt: codDebtNum,
+          payout_at: null,
+        },
+        platform_revenue: {
+          vendor_commission_amount: Math.round(totalPlatformFee * (0.05 / 0.15) * 100) / 100,
+          customer_markup_amount: Math.round(totalPlatformFee * (0.10 / 0.15) * 100) / 100,
+          total_platform_fee: Math.round(totalPlatformFee * 100) / 100,
+          tax_amount: taxAmount,
+          status: "PENDING",
+          realized_at: null,
+        },
+        settlement_status: "PENDING",
+        note: `Cash on Delivery (COD) Order created for ${orderNum}`,
+      },
+      { upsert: true, new: true }
+    );
+
     // Clear cart
     try {
       await Cart.findOneAndUpdate(
@@ -461,12 +622,46 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       console.warn("Could not clear cart:", cartErr);
     }
 
+    // Send In-App Notification to Customer
+    await createNotification({
+      userId: user._id,
+      title: "COD Order Confirmed! 🍔",
+      message: `Your Order #${orderNum} (Cash on Delivery) is confirmed. Food stalls are preparing your items!`,
+      type: "ORDER",
+      orderId: masterOrder._id,
+      amount: masterOrder.total_amount,
+    });
+
+    // Send In-App Notifications to Each Vendor Stall
+    const distinctStalls = Array.from(new Set(items.map((i: any) => i.stall_id || i.stallId).filter(Boolean)));
+    for (const sId of distinctStalls) {
+      try {
+        const stall = await Stall.findById(sId);
+        let targetVendorId = stall?.vendor_id;
+        if (!targetVendorId) {
+          const vUser = await User.findOne({ stall_id: sId, role: "VENDOR" });
+          targetVendorId = vUser?._id;
+        }
+        if (targetVendorId) {
+          await createNotification({
+            userId: targetVendorId,
+            title: "New Order Received! 🍳",
+            message: `New order #${orderNum} received for your stall (${stall?.name || "Street Stall"}). Please prepare items.`,
+            type: "ORDER",
+            orderId: masterOrder._id,
+          });
+        }
+      } catch (err) {
+        console.warn("Vendor order notification error:", err);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Cash on Delivery order placed successfully!",
       data: {
         orderId: masterOrder._id,
-        orderNumber: `MO-${masterOrder._id.toString().slice(-5).toUpperCase()}`,
+        orderNumber: orderNum,
         status: masterOrder.status,
         totalAmount: masterOrder.total_amount,
         deliveryOtp: masterOrder.delivery_otp,
@@ -617,14 +812,17 @@ export const verifyRiderRepay = async (req: Request, res: Response): Promise<voi
     rider.floating_cash_debt = 0;
     await rider.save();
 
-    // Record Transaction in Ledger
-    await Transaction.create({
-      user_id: rider._id,
-      amount: totalSettled,
-      type: "RIDER_COD_DEPOSIT",
-      status: "COMPLETED",
-      note: `Rider ${rider.name} settled ₹${totalSettled} floating COD debt via online payment. Payment ID: ${razorpay_payment_id || "direct"}`,
-    });
+    // Update consolidated transactions debt balance for these orders
+    const orderIds = pendingOrders.map((o) => o._id);
+    await Transaction.updateMany(
+      { order_id: { $in: orderIds } },
+      {
+        $set: {
+          "rider_payout.cod_cash_debt": 0,
+          settlement_status: "COMPLETED",
+        },
+      }
+    ).catch(() => {});
 
     res.status(200).json({
       success: true,
@@ -649,15 +847,21 @@ export const verifyRiderRepay = async (req: Request, res: Response): Promise<voi
  */
 export const getAdminFinancialOverview = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const transactions = await Transaction.find().sort({ createdAt: -1 }).limit(50).populate("user_id", "name role email").lean();
+    const allTransactions = await Transaction.find().sort({ createdAt: -1 }).lean();
 
-    // 1. Total Platform Revenue (15% Profit Ledger Entries)
-    const platformTransactions = await Transaction.find({ type: "PLATFORM_FEE" });
-    const totalPlatformRevenue = platformTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    // 1. Total Platform Revenue (15% Net Fee Earned across completed transactions)
+    const totalPlatformRevenue = allTransactions.reduce(
+      (sum, t: any) => sum + (t.platform_revenue?.total_platform_fee || 0),
+      0
+    );
 
-    // 2. Total Vendor Disbursed / Pending Payouts
-    const vendorTransactions = await Transaction.find({ type: "VENDOR_PAYOUT" });
-    const totalVendorPayouts = vendorTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    // 2. Total Vendor Payouts
+    const totalVendorPayouts = allTransactions.reduce((sum, t: any) => {
+      const vTotal = Array.isArray(t.vendor_payouts)
+        ? t.vendor_payouts.reduce((vSum: number, vp: any) => vSum + (vp.amount || 0), 0)
+        : 0;
+      return sum + vTotal;
+    }, 0);
 
     // 3. Floating COD Cash Currently in Field (Undeposited by Riders)
     const undepositedCodOrders = await Order.find({
@@ -665,11 +869,16 @@ export const getAdminFinancialOverview = async (_req: Request, res: Response): P
       cod_deposit_status: "PENDING_DEPOSIT",
       status: "DELIVERED",
     });
-    const floatingCashInField = undepositedCodOrders.reduce((sum, o) => sum + (o.cod_amount_held || o.total_amount || 0), 0);
+    const floatingCashInField = undepositedCodOrders.reduce(
+      (sum, o) => sum + (o.cod_amount_held || o.total_amount || 0),
+      0
+    );
 
-    // 4. Settled COD Deposits from Riders
-    const riderDepositTransactions = await Transaction.find({ type: "RIDER_COD_DEPOSIT" });
-    const totalRiderDeposits = riderDepositTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    // 4. Total Rider Earnings across all orders
+    const totalRiderEarnings = allTransactions.reduce(
+      (sum, t: any) => sum + (t.rider_payout?.amount || 0),
+      0
+    );
 
     res.status(200).json({
       success: true,
@@ -677,14 +886,19 @@ export const getAdminFinancialOverview = async (_req: Request, res: Response): P
         totalPlatformRevenue: Math.round(totalPlatformRevenue * 100) / 100,
         totalVendorPayouts: Math.round(totalVendorPayouts * 100) / 100,
         floatingCashInField: Math.round(floatingCashInField * 100) / 100,
-        totalRiderDeposits: Math.round(totalRiderDeposits * 100) / 100,
-        transactions: transactions.map((t: any) => ({
+        totalRiderDeposits: Math.round(totalRiderEarnings * 100) / 100,
+        transactions: allTransactions.slice(0, 50).map((t: any) => ({
           id: t._id,
-          type: t.type,
-          amount: t.amount,
-          status: t.status,
-          user: t.user_id ? `${t.user_id.name} (${t.user_id.role})` : "Global Platform System",
-          note: t.note || "Platform Ledger Entry",
+          orderNumber: t.order_number || `ORD-${t.order_id?.toString().slice(-6).toUpperCase()}`,
+          orderId: t.order_id,
+          paymentMethod: t.payment_method,
+          paymentStatus: t.payment_status,
+          totalAmount: t.total_order_amount,
+          vendorPayouts: t.vendor_payouts || [],
+          riderPayout: t.rider_payout || {},
+          platformRevenue: t.platform_revenue || {},
+          settlementStatus: t.settlement_status || "PENDING",
+          note: t.note || "Order Financial Ledger",
           createdAt: t.createdAt,
         })),
       },

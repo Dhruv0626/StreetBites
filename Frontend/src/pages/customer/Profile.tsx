@@ -31,12 +31,15 @@ import {
 } from '../../services/addressService';
 import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding';
 import type { AddressItem } from '../../types';
+import { AddressModal } from '../../components/customer/AddressModal';
+import { razorpayService } from '../../services/razorpayService';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout, updateProfile, refreshProfile } = useAuth();
   const { favorites } = useFavorites();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
 
   const profileHouseNoRef = useRef<HTMLInputElement | null>(null);
   const profileLandmarkRef = useRef<HTMLInputElement | null>(null);
@@ -112,25 +115,45 @@ export const Profile: React.FC = () => {
     pincode: '',
   });
 
-  // Total Orders calculation from storage / user history
+  // Total Orders calculation from real API + local storage cache
   const [totalOrdersCount, setTotalOrdersCount] = useState<number>(0);
 
   useEffect(() => {
+    let isMounted = true;
     if (isAuthenticated) {
-      const storedOrders = localStorage.getItem('streetbites_orders');
-      if (storedOrders) {
+      const loadOrders = async () => {
         try {
-          const parsed = JSON.parse(storedOrders);
-          setTotalOrdersCount(Array.isArray(parsed) ? parsed.length : 0);
+          const res = await razorpayService.getCustomerOrders();
+          if (isMounted && res.success && Array.isArray(res.data)) {
+            setTotalOrdersCount(res.data.length);
+            localStorage.setItem('streetbites_orders', JSON.stringify(res.data));
+            return;
+          }
         } catch (e) {
+          console.warn('Failed to load profile order count from API:', e);
+        }
+
+        const storedOrders = localStorage.getItem('streetbites_orders');
+        if (isMounted && storedOrders) {
+          try {
+            const parsed = JSON.parse(storedOrders);
+            setTotalOrdersCount(Array.isArray(parsed) ? parsed.length : 0);
+          } catch (e) {
+            setTotalOrdersCount(0);
+          }
+        } else if (isMounted) {
           setTotalOrdersCount(0);
         }
-      } else {
-        setTotalOrdersCount(0);
-      }
+      };
+
+      loadOrders();
     } else {
       setTotalOrdersCount(0);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [isAuthenticated, user]);
 
   // App Settings State (Saved in Browser Storage - Defaults to Disabled)
@@ -720,7 +743,7 @@ export const Profile: React.FC = () => {
                     <div className="text-center py-6 bg-white rounded-2xl border border-[#EAE4DA] p-4">
                       <p className="text-xs text-stone-500 font-medium mb-3">No saved addresses yet.</p>
                       <button
-                        onClick={() => setIsAddingAddress(true)}
+                        onClick={() => setIsAddressModalOpen(true)}
                         className="text-xs font-bold text-white bg-[#D94A38] px-4 py-2 rounded-xl hover:bg-[#993427] transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -779,7 +802,7 @@ export const Profile: React.FC = () => {
 
                       {!isAddingAddress && (
                         <button
-                          onClick={() => setIsAddingAddress(true)}
+                          onClick={() => setIsAddressModalOpen(true)}
                           className="text-xs font-bold text-[#D94A38] bg-white border border-[#D94A38] px-4 py-2 rounded-xl hover:bg-[#FCE8E6] transition-colors cursor-pointer inline-flex items-center gap-1.5 w-full justify-center"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -1125,6 +1148,18 @@ export const Profile: React.FC = () => {
             <span>Sign In to Your Account</span>
           </button>
         )}
+
+        {/* ─── Address Modal with Interactive Map Adjuster ─── */}
+        <AddressModal
+          isOpen={isAddressModalOpen}
+          onClose={() => setIsAddressModalOpen(false)}
+          onAddressCreated={async () => {
+            setIsAddressModalOpen(false);
+            await loadAddresses();
+          }}
+          userName={user?.name}
+          userPhone={user?.phone_number}
+        />
       </div>
     </div>
   );

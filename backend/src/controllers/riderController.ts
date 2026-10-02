@@ -9,6 +9,7 @@ import Transaction from "../models/Transaction.ts";
 import PlatformSetting from "../models/PlatformSetting.ts";
 import Address from "../models/Address.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 /**
  * Helper to resolve rider user document from auth, cookies, or query params
@@ -480,8 +481,8 @@ export const getRiderQueue = async (req: Request, res: Response): Promise<void> 
           drop:
             typeof o.delivery_address === "string"
               ? o.delivery_address
-              : o.delivery_address?.formatted ||
-                o.delivery_address?.street ||
+              : (o.delivery_address as any)?.formatted ||
+                (o.delivery_address as any)?.street ||
                 "Customer Location",
           payout: `₹${o.delivery_fee || 50}`,
           totalAmount: o.total_amount,
@@ -610,6 +611,28 @@ export const acceptQueueOrder = async (req: Request, res: Response): Promise<voi
     order.status = "READY_FOR_PICKUP";
     order.rider_earned_fee = order.delivery_fee || 50;
     await order.save();
+
+    const orderNum = `MO-${order._id.toString().slice(-5).toUpperCase()}`;
+
+    // Update Consolidated Transaction Document with assigned rider
+    await Transaction.findOneAndUpdate(
+      { order_id: order._id },
+      {
+        $set: {
+          "rider_payout.rider_id": rider._id,
+          "rider_payout.amount": order.rider_earned_fee,
+        },
+      }
+    ).catch(() => {});
+
+    // Send In-App Notification to Rider
+    await createNotification({
+      userId: rider._id,
+      title: "Delivery Assigned! 🛵",
+      message: `You have accepted Order #${orderNum}. Head to the food stalls for pickup.`,
+      type: "DELIVERY",
+      orderId: order._id,
+    });
 
     res.status(200).json({
       success: true,
@@ -846,6 +869,60 @@ export const getActiveRoute = async (req: Request, res: Response): Promise<void>
 };
 
 /**
+ * @desc    Advance checkpoint or mark stall pickup collected
+ * @route   POST /api/rider/orders/:id/collect-checkpoint
+ */
+export const collectRouteCheckpoint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rider = await resolveRider(req);
+    if (!rider) {
+      res.status(404).json({ success: false, message: "Rider not found." });
+      return;
+    }
+
+    const { id } = req.params;
+    const { checkpointIndex, totalCheckpoints } = req.body;
+
+    let order: any = null;
+    if (mongoose.isValidObjectId(id)) {
+      order = await Order.findById(id);
+    }
+    if (!order) {
+      const cleanId = id.replace(/^ORD-|^MO-/i, "");
+      order = await Order.findOne({
+        _id: { $regex: new RegExp(cleanId + "$", "i") },
+      });
+    }
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found." });
+      return;
+    }
+
+    // If rider has collected stalls (or reaches the drop stop), update status to OUT_FOR_DELIVERY
+    if (typeof checkpointIndex === "number" && totalCheckpoints && checkpointIndex >= totalCheckpoints - 2) {
+      order.status = "OUT_FOR_DELIVERY";
+      await order.save();
+    } else if (order.status === "READY_FOR_PICKUP") {
+      order.status = "OUT_FOR_DELIVERY";
+      await order.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Checkpoint updated successfully.",
+      orderStatus: order.status,
+    });
+  } catch (error: any) {
+    console.error("Collect Route Checkpoint Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to update checkpoint.",
+    });
+  }
+};
+
+/**
  * @desc    Get Rider Delivery History
  * @route   GET /api/rider/history
  */
@@ -966,6 +1043,95 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
       { $set: { stall_status: "READY" } }
     );
 
+    const orderNum = `MO-${order._id.toString().slice(-5).toUpperCase()}`;
+
+    // 1. Notify Customer of Delivery Completion
+    if (order.customer_id) {
+      await createNotification({
+        userId: order.customer_id,
+        title: "Order Delivered! 🎉",
+        message: `Your Order #${orderNum} has been delivered at your doorstep. Enjoy your hot street food meal!`,
+        type: "DELIVERY",
+        orderId: order._id,
+      });
+    }
+
+    // 2. Rider Payout Notification & Wallet Credit
+    const riderEarned = order.rider_earned_fee || order.delivery_fee || 50;
+    await User.findByIdAndUpdate(rider._id, { $inc: { wallet_balance: riderEarned } });
+    await createNotification({
+      userId: rider._id,
+      title: "Delivery Payout Credited! 💵",
+      message: `₹${riderEarned} delivery payout credited to your wallet for completing Order #${orderNum}.`,
+      type: "PAYOUT",
+      orderId: order._id,
+      amount: riderEarned,
+    });
+
+    // 3. Update Consolidated Single Transaction Document
+    try {
+      const isCod = order.payment_method === "COD";
+      const codDebtAmount = Math.max(0, Math.round(((order.total_amount || 0) - riderEarned) * 100) / 100);
+
+      await Transaction.findOneAndUpdate(
+        { order_id: order._id },
+        {
+          $set: {
+            "rider_payout.rider_id": rider._id,
+            "rider_payout.amount": riderEarned,
+            "rider_payout.status": "COMPLETED",
+            "rider_payout.cod_cash_collected": isCod ? (order.total_amount || 0) : 0,
+            "rider_payout.cod_cash_debt": isCod ? codDebtAmount : 0,
+            "rider_payout.payout_at": new Date(),
+            "vendor_payouts.$[].status": "COMPLETED",
+            "vendor_payouts.$[].payout_at": new Date(),
+            "platform_revenue.status": "COMPLETED",
+            "platform_revenue.realized_at": new Date(),
+            settlement_status: "COMPLETED",
+          },
+        }
+      );
+    } catch (txnErr) {
+      console.warn("Could not update transaction settlement state:", txnErr);
+    }
+
+    // 4. Vendor Payout Notifications & Wallet Credits
+    try {
+      const subOrders = await SubOrder.find({ order_id: order._id }).populate("stall_id");
+      const stallPayoutMap = new Map<string, { stall: any; amount: number }>();
+      for (const so of subOrders) {
+        const stall = so.stall_id as any;
+        const sId = stall?._id?.toString() || so.stall_id?.toString();
+        if (!sId) continue;
+        const existing = stallPayoutMap.get(sId) || { stall, amount: 0 };
+        existing.amount += so.vendor_earned_amount || 0;
+        stallPayoutMap.set(sId, existing);
+      }
+
+      for (const [_, entry] of stallPayoutMap.entries()) {
+        const stall = entry.stall;
+        const payoutAmount = Math.round(entry.amount * 100) / 100;
+        const vendorId = stall?.vendor_id;
+        let vendorUser = vendorId ? await User.findById(vendorId) : null;
+        if (!vendorUser && stall?._id) {
+          vendorUser = await User.findOne({ stall_id: stall._id, role: "VENDOR" });
+        }
+        if (vendorUser && payoutAmount > 0) {
+          await User.findByIdAndUpdate(vendorUser._id, { $inc: { wallet_balance: payoutAmount } });
+          await createNotification({
+            userId: vendorUser._id,
+            title: "Payout Credited! 💰",
+            message: `₹${payoutAmount} food sales revenue credited to your wallet for Order #${orderNum}.`,
+            type: "PAYOUT",
+            orderId: order._id,
+            amount: payoutAmount,
+          });
+        }
+      }
+    } catch (vendorNotifErr) {
+      console.warn("Vendor payout notification error:", vendorNotifErr);
+    }
+
     res.status(200).json({
       success: true,
       message: "Order successfully delivered! Payouts updated.",
@@ -1017,14 +1183,17 @@ export const settleRiderDebt = async (req: Request, res: Response): Promise<void
         }
       );
 
-      // Record transaction
-      await Transaction.create({
-        user_id: rider._id,
-        amount: totalSettled,
-        type: "RIDER_COD_DEDUCTION",
-        status: "COMPLETED",
-        note: `COD Debt settled by rider ${rider.name}`,
-      });
+      // Update consolidated transactions debt balance for these orders
+      const orderIds = pendingOrders.map((o) => o._id);
+      await Transaction.updateMany(
+        { order_id: { $in: orderIds } },
+        {
+          $set: {
+            "rider_payout.cod_cash_debt": 0,
+            settlement_status: "COMPLETED",
+          },
+        }
+      ).catch(() => {});
     }
 
     res.status(200).json({

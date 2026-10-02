@@ -14,53 +14,54 @@ import { Cluster } from "../models/Cluster.ts";
 export const getAdminTransactions = async (_req: Request, res: Response): Promise<void> => {
   try {
     const transactions = await Transaction.find()
-      .populate("user_id", "name email phone_number role")
-      .populate("order_id", "total_amount status delivery_fee rider_earned_fee platform_fee_earned")
+      .populate("customer_id", "name email phone_number")
+      .populate("rider_payout.rider_id", "name phone_number")
+      .populate("vendor_payouts.vendor_id", "name email phone_number")
+      .populate("vendor_payouts.stall_id", "name")
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedTransactions = transactions.map((t: any) => ({
-      id: t._id.toString(),
-      orderId: t.order_id?._id ? `ORD-${t.order_id._id.toString().slice(-6).toUpperCase()}` : "N/A",
-      type: t.type,
-      amount: t.amount || 0,
-      vendorGain: t.type === "VENDOR_PAYOUT" ? t.amount : 0,
-      riderGain: t.type === "RIDER_EARNING" ? t.amount : 0,
-      platformGain: t.type === "PLATFORM_FEE" ? t.amount : 0,
-      total: t.order_id?.total_amount || t.amount || 0,
-      status: t.status?.toLowerCase() || "pending",
-      user: t.user_id ? {
-        id: t.user_id._id,
-        name: t.user_id.name,
-        role: t.user_id.role,
-        email: t.user_id.email,
-        phone: t.user_id.phone_number,
-      } : null,
-      date: t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }) : "N/A",
-    }));
+    const formattedTransactions = transactions.map((t: any) => {
+      const vendorTotal = Array.isArray(t.vendor_payouts)
+        ? t.vendor_payouts.reduce((sum: number, vp: any) => sum + (vp.amount || 0), 0)
+        : 0;
 
-    const payouts = formattedTransactions.filter(
-      (t) =>
-        t.type === "VENDOR_PAYOUT" ||
-        t.type === "RIDER_EARNING" ||
-        t.type === "PLATFORM_FEE" ||
-        t.type === "RIDER_COD_DEPOSIT"
-    );
-    const refunds = formattedTransactions.filter((t) => t.type === "CUSTOMER_REFUND").map(r => ({
-      id: r.id,
-      orderId: r.orderId,
-      customerName: r.user?.name || "Customer",
-      reason: "Order issue resolution / Cancellation",
-      amount: r.amount,
-      date: r.date,
-      status: r.status,
-    }));
+      return {
+        id: t._id.toString(),
+        orderId: t.order_number || `ORD-${t.order_id?.toString().slice(-6).toUpperCase()}`,
+        type: t.payment_method === "ONLINE" ? "ONLINE_ORDER" : "COD_ORDER",
+        amount: t.total_order_amount || 0,
+        vendorGain: Math.round(vendorTotal * 100) / 100,
+        riderGain: Math.round((t.rider_payout?.amount || 0) * 100) / 100,
+        platformGain: Math.round((t.platform_revenue?.total_platform_fee || 0) * 100) / 100,
+        total: t.total_order_amount || 0,
+        status: t.settlement_status?.toLowerCase() || "pending",
+        user: t.customer_id
+          ? {
+              id: t.customer_id._id,
+              name: t.customer_id.name,
+              role: "CUSTOMER",
+              email: t.customer_id.email,
+              phone: t.customer_id.phone_number,
+            }
+          : null,
+        vendorPayouts: t.vendor_payouts || [],
+        riderPayout: t.rider_payout || {},
+        platformRevenue: t.platform_revenue || {},
+        date: t.createdAt
+          ? new Date(t.createdAt).toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "N/A",
+      };
+    });
+
+    const payouts = formattedTransactions;
+    const refunds: any[] = [];
 
     // Calculate floating COD cash held by riders in field
     const pendingCodOrders = await Order.find({

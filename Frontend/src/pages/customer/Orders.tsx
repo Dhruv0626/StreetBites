@@ -7,6 +7,12 @@ import {
   MapPin,
   CheckCircle2,
   Clock,
+  Bike,
+  ChefHat,
+  ShoppingBag,
+  Home,
+  Phone,
+  ShieldCheck,
 } from 'lucide-react';
 import type { CartItem } from '../../types';
 import { useNavigate } from 'react-router';
@@ -284,32 +290,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                             {order.address}
                           </span>
                         </div>
-                        {order.deliveryOtp && (
-                          <div className="flex justify-between text-[#4B5563]">
-                            <span>Delivery OTP:</span>
-                            <span className="font-mono font-bold text-[#D94A38]">{order.deliveryOtp}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-2 pt-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReorder(order.id);
-                          }}
-                          disabled={reorderingId === order.id}
-                          className="w-full bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm disabled:opacity-80"
-                        >
-                          {reorderingId === order.id ? (
-                            <img src={buttonLoader} alt="Loading..." className="h-4 w-auto" />
-                          ) : (
-                            <>
-                              <RotateCcw className="w-4 h-4" />
-                              <span>Order Again</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex justify-between text-[#4B5563]">
+                          <span>Delivery OTP:</span>
+                          <span className="font-mono font-bold text-[#1C1917]">
+                            {order.status === 'Delivered' || order.rawStatus === 'DELIVERED' ? '- - - -' : (order.deliveryOtp || '- - - -')}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -383,192 +369,425 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         {/* ─── DESKTOP LIVE ORDER VIEW ─── */}
         {activeTab === 'live' && (
           <div className="animate-fadeIn">
-            {currentLiveOrder ? (
-              <div>
-                {/* Header info */}
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h1 className="text-3xl font-bold text-[#1C1917]">
-                      Order in Progress
-                    </h1>
-                    <p className="text-xs text-[#8E8B85] mt-1">
-                      {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · Order #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => handleNav('home')}
-                      className="bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
-                    >
-                      <span>Explore More Food</span>
-                    </button>
-                  </div>
-                </div>
+            {currentLiveOrder ? (() => {
+              const rawStatus = String(currentLiveOrder?.rawStatus || currentLiveOrder?.status || '').toUpperCase();
+              const isDelivered = rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered';
+              const isOutForDelivery = rawStatus === 'OUT_FOR_DELIVERY' || currentLiveOrder?.status === 'Out for Delivery';
+              const isReadyForPickup = rawStatus === 'READY_FOR_PICKUP' || currentLiveOrder?.status === 'Ready for Pickup';
+              const allStallsReady = liveItems.length > 0 && liveItems.every((it: any) => it.status === 'READY');
+              const hasRider = !!currentLiveOrder?.rider;
 
-                <div className="grid grid-cols-12 gap-8 items-start">
-                  {/* Left: Stalls & Real Items in Order */}
-                  <div className="col-span-8 space-y-6">
-                    {/* Multi-Stall Sub-orders List */}
-                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
-                      <div className="flex justify-between items-center pb-4 border-b border-[#F5F0E8] mb-4">
-                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917]">
-                          Multi-Stall Sub-Orders
-                        </h3>
-                        <span className="text-[10px] text-[#8E8B85] font-bold uppercase">
-                          {liveStalls.length} Stalls Consolidated
+              // Step Indices: 0: Stall Status, 1: Rider Collected Food, 2: Rider on the Way, 3: Rider is on Door, 4: Delivered
+              let currentStep = 0;
+              if (isDelivered) {
+                currentStep = 4;
+              } else if (isOutForDelivery) {
+                currentStep = 2; // Rider on the Way (or 3 if at doorstep)
+              } else if (isReadyForPickup || (hasRider && allStallsReady)) {
+                currentStep = 1; // Rider Collected Food / Collecting from stalls
+              } else {
+                currentStep = 0; // Stall Status (Cooking / Preparing)
+              }
+
+              const steps = [
+                {
+                  id: 0,
+                  label: 'Stall Status',
+                  desc: 'Kitchens Preparing',
+                  icon: ChefHat,
+                  color: '#D94A38',
+                },
+                {
+                  id: 1,
+                  label: 'Food Collected',
+                  desc: 'Gathered by Rider',
+                  icon: ShoppingBag,
+                  color: '#F59E0B',
+                },
+                {
+                  id: 2,
+                  label: 'Rider on the Way',
+                  desc: 'En Route to Address',
+                  icon: Bike,
+                  color: '#0284C7',
+                },
+                {
+                  id: 3,
+                  label: 'Rider on Door',
+                  desc: 'Doorstep & OTP Handoff',
+                  icon: Home,
+                  color: '#059669',
+                },
+              ];
+
+              return (
+                <div className="space-y-6">
+                  {/* Header info */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          Live Order Tracking
+                        </span>
+                        <span className="text-xs text-[#8E8B85] font-semibold">
+                          Order #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
                         </span>
                       </div>
-                      <div className="space-y-3">
-                        {liveStalls.map((stallName: string, sIdx: number) => {
-                          const stallTitle = typeof stallName === 'string' ? stallName : (stallName as any)?.name || 'Food Stall';
-                          const stallItems = liveItems.filter((it: any) => {
-                            const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
-                            return !itemStall || itemStall === stallTitle;
-                          });
-                          const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
-                          const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
-                          const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
-                          const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
-                          const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
+                      <h1 className="text-3xl font-bold text-[#1C1917]">
+                        {isDelivered
+                          ? 'Order Delivered!'
+                          : currentStep === 3
+                            ? 'Rider is at Your Doorstep!'
+                            : currentStep === 2
+                              ? 'Rider is On The Way to You!'
+                              : currentStep === 1
+                                ? 'Rider is Collecting Food'
+                                : 'Kitchens are Preparing Your Order'}
+                      </h1>
+                      <p className="text-xs text-[#8E8B85] mt-1">
+                        {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · {liveStalls.length} Food Stall{liveStalls.length > 1 ? 's' : ''} Consolidated
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleNav('home')}
+                        className="bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+                      >
+                        <span>Explore More Food</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ─── 4-STAGE FULL TRACKING FLOW STEPPER ─── */}
+                  <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
+                    <div className="flex justify-between items-center mb-6">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#D94A38] animate-ping" />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-[#1C1917]">
+                          Live Journey Tracking
+                        </h3>
+                      </div>
+                      <span className="text-[11px] font-bold text-[#8E8B85]">
+                        {isDelivered
+                          ? 'All 4 Milestones Completed'
+                          : `Milestone ${Math.min(currentStep + 1, 4)} of 4`}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      {/* Connecting Line Background */}
+                      <div className="absolute top-6 left-10 right-10 h-1 bg-[#F0ECE6] -translate-y-1/2 z-0 rounded-full" />
+                      {/* Active Connecting Line Progress */}
+                      <div
+                        className="absolute top-6 left-10 h-1 bg-gradient-to-r from-[#D94A38] via-[#F59E0B] to-[#059669] -translate-y-1/2 z-0 rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, (currentStep / 3) * 100))}%`,
+                          maxWidth: 'calc(100% - 80px)',
+                        }}
+                      />
+
+                      <div className="grid grid-cols-4 gap-2 relative z-10">
+                        {steps.map((step) => {
+                          const isDone = currentStep > step.id || isDelivered;
+                          const isCurrent = currentStep === step.id && !isDelivered;
+                          const IconComp = step.icon;
 
                           return (
-                            <div
-                              key={sIdx}
-                              className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${
-                                isRejected ? 'bg-red-50/50 border-red-200 opacity-80' : 'bg-[#FAF7F2] border-[#EAE4DA]'
-                              }`}
-                            >
-                              <div className="flex gap-3 items-center">
-                                <span className={`w-8 h-8 rounded-full text-xs font-black flex items-center justify-center select-none ${
-                                  isRejected ? 'bg-red-100 text-red-600' : 'bg-[#1C1917] text-white'
-                                }`}>
-                                  S{sIdx + 1}
-                                </span>
-                                <div>
-                                  <span className="text-xs font-bold text-[#1C1917] block">
-                                    {stallTitle}
-                                  </span>
-                                  <span className="text-[10px] text-[#8E8B85] block mt-0.5">
-                                    {isRejected
-                                      ? 'Item unavailable (Refund processed)'
-                                      : stallItems.length > 0
-                                        ? stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : (i.name?.name || 'Item')}`).join(' · ')
-                                        : 'Consolidated Items'}
-                                  </span>
-                                </div>
+                            <div key={step.id} className="flex flex-col items-center text-center">
+                              {/* Step Icon Badge */}
+                              <div
+                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm ${
+                                  isDone
+                                    ? 'bg-[#059669] text-white border-2 border-[#059669]'
+                                    : isCurrent
+                                      ? 'bg-white text-[#D94A38] border-2 border-[#D94A38] ring-4 ring-[#D94A38]/15 scale-110'
+                                      : 'bg-[#FAF7F2] text-[#8E8B85] border-2 border-[#EAE4DA]'
+                                }`}
+                              >
+                                {isDone ? (
+                                  <CheckCircle2 className="w-6 h-6 text-white" />
+                                ) : (
+                                  <IconComp className={`w-5 h-5 ${isCurrent ? 'animate-bounce' : ''}`} />
+                                )}
                               </div>
-                              {isRejected ? (
-                                <span className="bg-red-50 text-red-700 border border-red-200 text-[10px] font-extrabold px-3 py-1 rounded-full">
-                                  Out of Stock (Refunded)
+
+                              {/* Label & Description */}
+                              <div className="mt-3">
+                                <span
+                                  className={`text-xs font-black block ${
+                                    isDone
+                                      ? 'text-[#059669]'
+                                      : isCurrent
+                                        ? 'text-[#D94A38]'
+                                        : 'text-[#8E8B85]'
+                                  }`}
+                                >
+                                  {step.label}
                                 </span>
-                              ) : isAllReady ? (
-                                <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1">
-                                  <CheckCircle2 className="w-3 h-3 text-[#137333]" /> Ready
+                                <span className="text-[10px] text-[#8E8B85] font-semibold block mt-0.5 max-w-[130px] leading-tight">
+                                  {step.desc}
                                 </span>
-                              ) : isCooking ? (
-                                <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-3 py-1 rounded-full">
-                                  Cooking ({prepMins}m)
-                                </span>
-                              ) : isAccepted ? (
-                                <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-extrabold px-3 py-1 rounded-full">
-                                  Accepted
-                                </span>
-                              ) : (
-                                <span className="bg-[#FAF7F2] text-[#8E8B85] border border-[#EAE4DA] text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                                  <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting for stall...
-                                </span>
-                              )}
+                              </div>
                             </div>
                           );
                         })}
-                          </div>
-                    </div>
-
-                    {/* Delivery Address Card */}
-                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-2xs flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-2xl bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-[10px] uppercase font-bold text-[#8E8B85] block tracking-wider">
-                          Delivering to
-                        </span>
-                        <span className="text-xs font-bold text-[#1C1917] block mt-0.5">
-                          {typeof currentLiveOrder?.address === 'string'
-                            ? currentLiveOrder.address
-                            : (currentLiveOrder?.address as any)?.formatted || 'Saved Delivery Address'}
-                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right: Live Status & Delivery OTP */}
-                  <div className="col-span-4 space-y-6">
-                    <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8E8B85]">
-                          Order Status
-                        </span>
-                        <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 select-none">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
-                          CONFIRMED
-                        </span>
-                      </div>
-
-                      <div>
-                        <h3 className="text-xl font-bold text-[#1C1917]">
-                          Kitchens are Cooking
-                        </h3>
-                        <p className="text-xs text-[#8E8B85] mt-1 leading-relaxed">
-                          Your street food order is confirmed and being prepared simultaneously across participating stalls.
-                        </p>
-                      </div>
-
-                      {/* Delivery Verification OTP */}
-                      {currentLiveOrder?.rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered' || currentLiveOrder?.deliveryOtp === '- - - -' ? (
-                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
-                          <span className="text-[10px] uppercase font-extrabold text-emerald-800 tracking-wider block">
-                            Delivery Completed
-                          </span>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-2xl font-mono font-black text-emerald-700 tracking-widest">
-                              - - - -
-                            </span>
-                            <span className="text-[10px] text-emerald-700 font-bold max-w-[140px] text-right flex items-center justify-end gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Verified at Doorstep
-                            </span>
+                  {/* Main Grid: Left Details & Right Actions */}
+                  <div className="grid grid-cols-12 gap-8 items-start">
+                    {/* Left: Stalls, Rider & Delivery Info */}
+                    <div className="col-span-8 space-y-6">
+                      {/* Multi-Stall Sub-orders Live Breakdown */}
+                      <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
+                        <div className="flex justify-between items-center pb-4 border-b border-[#F5F0E8] mb-4">
+                          <div>
+                            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#1C1917]">
+                              Multi-Stall Preparation Status
+                            </h3>
+                            <p className="text-[11px] text-[#8E8B85] mt-0.5">
+                              Real-time cooking progress from {liveStalls.length} vendor stall{liveStalls.length > 1 ? 's' : ''}
+                            </p>
                           </div>
-                        </div>
-                      ) : currentLiveOrder?.deliveryOtp ? (
-                        <div className="p-4 bg-gradient-to-r from-[#FAF0ED] to-[#FFF8F0] border border-[#FCE8E6] rounded-2xl">
-                          <span className="text-[10px] uppercase font-extrabold text-[#8E8B85] tracking-wider block">
-                            Your 4-Digit Delivery OTP
+                          <span className="text-[10px] text-[#8E8B85] font-bold uppercase bg-[#FAF7F2] border border-[#EAE4DA] px-2.5 py-1 rounded-full">
+                            {liveStalls.length} Stalls Consolidated
                           </span>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-2xl font-mono font-black text-[#D94A38] tracking-widest">
-                              {currentLiveOrder?.deliveryOtp}
-                            </span>
-                            <span className="text-[10px] text-[#8E8B85] font-semibold max-w-[120px] text-right">
-                              Share with rider upon doorstep delivery
-                            </span>
-                          </div>
                         </div>
-                      ) : null}
 
-                      {/* Payment summary */}
-                      <div className="pt-3 border-t border-[#F5F0E8] flex justify-between items-center text-xs">
-                        <span className="text-[#8E8B85]">Payment Method:</span>
-                        <span className="font-bold text-[#1C1917]">{currentLiveOrder?.payment || 'Online'}</span>
+                        <div className="space-y-3">
+                          {liveStalls.map((stallName: string, sIdx: number) => {
+                            const stallTitle = typeof stallName === 'string' ? stallName : (stallName as any)?.name || 'Food Stall';
+                            const stallItems = liveItems.filter((it: any) => {
+                              const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
+                              return !itemStall || itemStall === stallTitle;
+                            });
+                            const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
+                            const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
+                            const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
+                            const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
+                            const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
+                            const isPickedUp = currentStep >= 1;
+
+                            return (
+                              <div
+                                key={sIdx}
+                                className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${
+                                  isRejected
+                                    ? 'bg-red-50/50 border-red-200 opacity-80'
+                                    : isPickedUp
+                                      ? 'bg-[#F0FDF4] border-[#BBF7D0]'
+                                      : 'bg-[#FAF7F2] border-[#EAE4DA]'
+                                }`}
+                              >
+                                <div className="flex gap-3.5 items-center">
+                                  <span
+                                    className={`w-9 h-9 rounded-2xl text-xs font-black flex items-center justify-center select-none shadow-3xs ${
+                                      isRejected
+                                        ? 'bg-red-100 text-red-600'
+                                        : isPickedUp
+                                          ? 'bg-[#059669] text-white'
+                                          : 'bg-[#1C1917] text-white'
+                                    }`}
+                                  >
+                                    S{sIdx + 1}
+                                  </span>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-[#1C1917]">
+                                        {stallTitle}
+                                      </span>
+                                      {isPickedUp && (
+                                        <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.2 rounded-md">
+                                          Collected
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-[#8E8B85] block mt-0.5">
+                                      {isRejected
+                                        ? 'Item unavailable (Refund processed)'
+                                        : stallItems.length > 0
+                                          ? stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : (i.name?.name || 'Item')}`).join(' · ')
+                                          : 'Consolidated Items'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {isRejected ? (
+                                  <span className="bg-red-50 text-red-700 border border-red-200 text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                    Out of Stock (Refunded)
+                                  </span>
+                                ) : isPickedUp ? (
+                                  <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[#137333]" /> Picked Up by Rider
+                                  </span>
+                                ) : isAllReady ? (
+                                  <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[#137333]" /> Food Ready
+                                  </span>
+                                ) : isCooking ? (
+                                  <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-amber-700 animate-spin" /> Cooking ({prepMins}m)
+                                  </span>
+                                ) : isAccepted ? (
+                                  <span className="bg-[#FAF0ED] text-[#D94A38] border border-[#FCE8E6] text-[10px] font-extrabold px-3 py-1 rounded-full">
+                                    Accepted
+                                  </span>
+                                ) : (
+                                  <span className="bg-[#FAF7F2] text-[#8E8B85] border border-[#EAE4DA] text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting for stall...
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center text-xs font-bold text-[#1C1917]">
-                        <span>Total Paid:</span>
-                        <span className="text-base text-[#D94A38]">₹{currentLiveOrder?.total || 0}</span>
+
+                      {/* Assigned Rider Contact Banner */}
+                      {currentLiveOrder?.rider && (
+                        <div className="bg-gradient-to-r from-[#FAF0ED] to-white rounded-3xl border border-[#FCE8E6] p-5 shadow-2xs flex justify-between items-center gap-4">
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-12 h-12 rounded-2xl bg-[#D94A38] text-white flex items-center justify-center font-bold text-base shadow-sm">
+                              🛵
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-[#1C1917]">
+                                  {currentLiveOrder.rider.name || 'StreetBites Delivery Partner'}
+                                </span>
+                                <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Verified Rider
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#8E8B85] mt-0.5">
+                                Dedicated motorbike courier delivering all your stalls together
+                              </p>
+                            </div>
+                          </div>
+
+                          {currentLiveOrder.rider.phone && (
+                            <a
+                              href={`tel:${currentLiveOrder.rider.phone}`}
+                              className="px-4 py-2 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-black flex items-center gap-2 shadow-3xs transition-all no-underline shrink-0"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>Call Rider</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Delivery Address Card */}
+                      <div className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-2xs flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center shrink-0">
+                          <MapPin className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[10px] uppercase font-bold text-[#8E8B85] block tracking-wider">
+                            Delivering to
+                          </span>
+                          <span className="text-xs font-bold text-[#1C1917] block mt-0.5">
+                            {typeof currentLiveOrder?.address === 'string'
+                              ? currentLiveOrder.address
+                              : (currentLiveOrder?.address as any)?.formatted || 'Saved Delivery Address'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Live Status & Delivery OTP */}
+                    <div className="col-span-4 space-y-6">
+                      <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8E8B85]">
+                            Current Milestone
+                          </span>
+                          <span className="bg-[#E6F4EA] text-[#137333] border border-[#A7E1BA] text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 select-none">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#137333] animate-pulse" />
+                            {isDelivered
+                              ? 'COMPLETED'
+                              : currentStep === 3
+                                ? 'AT DOOR'
+                                : currentStep === 2
+                                  ? 'ON THE WAY'
+                                  : currentStep === 1
+                                    ? 'COLLECTING'
+                                    : 'COOKING'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-xl font-bold text-[#1C1917]">
+                            {isDelivered
+                              ? 'Delivered to Doorstep'
+                              : currentStep === 3
+                                ? 'Rider is at Your Door!'
+                                : currentStep === 2
+                                  ? 'Rider is On The Way'
+                                  : currentStep === 1
+                                    ? 'Rider Collecting Food'
+                                    : 'Kitchens are Cooking'}
+                          </h3>
+                          <p className="text-xs text-[#8E8B85] mt-1 leading-relaxed">
+                            {isDelivered
+                              ? 'Your delivery is verified and completed. Enjoy your hot street food meal!'
+                              : currentStep === 3
+                                ? 'Your delivery partner has arrived outside. Share your 4-digit Delivery OTP below to collect your food.'
+                                : currentStep === 2
+                                  ? 'Your multi-stall packages have been collected and are riding straight to your destination address.'
+                                  : currentStep === 1
+                                    ? 'Your rider is picking up hot items from the market stalls.'
+                                    : 'Participating Khau Galli stalls are preparing your items freshly in their kitchen.'}
+                          </p>
+                        </div>
+
+                        {/* Delivery Verification OTP */}
+                        {isDelivered || currentLiveOrder?.deliveryOtp === '- - - -' ? (
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                            <span className="text-[10px] uppercase font-extrabold text-emerald-800 tracking-wider block">
+                              Delivery Completed
+                            </span>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-2xl font-mono font-black text-emerald-700 tracking-widest">
+                                - - - -
+                              </span>
+                              <span className="text-[10px] text-emerald-700 font-bold max-w-[140px] text-right flex items-center justify-end gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Verified at Doorstep
+                              </span>
+                            </div>
+                          </div>
+                        ) : currentLiveOrder?.deliveryOtp ? (
+                          <div className="p-4 bg-gradient-to-r from-[#FAF0ED] to-[#FFF8F0] border border-[#FCE8E6] rounded-2xl shadow-3xs">
+                            <span className="text-[10px] uppercase font-extrabold text-[#8E8B85] tracking-wider block">
+                              Your 4-Digit Delivery OTP
+                            </span>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-3xl font-mono font-black text-[#D94A38] tracking-widest">
+                                {currentLiveOrder?.deliveryOtp}
+                              </span>
+                              <span className="text-[10px] text-[#8E8B85] font-semibold max-w-[120px] text-right">
+                                Share with rider upon doorstep delivery
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {/* Payment summary */}
+                        <div className="pt-3 border-t border-[#F5F0E8] flex justify-between items-center text-xs">
+                          <span className="text-[#8E8B85]">Payment Method:</span>
+                          <span className="font-bold text-[#1C1917]">{currentLiveOrder?.payment || 'Online'}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs font-bold text-[#1C1917]">
+                          <span>Total Paid:</span>
+                          <span className="text-base text-[#D94A38]">₹{currentLiveOrder?.total || 0}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               /* Empty Live Order State */
               <div className="bg-white border border-[#EAE4DA] rounded-3xl p-16 text-center space-y-4 max-w-xl mx-auto my-8 animate-fadeIn">
                 <div>
@@ -623,15 +842,17 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           <div className="bg-[#F5F0E8] p-1 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-                }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
+                activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+              }`}
             >
               Live
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-                }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
+                activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+              }`}
             >
               History ({ordersToDisplay.length})
             </button>
@@ -641,88 +862,219 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         {/* Mobile Live View */}
         {activeTab === 'live' && (
           <div>
-            {currentLiveOrder ? (
-              <div className="space-y-4 animate-fadeIn">
-                <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-[#8E8B85]">Active Order</span>
-                    <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-black px-2 py-0.5 rounded-full uppercase border border-[#A7E1BA]">
-                      Confirmed
-                    </span>
+            {currentLiveOrder ? (() => {
+              const rawStatus = String(currentLiveOrder?.rawStatus || currentLiveOrder?.status || '').toUpperCase();
+              const isDelivered = rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered';
+              const isOutForDelivery = rawStatus === 'OUT_FOR_DELIVERY' || currentLiveOrder?.status === 'Out for Delivery';
+              const isReadyForPickup = rawStatus === 'READY_FOR_PICKUP' || currentLiveOrder?.status === 'Ready for Pickup';
+              const allStallsReady = liveItems.length > 0 && liveItems.every((it: any) => it.status === 'READY');
+              const hasRider = !!currentLiveOrder?.rider;
+
+              let currentStep = 0;
+              if (isDelivered) {
+                currentStep = 4;
+              } else if (isOutForDelivery) {
+                currentStep = 2;
+              } else if (isReadyForPickup || (hasRider && allStallsReady)) {
+                currentStep = 1;
+              } else {
+                currentStep = 0;
+              }
+
+              const mobileSteps = [
+                { id: 0, label: 'Stall Status', icon: ChefHat },
+                { id: 1, label: 'Food Collected', icon: ShoppingBag },
+                { id: 2, label: 'On The Way', icon: Bike },
+                { id: 3, label: 'At Door', icon: Home },
+              ];
+
+              return (
+                <div className="space-y-4 animate-fadeIn">
+                  {/* Active Order Card */}
+                  <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] uppercase font-bold text-[#8E8B85]">
+                        #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
+                      </span>
+                      <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-black px-2 py-0.5 rounded-full uppercase border border-[#A7E1BA]">
+                        {isDelivered
+                          ? 'Delivered'
+                          : currentStep === 3
+                            ? 'At Door'
+                            : currentStep === 2
+                              ? 'On The Way'
+                              : currentStep === 1
+                                ? 'Collecting'
+                                : 'Cooking'}
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl font-bold text-[#1C1917]">
+                      {isDelivered
+                        ? 'Order Delivered!'
+                        : currentStep === 3
+                          ? 'Rider at Your Door!'
+                          : currentStep === 2
+                            ? 'Rider is on the way!'
+                            : currentStep === 1
+                              ? 'Rider Collecting Food'
+                              : 'Kitchens Cooking'}
+                    </h2>
+                    <p className="text-xs text-[#8E8B85]">
+                      {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · {liveStalls.length} Stalls
+                    </p>
+
+                    {/* Mobile 4-Step Visual Flow */}
+                    <div className="pt-2 border-t border-[#F5F0E8]">
+                      <div className="grid grid-cols-4 gap-1">
+                        {mobileSteps.map((mStep) => {
+                          const isDone = currentStep > mStep.id || isDelivered;
+                          const isCurrent = currentStep === mStep.id && !isDelivered;
+                          const MIcon = mStep.icon;
+
+                          return (
+                            <div key={mStep.id} className="flex flex-col items-center text-center">
+                              <div
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                                  isDone
+                                    ? 'bg-[#059669] text-white'
+                                    : isCurrent
+                                      ? 'bg-[#D94A38] text-white ring-2 ring-[#D94A38]/20'
+                                      : 'bg-stone-100 text-stone-400'
+                                }`}
+                              >
+                                {isDone ? <CheckCircle2 className="w-4 h-4" /> : <MIcon className="w-4 h-4" />}
+                              </div>
+                              <span
+                                className={`text-[9px] font-black mt-1 leading-tight ${
+                                  isDone
+                                    ? 'text-[#059669]'
+                                    : isCurrent
+                                      ? 'text-[#D94A38]'
+                                      : 'text-[#8E8B85]'
+                                }`}
+                              >
+                                {mStep.label}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* OTP display on mobile */}
+                    {isDelivered || currentLiveOrder?.deliveryOtp === '- - - -' ? (
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Delivered:
+                        </span>
+                        <span className="text-lg font-mono font-black text-emerald-700 tracking-widest">
+                          - - - -
+                        </span>
+                      </div>
+                    ) : currentLiveOrder?.deliveryOtp ? (
+                      <div className="p-3 bg-[#FAF0ED] rounded-xl border border-[#FCE8E6] flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-[#8E8B85] uppercase">Delivery OTP:</span>
+                        <span className="text-lg font-mono font-black text-[#D94A38] tracking-widest">
+                          {currentLiveOrder?.deliveryOtp}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
-                  <h2 className="text-xl font-bold text-[#1C1917]">Preparing Food</h2>
-                  <p className="text-xs text-[#8E8B85]">
-                    {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · #{currentLiveOrder?.orderNumber || currentLiveOrder?.id || ''}
-                  </p>
 
-                  {/* OTP display on mobile */}
-                  {currentLiveOrder?.rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered' || currentLiveOrder?.deliveryOtp === '- - - -' ? (
-                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" /> Delivered:
-                      </span>
-                      <span className="text-lg font-mono font-black text-emerald-700 tracking-widest">
-                        - - - -
-                      </span>
-                    </div>
-                  ) : currentLiveOrder?.deliveryOtp ? (
-                    <div className="p-3 bg-[#FAF0ED] rounded-xl border border-[#FCE8E6] flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-[#8E8B85] uppercase">Delivery OTP:</span>
-                      <span className="text-lg font-mono font-black text-[#D94A38] tracking-widest">
-                        {currentLiveOrder?.deliveryOtp}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#8E8B85]">
-                    Sub-Orders ({liveStalls.length} Stalls)
-                  </h3>
-                  <div className="space-y-2">
-                    {liveStalls.map((sName: any, idx: number) => {
-                      const stallTitle = typeof sName === 'string' ? sName : (sName?.name || 'Food Stall');
-                      const stallItems = liveItems.filter((it: any) => {
-                        const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
-                        return !itemStall || itemStall === stallTitle;
-                      });
-                      const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
-                      const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
-                      const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
-                      const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
-                      const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
-
-                      return (
-                        <div key={idx} className="p-3 bg-[#FAF7F2] rounded-xl border border-[#EAE4DA] flex justify-between items-center text-xs">
-                          <span className="font-bold text-[#1C1917]">{stallTitle}</span>
-                          {isRejected ? (
-                            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
-                              Out of Stock (Refunded)
-                            </span>
-                          ) : isAllReady ? (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
-                            </span>
-                          ) : isCooking ? (
-                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                              Cooking ({prepMins}m)
-                            </span>
-                          ) : isAccepted ? (
-                            <span className="text-[10px] font-bold text-[#D94A38] bg-[#FAF0ED] px-2.5 py-0.5 rounded-full border border-[#FCE8E6]">
-                              Accepted
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-[#8E8B85] bg-[#FAF7F2] px-2.5 py-0.5 rounded-full border border-[#EAE4DA] flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting for stall...
-                            </span>
-                          )}
+                  {/* Rider Info Mobile Card */}
+                  {currentLiveOrder?.rider && (
+                    <div className="bg-white rounded-2xl border border-[#EAE4DA] p-3.5 shadow-3xs flex justify-between items-center">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-[#D94A38] text-white flex items-center justify-center text-sm">
+                          🛵
                         </div>
-                      );
-                    })}
+                        <div>
+                          <span className="text-xs font-bold text-[#1C1917] block">
+                            {currentLiveOrder.rider.name || 'Delivery Partner'}
+                          </span>
+                          <span className="text-[10px] text-[#8E8B85]">StreetBites Courier</span>
+                        </div>
+                      </div>
+                      {currentLiveOrder.rider.phone && (
+                        <a
+                          href={`tel:${currentLiveOrder.rider.phone}`}
+                          className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 no-underline"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>Call</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mobile Stalls List */}
+                  <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#8E8B85]">
+                      Sub-Orders ({liveStalls.length} Stalls)
+                    </h3>
+                    <div className="space-y-2">
+                      {liveStalls.map((sName: any, idx: number) => {
+                        const stallTitle = typeof sName === 'string' ? sName : (sName?.name || 'Food Stall');
+                        const stallItems = liveItems.filter((it: any) => {
+                          const itemStall = typeof it.stallName === 'string' ? it.stallName : it.stallName?.name;
+                          return !itemStall || itemStall === stallTitle;
+                        });
+                        const isRejected = stallItems.length > 0 && stallItems.every((it: any) => it.status === 'REJECTED' || it.status === 'Cancelled');
+                        const isAllReady = !isRejected && stallItems.length > 0 && stallItems.every((it: any) => it.status === 'READY');
+                        const isCooking = !isRejected && !isAllReady && stallItems.some((it: any) => it.status === 'PREPARING');
+                        const isAccepted = !isRejected && !isAllReady && !isCooking && stallItems.some((it: any) => it.status === 'ACCEPTED');
+                        const prepMins = stallItems.find((it: any) => it.prepTimeMinutes)?.prepTimeMinutes || 15;
+                        const isPickedUp = currentStep >= 1;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded-xl border flex justify-between items-center text-xs ${
+                              isPickedUp ? 'bg-emerald-50/60 border-emerald-200' : 'bg-[#FAF7F2] border-[#EAE4DA]'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-bold text-[#1C1917] block">{stallTitle}</span>
+                              {stallItems.length > 0 && (
+                                <span className="text-[10px] text-[#8E8B85]">
+                                  {stallItems.map((i: any) => `${i.quantity || 1}x ${typeof i.name === 'string' ? i.name : i.name?.name}`).join(', ')}
+                                </span>
+                              )}
+                            </div>
+                            {isRejected ? (
+                              <span className="text-[10px] font-bold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
+                                Out of Stock
+                              </span>
+                            ) : isPickedUp ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Collected
+                              </span>
+                            ) : isAllReady ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
+                              </span>
+                            ) : isCooking ? (
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                                Cooking ({prepMins}m)
+                              </span>
+                            ) : isAccepted ? (
+                              <span className="text-[10px] font-bold text-[#D94A38] bg-[#FAF0ED] px-2.5 py-0.5 rounded-full border border-[#FCE8E6]">
+                                Accepted
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-[#8E8B85] bg-[#FAF7F2] px-2.5 py-0.5 rounded-full border border-[#EAE4DA] flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-[#8E8B85]" /> Waiting
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div className="bg-white border border-[#EAE4DA] rounded-2xl p-10 text-center space-y-3 animate-fadeIn my-4">
                 <h3 className="text-sm font-bold text-[#1C1917]">No Active Orders</h3>
                 <p className="text-xs text-[#8E8B85]">
