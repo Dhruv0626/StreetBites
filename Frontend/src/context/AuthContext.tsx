@@ -133,10 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await authService.register(data);
       if (res.success && res.data?.user) {
         updateCachedUser(res.data.user);
-        // Explicitly set notifications and live location to disabled on new registration
-        localStorage.setItem("streetbites_notifications_enabled", "false");
-        localStorage.setItem("streetbites_location_enabled", "false");
-        localStorage.setItem("streetbites_location_permission", "denied");
         setIsLoading(false);
         return { success: true, role: res.data.user.role, user: res.data.user };
       } else {

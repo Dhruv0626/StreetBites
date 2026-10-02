@@ -91,32 +91,33 @@ export const RiderRoute: React.FC = () => {
   useEffect(() => {
     if (!navigator.geolocation) return;
 
-    // Get initial position immediately
+    const handlePos = (pos: GeolocationPosition) => {
+      setRiderLiveLocation([pos.coords.longitude, pos.coords.latitude]);
+      if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) {
+        setDeviceGpsHeading(pos.coords.heading);
+      }
+    };
+
+    // Get initial position immediately with high accuracy, falling back to standard if needed
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setRiderLiveLocation([pos.coords.longitude, pos.coords.latitude]);
-        if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) {
-          setDeviceGpsHeading(pos.coords.heading);
-        }
+      handlePos,
+      () => {
+        navigator.geolocation.getCurrentPosition(
+          handlePos,
+          (e) => console.warn('Fallback GPS warning:', e),
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
       },
-      (err) => {
-        console.warn('Initial GPS query warning:', err);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     );
 
     // Watch position as rider moves along the road
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        setRiderLiveLocation([pos.coords.longitude, pos.coords.latitude]);
-        if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) {
-          setDeviceGpsHeading(pos.coords.heading);
-        }
-      },
+      handlePos,
       (err) => {
         console.warn('GPS continuous watch warning:', err);
       },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
     );
 
     return () => {

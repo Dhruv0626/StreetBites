@@ -53,70 +53,87 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 1-Tap Live GPS: Pinpoints device coordinates with maximum accuracy (no stale cache)
+  // 1-Tap Live GPS: Pinpoints device coordinates with maximum accuracy and automatic fallback
   const handleDetectGpsAndAutoFill = () => {
-    // Check if user has enabled live location in App Settings
-    const isLocationEnabled = localStorage.getItem('streetbites_location_enabled') === 'true';
-    if (!isLocationEnabled) {
-      setWarningMsg('Enable Live location first from your Profile -> App Settings, or enter your address manually.');
-      setErrorMsg(null);
-      return;
-    }
-
     if (!navigator.geolocation) {
       setErrorMsg('Geolocation is not supported by your browser.');
-      localStorage.setItem('streetbites_location_permission', 'denied');
       return;
     }
 
+    // Mark location as actively enabled by user tap
+    localStorage.setItem('streetbites_location_enabled', 'true');
     setIsGpsDetecting(true);
     setErrorMsg(null);
     setWarningMsg(null);
-    setGpsStatusMessage('Pinpointing your satellite GPS coordinates...');
+    setGpsStatusMessage('Locating your position via GPS...');
 
+    const onLocationSuccess = async (position: GeolocationPosition) => {
+      const detectedLat = position.coords.latitude;
+      const detectedLng = position.coords.longitude;
+      setLat(detectedLat);
+      setLng(detectedLng);
+      setHasGpsLocked(true);
+      localStorage.setItem('streetbites_location_permission', 'granted');
+      localStorage.setItem('streetbites_location_enabled', 'true');
+
+      // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
+      try {
+        const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
+        const detectedArea = geoInfo.area || '';
+        const detectedCity = geoInfo.city || 'Ahmedabad';
+        const detectedPincode = geoInfo.pincode || '';
+
+        if (detectedArea) setArea(detectedArea);
+        if (detectedCity) setCity(detectedCity);
+        if (detectedPincode) setPincode(detectedPincode);
+
+        const pinText = detectedPincode ? ` - ${detectedPincode}` : '';
+        setGpsStatusMessage(
+          `📍 GPS Pinpoint: ${detectedArea}, ${detectedCity}${pinText}. You can tap anywhere on the map to adjust exact gate.`
+        );
+      } catch {
+        setGpsStatusMessage(`📍 GPS Locked: ${detectedLat.toFixed(4)}, ${detectedLng.toFixed(4)}. Tap on map to fine-tune.`);
+      }
+
+      setIsGpsDetecting(false);
+
+      // Auto-focus House No. input for immediate manual entry
+      setTimeout(() => {
+        houseNoInputRef.current?.focus();
+      }, 150);
+    };
+
+    // Primary High-Accuracy GPS Request with 7s timeout
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const detectedLat = position.coords.latitude;
-        const detectedLng = position.coords.longitude;
-        setLat(detectedLat);
-        setLng(detectedLng);
-        setHasGpsLocked(true);
-        localStorage.setItem('streetbites_location_permission', 'granted');
-        localStorage.setItem('streetbites_location_enabled', 'true');
+      onLocationSuccess,
+      (highAccErr) => {
+        console.warn('High accuracy GPS timed out or unavailable, attempting standard fallback:', highAccErr);
 
-        // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
-        try {
-          const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
-          const detectedArea = geoInfo.area || '';
-          const detectedCity = geoInfo.city || 'Ahmedabad';
-          const detectedPincode = geoInfo.pincode || '';
-
-          if (detectedArea) setArea(detectedArea);
-          if (detectedCity) setCity(detectedCity);
-          if (detectedPincode) setPincode(detectedPincode);
-
-          const pinText = detectedPincode ? ` - ${detectedPincode}` : '';
-          setGpsStatusMessage(
-            `📍 GPS Pinpoint: ${detectedArea}, ${detectedCity}${pinText}. You can tap anywhere on the map to adjust exact building gate.`
-          );
-        } catch {
-          setGpsStatusMessage(`📍 GPS Locked: ${detectedLat.toFixed(4)}, ${detectedLng.toFixed(4)}. Tap on map if you want to adjust.`);
+        // If user explicitly denied permission, show instruction
+        if (highAccErr.code === 1) {
+          setIsGpsDetecting(false);
+          localStorage.setItem('streetbites_location_permission', 'denied');
+          setErrorMsg('Location permission was denied in your browser. Please tap the lock icon in your browser address bar to allow location, or click directly on the map below.');
+          return;
         }
 
-        setIsGpsDetecting(false);
-
-        // Auto-focus House No. input for immediate manual entry
-        setTimeout(() => {
-          houseNoInputRef.current?.focus();
-        }, 150);
+        // Secondary Standard Fallback (Wi-Fi/Cellular positioning)
+        navigator.geolocation.getCurrentPosition(
+          onLocationSuccess,
+          (fallbackErr) => {
+            setIsGpsDetecting(false);
+            console.warn('Fallback geolocation error:', fallbackErr);
+            if (fallbackErr.code === 1) {
+              localStorage.setItem('streetbites_location_permission', 'denied');
+              setErrorMsg('Location permission was denied in your browser. Please allow permission or tap directly on the map to set your address.');
+            } else {
+              setErrorMsg('Unable to retrieve GPS signal automatically. Please tap directly on the map to place your delivery pin.');
+            }
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
       },
-      (err) => {
-        setIsGpsDetecting(false);
-        console.warn('GPS detection error:', err);
-        localStorage.setItem('streetbites_location_permission', 'denied');
-        setErrorMsg('GPS access denied or unavailable. Please allow permission or click on the map to place your pin manually.');
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     );
   };
 

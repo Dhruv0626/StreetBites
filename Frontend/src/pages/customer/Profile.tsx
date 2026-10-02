@@ -378,34 +378,29 @@ export const Profile: React.FC = () => {
   const [profileGpsNotice, setProfileGpsNotice] = useState<string | null>(null);
 
   const handleAddGpsAddressProfile = () => {
-    const isEnabled = localStorage.getItem('streetbites_location_enabled') === 'true';
-    if (!isEnabled) {
-      setAddressWarning('Enable the Live location first under App Settings below before using Live GPS.');
-      return;
-    }
-
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
       return;
     }
 
+    localStorage.setItem('streetbites_location_enabled', 'true');
     setAddressWarning(null);
     setIsGpsLocatingProfile(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const detectedLat = position.coords.latitude;
-        const detectedLng = position.coords.longitude;
-        setNewAddressGpsCoords({ lat: detectedLat, lng: detectedLng });
-        localStorage.setItem('streetbites_location_permission', 'granted');
-        localStorage.setItem('streetbites_location_enabled', 'true');
 
-        // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
+    const onProfileGpsSuccess = async (position: GeolocationPosition) => {
+      const detectedLat = position.coords.latitude;
+      const detectedLng = position.coords.longitude;
+      setNewAddressGpsCoords({ lat: detectedLat, lng: detectedLng });
+      localStorage.setItem('streetbites_location_permission', 'granted');
+      localStorage.setItem('streetbites_location_enabled', 'true');
+
+      // Reverse geocode to get clean Area, City & Pincode (strictly without Taluka)
+      try {
         const geoInfo = await reverseGeocodeCoords(detectedLat, detectedLng);
         const detectedArea = geoInfo.area || '';
         const detectedCity = geoInfo.city || 'Ahmedabad';
         const detectedPincode = geoInfo.pincode || '';
 
-        // Auto-fill Area, City & Pincode in form - DO NOT SAVE DIRECTLY!
         setNewAddressData((prev) => ({
           ...prev,
           area: detectedArea,
@@ -413,27 +408,48 @@ export const Profile: React.FC = () => {
           pincode: detectedPincode,
         }));
 
-        setIsGpsLocatingProfile(false);
         const pinText = detectedPincode ? ` - ${detectedPincode}` : '';
         setProfileGpsNotice(
           `📍 GPS Location detected: ${detectedArea}, ${detectedCity}${pinText}. Add the House no./apartment and landmark for get easy delivery.`
         );
+      } catch {
+        setProfileGpsNotice(`📍 GPS coordinates locked (${detectedLat.toFixed(4)}, ${detectedLng.toFixed(4)}).`);
+      }
 
-        // Auto-focus House No. input for immediate entry
-        setTimeout(() => {
-          profileHouseNoRef.current?.focus();
-        }, 150);
+      setIsGpsLocatingProfile(false);
 
-        // Hide notice after 8 seconds
-        setTimeout(() => {
-          setProfileGpsNotice(null);
-        }, 8000);
+      // Auto-focus House No. input for immediate entry
+      setTimeout(() => {
+        profileHouseNoRef.current?.focus();
+      }, 150);
+
+      // Hide notice after 8 seconds
+      setTimeout(() => {
+        setProfileGpsNotice(null);
+      }, 8000);
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      onProfileGpsSuccess,
+      (highAccErr) => {
+        console.warn('Profile high-accuracy GPS failed, trying fallback:', highAccErr);
+        if (highAccErr.code === 1) {
+          setIsGpsLocatingProfile(false);
+          setAddressWarning('Location permission is blocked in your browser. Please allow permission from your browser address bar.');
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          onProfileGpsSuccess,
+          (fallbackErr) => {
+            setIsGpsLocatingProfile(false);
+            console.warn('Profile fallback geolocation error:', fallbackErr);
+            setAddressWarning('Could not automatically determine GPS location. Please type your area and house details.');
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
       },
-      (err) => {
-        setIsGpsLocatingProfile(false);
-        console.warn('Geolocation error in profile:', err);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     );
   };
 

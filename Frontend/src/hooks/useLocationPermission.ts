@@ -51,26 +51,43 @@ export function useLocationPermission() {
       }
 
       setIsLocating(true);
+
+      const onSuccess = (position: GeolocationPosition) => {
+        const newCoords: LocationCoords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setCoords(newCoords);
+        setPermission('granted');
+        localStorage.setItem(STORAGE_PERMISSION_KEY, 'granted');
+        localStorage.setItem(STORAGE_ENABLED_KEY, 'true');
+        setIsLocating(false);
+        resolve(newCoords);
+      };
+
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newCoords: LocationCoords = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          setCoords(newCoords);
-          setPermission('granted');
-          localStorage.setItem(STORAGE_PERMISSION_KEY, 'granted');
-          localStorage.setItem(STORAGE_ENABLED_KEY, 'true');
-          setIsLocating(false);
-          resolve(newCoords);
+        onSuccess,
+        (highAccErr) => {
+          console.warn('High accuracy GPS timed out, trying fallback:', highAccErr);
+          if (highAccErr.code === 1) {
+            setPermission('denied');
+            localStorage.setItem(STORAGE_PERMISSION_KEY, 'denied');
+            setIsLocating(false);
+            resolve(null);
+            return;
+          }
+
+          navigator.geolocation.getCurrentPosition(
+            onSuccess,
+            (fallbackErr) => {
+              console.warn('Fallback geolocation failed:', fallbackErr);
+              setIsLocating(false);
+              resolve(null);
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+          );
         },
-        (error) => {
-          console.warn('Geolocation error:', error);
-          setIsLocating(false);
-          // Never reset user's manual in-app enabled setting on error/reload
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
       );
     });
   }, []);
