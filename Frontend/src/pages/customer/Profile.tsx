@@ -156,21 +156,11 @@ export const Profile: React.FC = () => {
     };
   }, [isAuthenticated, user]);
 
-  // App Settings State (Saved in Browser Storage - Defaults to Disabled)
-  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem('streetbites_notifications_enabled');
-    return saved === 'true';
-  });
+  // App Settings State (Saved in Browser Storage)
   const [locationEnabled, setLocationEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('streetbites_location_enabled');
     return saved === 'true';
   });
-
-  const handleToggleNotifications = () => {
-    const updated = !notificationsEnabled;
-    setNotificationsEnabled(updated);
-    localStorage.setItem('streetbites_notifications_enabled', String(updated));
-  };
 
   const handleToggleLocation = () => {
     const updated = !locationEnabled;
@@ -1092,7 +1082,7 @@ export const Profile: React.FC = () => {
                   </div>
                   <div className="text-left">
                     <span className="text-sm font-bold text-[#1C1917] block">App Settings</span>
-                    <span className="text-[11px] text-[#8E8B85] font-medium block">Notifications, Location</span>
+                    <span className="text-[11px] text-[#8E8B85] font-medium block">Live Location & Permissions</span>
                   </div>
                 </div>
                 {openSection === 'app' ? (
@@ -1105,27 +1095,8 @@ export const Profile: React.FC = () => {
                 <div className="p-5 bg-[#FAF7F2]/50 border-t border-[#F5F0E8] text-sm text-[#4B5563] space-y-4 animate-fadeIn">
                   <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
                     <div>
-                      <span className="font-bold text-[#1C1917] block text-xs">Notification Permission</span>
-                      <span className="text-[10px] text-[#8E8B85]">Receive order updates and offers</span>
-                    </div>
-                    <button
-                      onClick={handleToggleNotifications}
-                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                        notificationsEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          notificationsEnabled ? 'translate-x-4' : 'translate-x-0'
-                        }`}
-                      ></div>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
-                    <div>
-                      <span className="font-bold text-[#1C1917] block text-xs">Live Location</span>
-                      <span className="text-[10px] text-[#8E8B85]">Better stall recommendations</span>
+                      <span className="font-bold text-[#1C1917] block text-xs">Live GPS Location</span>
+                      <span className="text-[10px] text-[#8E8B85]">Enables 1-tap address autofill & closest stall discovery</span>
                     </div>
                     <button
                       onClick={handleToggleLocation}

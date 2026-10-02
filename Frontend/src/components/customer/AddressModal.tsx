@@ -9,7 +9,6 @@ import {
   Check,
   AlertTriangle,
   LocateFixed,
-
 } from 'lucide-react';
 import { TomTomMap } from '../map/TomTomMap';
 import type { MapMarker } from '../../types/map';
@@ -109,11 +108,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
       (highAccErr) => {
         console.warn('High accuracy GPS timed out or unavailable, attempting standard fallback:', highAccErr);
 
-        // If user explicitly denied permission, show instruction
+        // If user explicitly denied permission or browser blocked it
         if (highAccErr.code === 1) {
           setIsGpsDetecting(false);
-          localStorage.setItem('streetbites_location_permission', 'denied');
-          setErrorMsg('Location permission was denied in your browser. Please tap the lock icon in your browser address bar to allow location, or click directly on the map below.');
+          setErrorMsg('Location access is disabled in your browser. You can tap directly on the map to set your address pin, or allow location in your browser bar.');
           return;
         }
 
@@ -124,10 +122,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
             setIsGpsDetecting(false);
             console.warn('Fallback geolocation error:', fallbackErr);
             if (fallbackErr.code === 1) {
-              localStorage.setItem('streetbites_location_permission', 'denied');
-              setErrorMsg('Location permission was denied in your browser. Please allow permission or tap directly on the map to set your address.');
+              setErrorMsg('Location access is disabled in your browser. You can tap directly on the map to set your address pin.');
             } else {
-              setErrorMsg('Unable to retrieve GPS signal automatically. Please tap directly on the map to place your delivery pin.');
+              setErrorMsg('GPS signal is weak. Tap directly on the map to place your delivery pin.');
             }
           },
           { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
@@ -165,16 +162,18 @@ export const AddressModal: React.FC<AddressModalProps> = ({
     }
   };
 
-  // Delivery Pin Marker for TomTom Map
-  const mapMarkers: MapMarker[] = [
-    {
-      id: 'customer-delivery-pin',
-      position: [lng, lat],
-      title: label === 'Home' ? 'Home' : label === 'Office' ? 'Office' : 'Delivery Address',
-      description: area ? `${area}, ${city}` : 'Exact Pinpoint',
-      type: 'customer',
-    },
-  ];
+  // Delivery Pin Marker for TomTom Map (Only displayed when user clicks on map or taps GPS)
+  const mapMarkers: MapMarker[] = hasGpsLocked
+    ? [
+      {
+        id: 'customer-delivery-pin',
+        position: [lng, lat],
+        title: label === 'Home' ? 'Home' : label === 'Office' ? 'Office' : 'Delivery Address',
+        description: area ? `${area}, ${city}` : 'Exact Pinpoint',
+        type: 'customer',
+      },
+    ]
+    : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,11 +356,15 @@ export const AddressModal: React.FC<AddressModalProps> = ({
               <div className="px-3 py-2 bg-white/90 backdrop-blur-xs border-b border-[#EAE4DA] flex items-center justify-between z-10">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs">📍</span>
-                  <span className="text-[11px] font-bold text-[#1C1917]">Map Fine-Tuning</span>
-                  <span className="text-[9px] text-[#8E8B85] font-medium hidden sm:inline">(Click map to adjust pin)</span>
+                  <span className="text-[11px] font-bold text-[#1C1917]">
+                    {hasGpsLocked ? 'Map Pin Fine-Tuning' : 'Select Location on Map'}
+                  </span>
+                  <span className="text-[9px] text-[#8E8B85] font-medium hidden sm:inline">
+                    {hasGpsLocked ? '(Click map to adjust pin)' : '(Click map or use GPS to place pin)'}
+                  </span>
                 </div>
                 <span className="text-[9px] font-mono text-stone-600 bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE4DA]">
-                  {lat.toFixed(4)}, {lng.toFixed(4)}
+                  {hasGpsLocked ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : 'No Pin Set'}
                 </span>
               </div>
 
@@ -369,7 +372,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
               <div className="flex-1 relative w-full h-full min-h-[180px]">
                 <TomTomMap
                   center={[lng, lat]}
-                  zoom={17}
+                  zoom={16}
                   markers={mapMarkers}
                   showControls={true}
                   onMapClick={handleMapClick}
@@ -377,9 +380,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                 />
 
                 {/* Floating Map Helper Badge */}
-                <div className="absolute top-2 left-2 bg-stone-900/85 backdrop-blur-xs text-white text-[9px] sm:text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none shadow-md border border-stone-700/80 flex items-center gap-1 z-10">
-                  <MapPin className="w-3 h-3 text-[#D94A38]" />
-                  <span>Tap anywhere to adjust exact pin</span>
+                <div className="absolute top-2 left-2 bg-stone-900/85 backdrop-blur-xs text-white text-[9px] sm:text-[10px] font-bold px-2.5 py-1.2 rounded-lg pointer-events-none shadow-md border border-stone-700/80 flex items-center gap-1.5 z-10">
+                  <MapPin className={`w-3.5 h-3.5 ${hasGpsLocked ? 'text-[#D94A38]' : 'text-emerald-400 animate-bounce'}`} />
+                  <span>{hasGpsLocked ? 'Tap anywhere to move pin' : 'Tap anywhere on map or use GPS to set pin'}</span>
                 </div>
 
                 {/* Floating Recenter GPS Button */}
@@ -425,11 +428,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setLabel('Home')}
-                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
-                      label === 'Home'
-                        ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
-                        : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
-                    }`}
+                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${label === 'Home'
+                      ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
+                      : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
+                      }`}
                   >
                     <Home className="w-3.5 h-3.5" />
                     <span>Home</span>
@@ -437,11 +439,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setLabel('Office')}
-                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
-                      label === 'Office'
-                        ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
-                        : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
-                    }`}
+                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${label === 'Office'
+                      ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
+                      : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
+                      }`}
                   >
                     <Briefcase className="w-3.5 h-3.5" />
                     <span>Office</span>
@@ -449,11 +450,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setLabel('Other')}
-                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
-                      label === 'Other'
-                        ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
-                        : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
-                    }`}
+                    className={`py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${label === 'Other'
+                      ? 'border-[#D94A38] bg-[#FAF0ED] text-[#D94A38] shadow-3xs'
+                      : 'border-[#EAE4DA] bg-white text-[#5C5954] hover:border-[#DCD6CC]'
+                      }`}
                   >
                     <MapPin className="w-3.5 h-3.5" />
                     <span>Other</span>
