@@ -186,16 +186,6 @@ export const Cart: React.FC = () => {
                           );
                         })}
                       </div>
-
-                      {/* Suborder Total Footer */}
-                      <div className="pt-4 border-t border-[#F5F0E8] flex justify-between items-center text-xs">
-                        <span className="text-[#8E8B85] font-medium">
-                          Sub-total → forks to <strong className="text-[#1C1917] font-semibold">{group.vendorName}</strong>
-                        </span>
-                        <span className="font-bold text-[#D94A38] text-sm">
-                          ₹{subTotal}
-                        </span>
-                      </div>
                     </div>
                   );
                 })}

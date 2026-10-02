@@ -14,7 +14,7 @@ import {
 import { Link, useNavigate } from 'react-router';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { getCustomerAddresses, updateCustomerAddress } from '../../services/addressService';
+import { getCustomerAddresses, updateCustomerAddress, subscribeAddresses } from '../../services/addressService';
 import { AddressModal } from '../customer/AddressModal';
 import type { AddressItem } from '../../types';
 import logoImg from '../../assets/Logo/Logo.png';
@@ -56,7 +56,22 @@ export const CustomerHeader: React.FC = () => {
   };
 
   useEffect(() => {
+    const unsubscribe = subscribeAddresses((saved) => {
+      if (Array.isArray(saved) && saved.length > 0) {
+        setAddresses(saved);
+        const primary = saved.find((a) => a.is_primary) || saved[0];
+        setActiveAddress(primary);
+      } else {
+        setAddresses([]);
+        setActiveAddress(null);
+      }
+    });
+
     loadAddresses();
+
+    return () => {
+      unsubscribe();
+    };
   }, [user]);
 
   // Load unread notifications count

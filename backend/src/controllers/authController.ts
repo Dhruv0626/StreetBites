@@ -168,7 +168,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     res.status(201).json({
       success: true,
       message: "Registration successful!",
-      data: { user: formatUserResponse(user) },
+      data: { user: formatUserResponse(user), accessToken },
     });
   } catch (error: any) {
     console.error("Register Error:", error);
@@ -260,7 +260,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       success: true,
       message: "Login successful!",
-      data: { user: formatUserResponse(user) },
+      data: { user: formatUserResponse(user), accessToken },
     });
   } catch (error: any) {
     console.error("Login Error:", error);

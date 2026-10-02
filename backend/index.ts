@@ -62,7 +62,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-customer-id", "x-fresh", "x-cluster-id", "x-stall-id", "x-order-id"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-customer-id", "x-user-id", "x-fresh", "x-cluster-id", "x-stall-id", "x-order-id", "x-requested-with", "Accept"],
   })
 );
 app.use(cookieParser());

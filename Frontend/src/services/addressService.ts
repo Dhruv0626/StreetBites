@@ -106,6 +106,7 @@ export async function createCustomerAddress(payload: CreateAddressPayload): Prom
     });
     if (res.success && res.data) {
       clearAddressCache();
+      await getCustomerAddresses(true);
       return res.data;
     }
     return null;
@@ -130,6 +131,7 @@ export async function updateCustomerAddress(
     });
     if (res.success && res.data) {
       clearAddressCache();
+      await getCustomerAddresses(true);
       return res.data;
     }
     return null;
@@ -150,6 +152,7 @@ export async function deleteCustomerAddress(id: string): Promise<boolean> {
     });
     if (res.success) {
       clearAddressCache();
+      await getCustomerAddresses(true);
     }
     return Boolean(res.success);
   } catch (err) {

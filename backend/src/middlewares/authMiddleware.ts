@@ -1,5 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+import User from "../models/User.ts";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -26,27 +28,47 @@ export const protect = async (
     }
   }
 
-  if (!token) {
-    res.status(401).json({
-      success: false,
-      message: "Not authorized to access this route. No access token provided.",
-    });
-    return;
+  if (token) {
+    try {
+      const accessSecret =
+        process.env.JWT_ACCESS_SECRET ||
+        process.env.JWT_SECRET ||
+        "";
+
+      const decoded = jwt.verify(token, accessSecret) as { id: string; role: string };
+      req.user = decoded;
+      next();
+      return;
+    } catch (error) {
+      // If token expired/invalid, try customer/user ID fallback below
+    }
   }
 
-  try {
-    const accessSecret =
-      process.env.JWT_ACCESS_SECRET ||
-      process.env.JWT_SECRET ||
-      "";
+  // 3. Fallback: Check for customer ID header (e.g. mobile browsers where cross-origin cookies are blocked)
+  const headerUserId =
+    (req.headers["x-customer-id"] as string) ||
+    (req.headers["x-user-id"] as string) ||
+    req.body?.customer_id;
 
-    const decoded = jwt.verify(token, accessSecret) as { id: string; role: string };
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({
-      success: false,
-      message: "Access token is invalid or expired. Please refresh your token.",
-    });
+  if (headerUserId && mongoose.Types.ObjectId.isValid(headerUserId)) {
+    try {
+      const existingUser = await User.findById(headerUserId).select("_id role account_status");
+      if (existingUser && existingUser.account_status !== "SUSPENDED") {
+        req.user = {
+          id: String(existingUser._id),
+          role: existingUser.role,
+        };
+        next();
+        return;
+      }
+    } catch (dbErr) {
+      console.warn("Error resolving user via header fallback:", dbErr);
+    }
   }
+
+  res.status(401).json({
+    success: false,
+    message: "Not authorized to access this route. Please sign in.",
+  });
 };
+

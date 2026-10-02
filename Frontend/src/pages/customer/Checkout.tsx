@@ -383,8 +383,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
     ? Math.round((itemSubtotal + deliveryFee + gstAmount) * 10) / 10
     : Math.round((itemSubtotal + gstAmount) * 10) / 10;
 
-  // Estimated savings vs separate aggregator deliveries
-  const estimatedSavings = uniqueVendorsCount > 1 ? (uniqueVendorsCount - 1) * 35 : 0;
+  // Estimated savings vs separate aggregator deliveries (identical to Cart calculation)
+  const estimatedSavings = uniqueVendorsCount > 1 ? (uniqueVendorsCount - 1) * 45 : 0;
 
   const handlePay = async () => {
     if (!selectedAddress) {
@@ -416,7 +416,10 @@ export const Checkout: React.FC<CheckoutProps> = ({
           ? [Number(selectedAddress.lng), Number(selectedAddress.lat)]
           : [72.5815, 23.1118];
 
+    const customerId = user?.id || (user as any)?._id || localStorage.getItem('streetbites_customer_id');
+
     const payload = {
+      customer_id: customerId,
       cluster_id: activeKhauGalli?.id || (cartItems[0] as any)?.clusterId || '678000000000000000000001',
       items: cartItems.map((item) => ({
         stall_id: item.vendorId,
@@ -1165,12 +1168,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
                       )}
                     </div>
                     <p className="text-[10px] text-[#8E8B85] leading-normal">{selectedAddress.detail}</p>
-                    {selectedAddress.landmark && (
-                      <p className="text-[10px] text-[#5C5954] flex items-center gap-1">
-                        <span className="text-[#8E8B85]">Landmark:</span>
-                        <span className="font-semibold">{selectedAddress.landmark}</span>
-                      </p>
-                    )}
+
                     <div className="flex items-center gap-2 pt-1 flex-wrap">
                       <span className="bg-[#FAF7F2] text-[#4B5563] text-[9px] font-bold px-2 py-0.5 rounded border border-[#EAE4DA] flex items-center gap-1">
                         <Navigation className="w-2.5 h-2.5 text-[#D94A38]" />
@@ -1197,6 +1195,21 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 {uniqueVendorsCount} Stalls
               </span>
             </div>
+
+            {/* Savings Highlight Badge (Mobile) */}
+            {estimatedSavings > 0 && (
+              <div className="bg-gradient-to-r from-[#FAF0ED] to-[#FFF8F0] border border-[#FCE8E6] rounded-xl p-2.5 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[#D94A38] text-white flex items-center justify-center shrink-0 shadow-3xs">
+                  <Flame className="w-3.5 h-3.5" />
+                </div>
+                <div className="text-[10px] text-[#1C1917] leading-tight">
+                  <span className="font-extrabold text-[#D94A38]">Saving ₹{estimatedSavings}</span> vs separate deliveries!
+                  <span className="block text-[9px] text-[#8E8B85] mt-0.5">
+                    1 single rider delivers from all {uniqueVendorsCount} stalls.
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2.5 max-h-[220px] overflow-y-auto">
               {cartItems.map((item) => {

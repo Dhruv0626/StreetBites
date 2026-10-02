@@ -67,6 +67,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
+        localStorage.removeItem("streetbites_customer_id");
+        localStorage.removeItem("streetbites_access_token");
       }
     } catch { }
   };

@@ -68,9 +68,11 @@ export async function apiRequest<T = any>(
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
 
   const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("streetbites_customer_id") : null;
+  const storedToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
   const configHeaders: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(storedCustomerId ? { "x-customer-id": storedCustomerId } : {}),
+    ...(storedToken ? { Authorization: `Bearer ${storedToken}` } : {}),
+    ...(storedCustomerId ? { "x-customer-id": storedCustomerId, "x-user-id": storedCustomerId } : {}),
     ...(headers as Record<string, string>),
   };
 
@@ -125,6 +127,13 @@ export async function apiRequest<T = any>(
     }
 
     const resJson = await response.json().catch(() => ({}));
+
+    if (resJson?.data?.accessToken || resJson?.accessToken) {
+      const token = resJson?.data?.accessToken || resJson?.accessToken;
+      if (typeof window !== "undefined" && token) {
+        localStorage.setItem("streetbites_access_token", token);
+      }
+    }
 
     if (!response.ok) {
       return {
