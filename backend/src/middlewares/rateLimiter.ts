@@ -38,6 +38,12 @@ export const createRateLimiter = (options: RateLimitOptions) => {
   }, cleanupInterval);
 
   return (req: Request, res: Response, next: NextFunction): void => {
+    // Skip rate limiting for OPTIONS preflight requests
+    if (req.method === "OPTIONS") {
+      next();
+      return;
+    }
+
     // Extract real client IP (supports proxies / cloudflare / load balancers)
     const clientIp =
       (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
@@ -45,6 +51,19 @@ export const createRateLimiter = (options: RateLimitOptions) => {
       req.ip ||
       req.socket.remoteAddress ||
       "unknown_ip";
+
+    // Whitelist localhost and local development requests
+    const isLocalhost =
+      clientIp === "127.0.0.1" ||
+      clientIp === "::1" ||
+      clientIp === "::ffff:127.0.0.1" ||
+      clientIp === "localhost" ||
+      process.env.NODE_ENV !== "production";
+
+    if (isLocalhost) {
+      next();
+      return;
+    }
 
     const now = Date.now();
     let record = ipStore.get(clientIp);
@@ -87,30 +106,30 @@ export const createRateLimiter = (options: RateLimitOptions) => {
 
 /**
  * 1. Global Rate Limiter:
- * 300 requests per 15 minutes per IP for general browsing across the entire API
+ * 3,000 requests per 15 minutes per IP for general browsing & real-time polling
  */
 export const globalRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 300,
+  maxRequests: 3000,
   message: "Too many requests from your IP address. Please wait a few minutes before trying again.",
 });
 
 /**
  * 2. Strict Auth / Login Rate Limiter:
- * 15 requests per 15 minutes per IP to prevent brute-force password cracking & credential stuffing
+ * 100 requests per 15 minutes per IP to prevent brute-force password cracking
  */
 export const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 15,
+  maxRequests: 100,
   message: "Too many authentication attempts from this IP. Please try again after 15 minutes.",
 });
 
 /**
  * 3. Sensitive Action Limiter (Orders / Verification / Onboarding):
- * 40 requests per 15 minutes per IP to prevent checkout spam & fake order DDoS
+ * 250 requests per 15 minutes per IP
  */
 export const sensitiveActionLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 40,
+  maxRequests: 250,
   message: "Too many sensitive actions submitted from this IP. Please wait before retrying.",
 });

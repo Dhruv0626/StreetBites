@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
       }
-    } catch {}
+    } catch { }
   };
 
   // Helper event using useEffectEvent: sets the user data and turns off loading
@@ -226,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       await authService.logout();
-    } catch {}
+    } catch { }
     updateCachedUser(null);
     setIsLoading(false);
   };
@@ -238,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.success && res.data?.user) {
         updateCachedUser(res.data.user);
       }
-    } catch {}
+    } catch { }
   };
 
   // Update profile details (e.g. phone number)
