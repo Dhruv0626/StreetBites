@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 import { Stall } from "../models/Stall.ts";
 import { FoodItem } from "../models/FoodItem.ts";
 import { User } from "../models/User.ts";
-import { Cluster } from "../models/Cluster.ts";
 import type { AuthRequest } from "../middlewares/authMiddleware.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
 import { memoryCache } from "../utils/cache.ts";
@@ -41,7 +40,7 @@ const resolveUserId = async (req: AuthRequest): Promise<string | null> => {
   return vendorUser ? vendorUser._id.toString() : null;
 };
 
-// Helper to find or auto-create a Stall for a vendor user so adding items never fails
+// Helper to find existing Stall for a vendor user
 const resolveVendorStall = async (userId: string | null, stallId?: string): Promise<any> => {
   if (stallId && mongoose.isValidObjectId(stallId)) {
     const stall = await Stall.findById(stallId);
@@ -49,31 +48,17 @@ const resolveVendorStall = async (userId: string | null, stallId?: string): Prom
   }
 
   if (userId && mongoose.isValidObjectId(userId)) {
-    let stall = await Stall.findOne({ vendor_id: userId });
+    const user: any = await User.findById(userId);
+    if (user?.stall_id) {
+      const stall = await Stall.findById(user.stall_id);
+      if (stall) return stall;
+    }
+    const stall = await Stall.findOne({ vendor_id: userId });
     if (stall) return stall;
-
-    // Auto-create default stall for this vendor if missing
-    const user = await User.findById(userId);
-    const cluster = (await Cluster.findOne()) || { _id: new mongoose.Types.ObjectId() };
-
-    stall = await Stall.create({
-      vendor_id: userId,
-      cluster_id: cluster._id,
-      name: user?.name ? `${user.name}'s Famous Stall` : "Vendor Food Stall",
-      stall_category: "Fast Food",
-      description: "Authentic delicious street food freshly prepared every day.",
-      rating: 4.5,
-      image_url: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80",
-      is_accepting_orders: true,
-      status: "ACTIVE",
-      menu_items: []
-    });
-    return stall;
   }
 
-  // Fallback to first existing stall in DB
-  const firstStall = await Stall.findOne();
-  return firstStall;
+  // Fallback to first existing registered stall without creating any new dummy documents
+  return await Stall.findOne();
 };
 
 // Helper to determine the item's food item category name

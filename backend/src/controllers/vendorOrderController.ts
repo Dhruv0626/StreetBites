@@ -5,7 +5,6 @@ import Order from "../models/Order.ts";
 import SubOrder from "../models/SubOrder.ts";
 import Stall from "../models/Stall.ts";
 import User from "../models/User.ts";
-import Cluster from "../models/Cluster.ts";
 import Transaction from "../models/Transaction.ts";
 import type { AuthRequest } from "../middlewares/authMiddleware.ts";
 
@@ -44,32 +43,20 @@ const resolveUserId = async (req: AuthRequest): Promise<string | null> => {
 };
 
 /**
- * Find or auto-resolve a Stall for this vendor
+ * Find existing Stall for this vendor
  */
 const resolveVendorStall = async (userId: string | null): Promise<any> => {
   if (userId && mongoose.isValidObjectId(userId)) {
-    let stall = await Stall.findOne({ vendor_id: userId });
+    const user: any = await User.findById(userId);
+    if (user?.stall_id) {
+      const stall = await Stall.findById(user.stall_id);
+      if (stall) return stall;
+    }
+    const stall = await Stall.findOne({ vendor_id: userId });
     if (stall) return stall;
-
-    // Check if user has an existing vendor profile
-    const user = await User.findById(userId);
-    const cluster = (await Cluster.findOne()) || { _id: new mongoose.Types.ObjectId() };
-
-    stall = await Stall.create({
-      vendor_id: userId,
-      cluster_id: cluster._id,
-      name: user?.name ? `${user.name}'s Kitchen` : "Street Food Stall",
-      stall_category: "Fast Food",
-      description: "Authentic street food cooked live with fresh ingredients.",
-      rating: 4.8,
-      image_url: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop",
-      is_accepting_orders: true,
-      status: "ACTIVE",
-      menu_items: [],
-    });
-    return stall;
   }
 
+  // Fallback: check existing registered stalls without creating dummy data
   return await Stall.findOne();
 };
 

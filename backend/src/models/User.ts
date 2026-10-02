@@ -36,6 +36,7 @@ export interface IUser {
   floating_cash_debt: number;
   cash_limit: number;
   favorite_stalls?: any[];
+  stall_id?: any;
   google_id?: string | null;
   facebook_id?: string | null;
   avatar_url?: string | null;
