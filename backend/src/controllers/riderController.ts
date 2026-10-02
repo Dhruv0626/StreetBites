@@ -410,6 +410,15 @@ export const getRiderQueue = async (req: Request, res: Response): Promise<void> 
         continue;
       }
 
+      // Check if vendor has accepted: do not offer to riders if all sub-orders are still unaccepted / PENDING
+      const subOrdersForOrder = await SubOrder.find({ order_id: o._id, stall_status: { $ne: "REJECTED" } });
+      const hasVendorAccepted = subOrdersForOrder.length > 0 && subOrdersForOrder.some(
+        (so) => so.stall_status === "ACCEPTED" || so.stall_status === "PREPARING" || so.stall_status === "READY"
+      );
+      if (!hasVendorAccepted) {
+        continue;
+      }
+
       // Check rejected list (skip if rider already declined/timed out on this order)
       const rejectedList = (o.rejected_rider_ids || []).map((id: any) => id.toString());
       if (rejectedList.includes(rider._id.toString())) {
@@ -608,7 +617,14 @@ export const acceptQueueOrder = async (req: Request, res: Response): Promise<voi
     }
 
     order.rider_id = rider._id;
-    order.status = "READY_FOR_PICKUP";
+    // Maintain PREPARING status unless all vendors have already marked food READY
+    const subOrders = await SubOrder.find({ order_id: order._id, stall_status: { $ne: "REJECTED" } });
+    const allReady = subOrders.length > 0 && subOrders.every((so) => so.stall_status === "READY");
+    if (allReady) {
+      order.status = "READY_FOR_PICKUP";
+    } else {
+      order.status = "PREPARING";
+    }
     order.rider_earned_fee = order.delivery_fee || 50;
     await order.save();
 

@@ -17,6 +17,7 @@ import type { CartItem } from '../../types';
 import { useNavigate } from 'react-router';
 import { OrdersSkeleton } from '../../components';
 import { razorpayService } from '../../services/razorpayService';
+import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
 interface OrdersProps {
   activeOrder?: {
@@ -183,8 +184,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                   <div className="flex items-center gap-2 mb-2">
                     <span
                       className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${order.status === 'Delivered'
-                          ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
-                          : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
+                        ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
+                        : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
                         }`}
                     >
                       {order.status}
@@ -328,8 +329,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
             <button
               onClick={() => setActiveTab('live')}
               className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${activeTab === 'live'
-                  ? 'bg-white shadow-sm text-[#D94A38]'
-                  : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                ? 'bg-white shadow-sm text-[#D94A38]'
+                : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
                 }`}
             >
               Live Order {currentLiveOrder ? '•' : ''}
@@ -337,8 +338,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
             <button
               onClick={() => setActiveTab('past')}
               className={`px-5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer border-0 ${activeTab === 'past'
-                  ? 'bg-white shadow-sm text-[#D94A38]'
-                  : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
+                ? 'bg-white shadow-sm text-[#D94A38]'
+                : 'text-[#8E8B85] hover:text-[#1C1917] bg-transparent'
                 }`}
             >
               Order History ({ordersToDisplay.length})
@@ -371,11 +372,9 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               if (isDelivered) {
                 currentStep = 4;
               } else if (isOutForDelivery) {
-                currentStep = 2; // Rider on the Way (or 3 if at doorstep)
-              } else if (isReadyForPickup || (hasRider && allStallsReady)) {
-                currentStep = 1; // Rider Collected Food / Collecting from stalls
+                currentStep = 2; // Rider collected from stalls & on the way
               } else {
-                currentStep = 0; // Stall Status (Cooking / Preparing)
+                currentStep = 0; // Stall Status (Cooking / Preparing / Rider Assigned)
               }
 
               const steps = [
@@ -425,12 +424,14 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       <h1 className="text-3xl font-bold text-[#1C1917]">
                         {isDelivered
                           ? 'Order Delivered!'
-                          : currentStep === 3
-                            ? 'Rider is at Your Doorstep!'
-                            : currentStep === 2
-                              ? 'Rider is On The Way to You!'
-                              : currentStep === 1
-                                ? 'Rider is Collecting Food'
+                          : isOutForDelivery
+                            ? 'Rider is On The Way to You!'
+                            : isReadyForPickup || allStallsReady
+                              ? hasRider
+                                ? 'Food Ready — Rider Collecting from Stalls'
+                                : 'Food is Ready for Pickup'
+                              : hasRider
+                                ? 'Kitchens Preparing — Delivery Partner Assigned'
                                 : 'Kitchens are Preparing Your Order'}
                       </h1>
                       <p className="text-xs text-[#8E8B85] mt-1">
@@ -485,13 +486,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                             <div key={step.id} className="flex flex-col items-center text-center">
                               {/* Step Icon Badge */}
                               <div
-                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm ${
-                                  isDone
+                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 shadow-sm ${isDone
                                     ? 'bg-[#059669] text-white border-2 border-[#059669]'
                                     : isCurrent
                                       ? 'bg-white text-[#D94A38] border-2 border-[#D94A38] ring-4 ring-[#D94A38]/15 scale-110'
                                       : 'bg-[#FAF7F2] text-[#8E8B85] border-2 border-[#EAE4DA]'
-                                }`}
+                                  }`}
                               >
                                 {isDone ? (
                                   <CheckCircle2 className="w-6 h-6 text-white" />
@@ -503,13 +503,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                               {/* Label & Description */}
                               <div className="mt-3">
                                 <span
-                                  className={`text-xs font-black block ${
-                                    isDone
+                                  className={`text-xs font-black block ${isDone
                                       ? 'text-[#059669]'
                                       : isCurrent
                                         ? 'text-[#D94A38]'
                                         : 'text-[#8E8B85]'
-                                  }`}
+                                    }`}
                                 >
                                   {step.label}
                                 </span>
@@ -561,23 +560,21 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                             return (
                               <div
                                 key={sIdx}
-                                className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${
-                                  isRejected
+                                className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${isRejected
                                     ? 'bg-red-50/50 border-red-200 opacity-80'
                                     : isPickedUp
                                       ? 'bg-[#F0FDF4] border-[#BBF7D0]'
                                       : 'bg-[#FAF7F2] border-[#EAE4DA]'
-                                }`}
+                                  }`}
                               >
                                 <div className="flex gap-3.5 items-center">
                                   <span
-                                    className={`w-9 h-9 rounded-2xl text-xs font-black flex items-center justify-center select-none shadow-3xs ${
-                                      isRejected
+                                    className={`w-9 h-9 rounded-2xl text-xs font-black flex items-center justify-center select-none shadow-3xs ${isRejected
                                         ? 'bg-red-100 text-red-600'
                                         : isPickedUp
                                           ? 'bg-[#059669] text-white'
                                           : 'bg-[#1C1917] text-white'
-                                    }`}
+                                      }`}
                                   >
                                     S{sIdx + 1}
                                   </span>
@@ -637,8 +634,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       {currentLiveOrder?.rider && (
                         <div className="bg-gradient-to-r from-[#FAF0ED] to-white rounded-3xl border border-[#FCE8E6] p-5 shadow-2xs flex justify-between items-center gap-4">
                           <div className="flex items-center gap-3.5">
-                            <div className="w-12 h-12 rounded-2xl bg-[#D94A38] text-white flex items-center justify-center font-bold text-base shadow-sm">
-                              🛵
+                            <div className="w-12 h-12 rounded-2xl overflow-hidden border border-[#EAE4DA] shrink-0 shadow-sm bg-white">
+                              <img
+                                src={currentLiveOrder.rider.avatar || riderAvatarImg}
+                                alt="Rider"
+                                className="w-full h-full object-cover"
+                              />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -831,17 +832,15 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           <div className="bg-[#F5F0E8] p-1 rounded-full flex gap-1 shadow-inner border border-[#EAE4DA]">
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
-                activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-              }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'live' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+                }`}
             >
               Live
             </button>
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${
-                activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
-              }`}
+              className={`px-4 py-1 rounded-full text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer border-0 ${activeTab === 'past' ? 'bg-white shadow-sm text-[#D94A38]' : 'text-[#8E8B85] bg-transparent'
+                }`}
             >
               History ({ordersToDisplay.length})
             </button>
@@ -864,8 +863,6 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 currentStep = 4;
               } else if (isOutForDelivery) {
                 currentStep = 2;
-              } else if (isReadyForPickup || (hasRider && allStallsReady)) {
-                currentStep = 1;
               } else {
                 currentStep = 0;
               }
@@ -888,12 +885,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       <span className="bg-[#E6F4EA] text-[#137333] text-[9px] font-black px-2 py-0.5 rounded-full uppercase border border-[#A7E1BA]">
                         {isDelivered
                           ? 'Delivered'
-                          : currentStep === 3
-                            ? 'At Door'
-                            : currentStep === 2
-                              ? 'On The Way'
-                              : currentStep === 1
-                                ? 'Collecting'
+                          : isOutForDelivery
+                            ? 'On The Way'
+                            : isReadyForPickup || allStallsReady
+                              ? 'Food Ready'
+                              : hasRider
+                                ? 'Rider Assigned'
                                 : 'Cooking'}
                       </span>
                     </div>
@@ -901,12 +898,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                     <h2 className="text-xl font-bold text-[#1C1917]">
                       {isDelivered
                         ? 'Order Delivered!'
-                        : currentStep === 3
-                          ? 'Rider at Your Door!'
-                          : currentStep === 2
-                            ? 'Rider is on the way!'
-                            : currentStep === 1
-                              ? 'Rider Collecting Food'
+                        : isOutForDelivery
+                          ? 'Rider is on the way!'
+                          : isReadyForPickup || allStallsReady
+                            ? hasRider ? 'Food Ready — Collecting' : 'Food Ready for Pickup'
+                            : hasRider
+                              ? 'Kitchens Cooking'
                               : 'Kitchens Cooking'}
                     </h2>
                     <p className="text-xs text-[#8E8B85]">
@@ -924,24 +921,22 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                           return (
                             <div key={mStep.id} className="flex flex-col items-center text-center">
                               <div
-                                className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                                  isDone
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center ${isDone
                                     ? 'bg-[#059669] text-white'
                                     : isCurrent
                                       ? 'bg-[#D94A38] text-white ring-2 ring-[#D94A38]/20'
                                       : 'bg-stone-100 text-stone-400'
-                                }`}
+                                  }`}
                               >
                                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : <MIcon className="w-4 h-4" />}
                               </div>
                               <span
-                                className={`text-[9px] font-black mt-1 leading-tight ${
-                                  isDone
+                                className={`text-[9px] font-black mt-1 leading-tight ${isDone
                                     ? 'text-[#059669]'
                                     : isCurrent
                                       ? 'text-[#D94A38]'
                                       : 'text-[#8E8B85]'
-                                }`}
+                                  }`}
                               >
                                 {mStep.label}
                               </span>
@@ -975,14 +970,18 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                   {currentLiveOrder?.rider && (
                     <div className="bg-white rounded-2xl border border-[#EAE4DA] p-3.5 shadow-3xs flex justify-between items-center">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-[#D94A38] text-white flex items-center justify-center text-sm">
-                          🛵
+                        <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#EAE4DA] shrink-0 shadow-3xs bg-white">
+                          <img
+                            src={currentLiveOrder.rider.avatar || riderAvatarImg}
+                            alt="Rider"
+                            className="w-full h-full object-cover"
+                          />
                         </div>
                         <div>
                           <span className="text-xs font-bold text-[#1C1917] block">
                             {currentLiveOrder.rider.name || 'Delivery Partner'}
                           </span>
-                          <span className="text-[10px] text-[#8E8B85]">StreetBites Courier</span>
+                          <span className="text-[10px] text-[#8E8B85]">StreetBites Delivery Partner</span>
                         </div>
                       </div>
                       {currentLiveOrder.rider.phone && (
@@ -1019,9 +1018,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                         return (
                           <div
                             key={idx}
-                            className={`p-3 rounded-xl border flex justify-between items-center text-xs ${
-                              isPickedUp ? 'bg-emerald-50/60 border-emerald-200' : 'bg-[#FAF7F2] border-[#EAE4DA]'
-                            }`}
+                            className={`p-3 rounded-xl border flex justify-between items-center text-xs ${isPickedUp ? 'bg-emerald-50/60 border-emerald-200' : 'bg-[#FAF7F2] border-[#EAE4DA]'
+                              }`}
                           >
                             <div>
                               <span className="font-bold text-[#1C1917] block">{stallTitle}</span>
