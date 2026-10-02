@@ -34,6 +34,32 @@ export interface VendorOrderMetrics {
   todayPayout: number;
 }
 
+export interface VendorKPIItem {
+  label: string;
+  value: string;
+  trend: string;
+  positive: boolean;
+}
+
+export interface VendorChartDataItem {
+  name: string;
+  revenue: number;
+}
+
+export interface VendorPopularItem {
+  name: string;
+  sales: number;
+  revenue: string;
+  image?: string;
+}
+
+export interface VendorAnalyticsData {
+  kpis: VendorKPIItem[];
+  chartData: VendorChartDataItem[];
+  popularItems: VendorPopularItem[];
+  totalPeriodRevenue: number;
+}
+
 export const vendorOrderService = {
   // 1. Fetch live incoming and past orders (Sorted live orders first)
   getOrders: async () => {
@@ -84,6 +110,17 @@ export const vendorOrderService = {
       method: 'GET',
       requiresAuth: true,
     });
+  },
+
+  // 5. Real analytics data with time filter
+  getAnalytics: async (timeFilter: string = 'This Week') => {
+    return apiRequest<VendorAnalyticsData>(
+      `/vendor/orders/analytics?timeFilter=${encodeURIComponent(timeFilter)}`,
+      {
+        method: 'GET',
+        requiresAuth: true,
+      }
+    );
   },
 };
 

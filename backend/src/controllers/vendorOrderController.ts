@@ -605,3 +605,308 @@ export const getVendorMetrics = async (
     res.status(500).json({ success: false, message: error?.message });
   }
 };
+
+/**
+ * @desc    Get real analytics, KPI metrics, sales chart breakdown, and top items
+ * @route   GET /api/vendor/orders/analytics
+ * @access  Vendor
+ */
+export const getVendorAnalytics = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    const primaryStall = await resolveVendorStall(userId);
+
+    if (!primaryStall) {
+      res.status(200).json({
+        success: true,
+        data: {
+          kpis: [
+            { label: "Total Revenue", value: "₹0", trend: "0.0%", positive: true },
+            { label: "Total Orders", value: "0", trend: "0.0%", positive: true },
+            { label: "Avg. Prep Time", value: "--", trend: "0.0%", positive: true },
+            { label: "Cancellation Rate", value: "0%", trend: "0.0%", positive: true },
+          ],
+          chartData: [
+            { name: "Mon", revenue: 0 },
+            { name: "Tue", revenue: 0 },
+            { name: "Wed", revenue: 0 },
+            { name: "Thu", revenue: 0 },
+            { name: "Fri", revenue: 0 },
+            { name: "Sat", revenue: 0 },
+            { name: "Sun", revenue: 0 },
+          ],
+          popularItems: [],
+          totalPeriodRevenue: 0,
+        },
+      });
+      return;
+    }
+
+    const stallIds = [
+      primaryStall._id,
+      ...(userId && mongoose.isValidObjectId(userId) ? [new mongoose.Types.ObjectId(userId)] : []),
+    ];
+
+    const timeFilter = (req.query.timeFilter as string) || "This Week";
+    const now = new Date();
+
+    let currentPeriodStart: Date;
+    let prevPeriodStart: Date;
+    let prevPeriodEnd: Date;
+
+    if (timeFilter === "This Month") {
+      // Start of current month
+      currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+      // Start of previous month
+      prevPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+      prevPeriodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    } else if (timeFilter === "This Year") {
+      // Start of current year
+      currentPeriodStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+      // Start of previous year
+      prevPeriodStart = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0);
+      prevPeriodEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+    } else {
+      // Default: 'This Week' (Monday to Sunday)
+      const day = now.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      currentPeriodStart = new Date(now);
+      currentPeriodStart.setDate(now.getDate() + diffToMonday);
+      currentPeriodStart.setHours(0, 0, 0, 0);
+
+      prevPeriodStart = new Date(currentPeriodStart);
+      prevPeriodStart.setDate(prevPeriodStart.getDate() - 7);
+      prevPeriodEnd = new Date(currentPeriodStart);
+      prevPeriodEnd.setMilliseconds(-1);
+    }
+
+    // Fetch all suborders for stall in both current and previous period
+    const allSubOrders = await SubOrder.find({
+      stall_id: { $in: stallIds },
+      createdAt: { $gte: prevPeriodStart },
+    })
+      .populate("order_id", "status createdAt total_amount")
+      .lean();
+
+    const currentSubOrders = allSubOrders.filter(
+      (so: any) => new Date(so.createdAt) >= currentPeriodStart
+    );
+    const prevSubOrders = allSubOrders.filter(
+      (so: any) =>
+        new Date(so.createdAt) >= prevPeriodStart && new Date(so.createdAt) <= prevPeriodEnd
+    );
+
+    // 1. Total Revenue (sum of vendor_earned_amount for non-rejected suborders)
+    const validCurrentSubOrders = currentSubOrders.filter(
+      (so: any) => so.stall_status !== "REJECTED"
+    );
+    const currentRevenue = validCurrentSubOrders.reduce(
+      (sum: number, so: any) => sum + (so.vendor_earned_amount || 0),
+      0
+    );
+
+    const validPrevSubOrders = prevSubOrders.filter(
+      (so: any) => so.stall_status !== "REJECTED"
+    );
+    const prevRevenue = validPrevSubOrders.reduce(
+      (sum: number, so: any) => sum + (so.vendor_earned_amount || 0),
+      0
+    );
+
+    const calcTrend = (current: number, prev: number) => {
+      if (prev === 0) {
+        return { trend: current > 0 ? "+100%" : "0.0%", positive: true };
+      }
+      const pct = ((current - prev) / prev) * 100;
+      return {
+        trend: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`,
+        positive: pct >= 0,
+      };
+    };
+
+    const revTrend = calcTrend(currentRevenue, prevRevenue);
+
+    // 2. Total Orders (distinct parent orders in current period)
+    const currentOrderIds = new Set(
+      validCurrentSubOrders.map((so: any) => so.order_id?._id?.toString() || so.order_id?.toString())
+    );
+    const prevOrderIds = new Set(
+      validPrevSubOrders.map((so: any) => so.order_id?._id?.toString() || so.order_id?.toString())
+    );
+
+    const currentOrdersCount = currentOrderIds.size;
+    const prevOrdersCount = prevOrderIds.size;
+    const orderTrend = calcTrend(currentOrdersCount, prevOrdersCount);
+
+    // 3. Avg Prep Time
+    const prepTimes = validCurrentSubOrders
+      .map((so: any) => so.estimated_prep_time_minutes)
+      .filter((t: any) => typeof t === "number" && t > 0);
+
+    const avgPrepMins =
+      prepTimes.length > 0
+        ? Math.round(prepTimes.reduce((a: number, b: number) => a + b, 0) / prepTimes.length)
+        : 15;
+
+    const prevPrepTimes = validPrevSubOrders
+      .map((so: any) => so.estimated_prep_time_minutes)
+      .filter((t: any) => typeof t === "number" && t > 0);
+    const prevAvgPrepMins =
+      prevPrepTimes.length > 0
+        ? Math.round(prevPrepTimes.reduce((a: number, b: number) => a + b, 0) / prevPrepTimes.length)
+        : avgPrepMins;
+
+    const prepTrend = calcTrend(avgPrepMins, prevAvgPrepMins);
+
+    // 4. Cancellation Rate
+    const totalReceivedCurrent = currentSubOrders.length;
+    const rejectedCurrent = currentSubOrders.filter((so: any) => so.stall_status === "REJECTED").length;
+    const cancelRateCurrent =
+      totalReceivedCurrent > 0 ? (rejectedCurrent / totalReceivedCurrent) * 100 : 0;
+
+    const totalReceivedPrev = prevSubOrders.length;
+    const rejectedPrev = prevSubOrders.filter((so: any) => so.stall_status === "REJECTED").length;
+    const cancelRatePrev = totalReceivedPrev > 0 ? (rejectedPrev / totalReceivedPrev) * 100 : 0;
+
+    const cancelTrendPct = cancelRateCurrent - cancelRatePrev;
+    const cancelTrend = {
+      trend: `${cancelTrendPct >= 0 ? "+" : ""}${cancelTrendPct.toFixed(1)}%`,
+      positive: cancelTrendPct <= 0,
+    };
+
+    // 5. Chart Data Breakdown
+    let chartData: { name: string; revenue: number }[] = [];
+
+    if (timeFilter === "This Week") {
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const dayRevenues = [0, 0, 0, 0, 0, 0, 0];
+
+      validCurrentSubOrders.forEach((so: any) => {
+        const d = new Date(so.createdAt);
+        const dayIdx = (d.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+        dayRevenues[dayIdx] += so.vendor_earned_amount || 0;
+      });
+
+      chartData = days.map((name, i) => ({
+        name,
+        revenue: Math.round(dayRevenues[i] * 100) / 100,
+      }));
+    } else if (timeFilter === "This Month") {
+      const weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"];
+      const weekRevenues = [0, 0, 0, 0, 0];
+
+      validCurrentSubOrders.forEach((so: any) => {
+        const d = new Date(so.createdAt);
+        const dateNum = d.getDate();
+        const weekIdx = Math.min(Math.floor((dateNum - 1) / 7), 4);
+        weekRevenues[weekIdx] += so.vendor_earned_amount || 0;
+      });
+
+      chartData = weeks.map((name, i) => ({
+        name,
+        revenue: Math.round(weekRevenues[i] * 100) / 100,
+      }));
+    } else {
+      // 'This Year'
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthRevenues = new Array(12).fill(0);
+
+      validCurrentSubOrders.forEach((so: any) => {
+        const d = new Date(so.createdAt);
+        const m = d.getMonth();
+        monthRevenues[m] += so.vendor_earned_amount || 0;
+      });
+
+      chartData = months.map((name, i) => ({
+        name,
+        revenue: Math.round(monthRevenues[i] * 100) / 100,
+      }));
+    }
+
+    // 6. Top Performing Items
+    const menuItemsMap = new Map<string, any>();
+    (primaryStall.menu_items || []).forEach((m: any) => {
+      menuItemsMap.set(m._id?.toString(), m);
+    });
+
+    const itemSalesMap = new Map<
+      string,
+      { name: string; sales: number; revenue: number; image?: string }
+    >();
+
+    validCurrentSubOrders.forEach((so: any) => {
+      const itemId = so.item_id?.toString() || "unknown";
+      const menuItem = menuItemsMap.get(itemId);
+      const name = menuItem?.name || "Popular Dish";
+      const img = menuItem?.image_url || primaryStall.image_url || "";
+
+      if (!itemSalesMap.has(itemId)) {
+        itemSalesMap.set(itemId, {
+          name,
+          sales: 0,
+          revenue: 0,
+          image: img,
+        });
+      }
+
+      const itemStats = itemSalesMap.get(itemId)!;
+      itemStats.sales += so.quantity || 1;
+      itemStats.revenue += so.vendor_earned_amount || 0;
+    });
+
+    const popularItems = Array.from(itemSalesMap.values())
+      .sort((a, b) => b.sales - a.sales || b.revenue - a.revenue)
+      .slice(0, 5)
+      .map((item) => ({
+        name: item.name,
+        sales: item.sales,
+        revenue: `₹${Math.round(item.revenue).toLocaleString("en-IN")}`,
+        image: item.image,
+      }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        kpis: [
+          {
+            label: "Total Revenue",
+            value: `₹${Math.round(currentRevenue).toLocaleString("en-IN")}`,
+            trend: revTrend.trend,
+            positive: revTrend.positive,
+          },
+          {
+            label: "Total Orders",
+            value: `${currentOrdersCount}`,
+            trend: orderTrend.trend,
+            positive: orderTrend.positive,
+          },
+          {
+            label: "Avg. Prep Time",
+            value: `${avgPrepMins}m`,
+            trend: prepTrend.trend,
+            positive: prepTrend.positive,
+          },
+          {
+            label: "Cancellation Rate",
+            value: `${cancelRateCurrent.toFixed(1)}%`,
+            trend: cancelTrend.trend,
+            positive: cancelTrend.positive,
+          },
+        ],
+        chartData,
+        popularItems,
+        totalPeriodRevenue: Math.round(currentRevenue),
+      },
+    });
+  } catch (error: any) {
+    console.error("Get Vendor Analytics Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to fetch vendor analytics.",
+    });
+  }
+};
+

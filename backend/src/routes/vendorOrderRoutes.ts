@@ -4,6 +4,7 @@ import {
   updateVendorOrderStatus,
   rejectVendorOrder,
   getVendorMetrics,
+  getVendorAnalytics,
 } from "../controllers/vendorOrderController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
 
@@ -14,6 +15,9 @@ router.get("/", protect, getVendorOrders);
 
 // Quick metrics for navbar badge
 router.get("/metrics", protect, getVendorMetrics);
+
+// Detailed vendor analytics dashboard (KPIs, revenue breakdown, top items)
+router.get("/analytics", protect, getVendorAnalytics);
 
 // Update status (e.g. Preparing, Completed / Ready for pickup, Cancelled)
 router.patch("/:id/status", protect, updateVendorOrderStatus);
