@@ -114,7 +114,6 @@ export const Cart: React.FC = () => {
                 {vendorIds.map((vendorId, groupIdx) => {
                   const group = vendorGroups[vendorId];
                   const stallImageUrl = stallImages[vendorId] || stallImages[group.vendorName.toLowerCase().trim()] || group.items.find(it => it.stallImage)?.stallImage || '';
-                  const subTotal = group.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
                   return (
                     <div key={vendorId} className="bg-white rounded-3xl border border-[#EAE4DA] p-5 shadow-3xs space-y-4">
