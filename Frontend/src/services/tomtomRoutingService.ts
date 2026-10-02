@@ -147,7 +147,7 @@ export async function calculateTomTomRoute(
       apiKey
     )}&travelMode=${encodeURIComponent(mode)}&routeType=${encodeURIComponent(
       routeType
-    )}&traffic=false&routeRepresentation=polyline`;
+    )}&traffic=${Boolean(traffic)}&routeRepresentation=polyline`;
 
     try {
       const controller = new AbortController();

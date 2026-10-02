@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
-  RotateCcw,
   FileText,
   ChevronDown,
   MapPin,
@@ -17,7 +16,6 @@ import {
 import type { CartItem } from '../../types';
 import { useNavigate } from 'react-router';
 import { OrdersSkeleton } from '../../components';
-import buttonLoader from '../../assets/Loader/button_loading.gif';
 import { razorpayService } from '../../services/razorpayService';
 
 interface OrdersProps {
@@ -34,7 +32,6 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'live' | 'past'>('live');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [reorderingId, setReorderingId] = useState<string | null>(null);
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
 
   const handleNav = (tab: string) => {
@@ -74,14 +71,6 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
 
     return () => clearInterval(interval);
   }, [activeOrder]);
-
-  const handleReorder = (orderId: string) => {
-    setReorderingId(orderId);
-    setTimeout(() => {
-      setReorderingId(null);
-      handleNav('home');
-    }, 1500);
-  };
 
   // Convert real MongoDB orders into UI display items
   const ordersToDisplay = liveOrders.map((o: any) => {

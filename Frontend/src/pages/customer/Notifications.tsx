@@ -4,11 +4,8 @@ import {
   Bell,
   Package,
   Tag,
-  CheckCircle2,
   ChevronRight,
-  DollarSign,
   Bike,
-  Sparkles,
   Loader2,
   CheckCheck,
 } from 'lucide-react';

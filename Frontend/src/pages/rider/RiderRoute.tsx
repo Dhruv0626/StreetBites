@@ -57,7 +57,6 @@ export const RiderRoute: React.FC = () => {
   // Live TomTom routing calculation state
   const [routeResult, setRouteResult] = useState<RouteCalculationResult | null>(null);
   const [isRouting, setIsRouting] = useState(false);
-  const [isMatrixOptimized, setIsMatrixOptimized] = useState(false);
   const [riderLiveLocation, setRiderLiveLocation] = useState<[number, number] | null>(null);
   const [deviceGpsHeading, setDeviceGpsHeading] = useState<number | null>(null);
 
@@ -214,7 +213,6 @@ export const RiderRoute: React.FC = () => {
             result.coordinates.length > stopsToRoute.length
           ) {
             setRouteResult(result);
-            setIsMatrixOptimized(stopsToRoute.length > 2);
           } else {
             setRouteResult(null);
           }

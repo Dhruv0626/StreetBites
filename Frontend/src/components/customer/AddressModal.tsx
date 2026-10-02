@@ -29,8 +29,6 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   isOpen,
   onClose,
   onAddressCreated,
-  userName,
-  userPhone,
 }) => {
   const [label, setLabel] = useState<'Home' | 'Office' | 'Other'>('Home');
   const [area, setArea] = useState('');
@@ -49,7 +47,6 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
-  const [showMapAdjuster, setShowMapAdjuster] = useState<boolean>(true);
 
   const houseNoInputRef = useRef<HTMLInputElement | null>(null);
   const landmarkInputRef = useRef<HTMLInputElement | null>(null);
@@ -84,7 +81,6 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         setLat(detectedLat);
         setLng(detectedLng);
         setHasGpsLocked(true);
-        setShowMapAdjuster(true);
         localStorage.setItem('streetbites_location_permission', 'granted');
         localStorage.setItem('streetbites_location_enabled', 'true');
 

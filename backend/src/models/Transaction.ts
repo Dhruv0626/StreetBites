@@ -233,7 +233,6 @@ const TransactionSchema = new mongoose.Schema<ITransaction>(
 );
 
 // Indexes for superfast queries across Admin, Vendor, and Rider portals
-TransactionSchema.index({ order_id: 1 }, { unique: true });
 TransactionSchema.index({ "vendor_payouts.vendor_id": 1, createdAt: -1 });
 TransactionSchema.index({ "rider_payout.rider_id": 1, createdAt: -1 });
 TransactionSchema.index({ settlement_status: 1 });

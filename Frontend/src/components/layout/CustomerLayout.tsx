@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { RequirePhoneModal } from '../auth/RequirePhoneModal';
 import { CustomerLocationBanner } from '../common/CustomerLocationBanner';
 import { razorpayService } from '../../services/razorpayService';
-import { Bike, ChefHat, Sparkles } from 'lucide-react';
+import { Bike, ChefHat } from 'lucide-react';
 
 export const CustomerLayout: React.FC = () => {
   const location = useLocation();
