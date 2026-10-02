@@ -65,6 +65,7 @@ export interface ActiveRouteData {
   totalAmount: number;
   riderEarnedFee: number;
   codAmountHeld: number;
+  collectedCheckpoints?: number[];
   checkpoints: {
     type: "pickup" | "drop";
     id: string;
@@ -74,6 +75,7 @@ export interface ActiveRouteData {
     amount: string;
     position: [number, number];
     isReady?: boolean;
+    isCollected?: boolean;
     status?: string;
     items?: any[];
     stallName?: string;
@@ -237,6 +239,23 @@ export const riderService = {
       {
         method: "POST",
         body: JSON.stringify({ checkpointIndex, totalCheckpoints }),
+      }
+    );
+  },
+
+  // Mark Rider Arrived at Doorstep
+  markAtDoor: async (
+    orderId: string,
+    params?: { riderId?: string; email?: string }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{ message: string; orderStatus: string; riderAtDoor: boolean }>(
+      `/rider/orders/${orderId}/at-door${qs}`,
+      {
+        method: "POST",
       }
     );
   },

@@ -926,7 +926,7 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
 
     const orders = await Order.find({ customer_id: user._id })
       .populate("cluster_id", "name coordinates city")
-      .populate("rider_id", "name phone_number")
+      .populate("rider_id", "name phone_number current_coordinates")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -974,8 +974,16 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
           deliveryFee: o.delivery_fee,
           taxAmount: o.tax_amount || Math.round((o.food_items_total || 0) * 0.05 * 10) / 10,
           deliveryAddress: o.delivery_address,
+          deliveryCoordinates: o.delivery_coordinates?.coordinates || null,
           deliveryOtp: o.delivery_otp,
-          rider: o.rider_id ? { name: o.rider_id.name, phone: o.rider_id.phone_number } : null,
+          rider: o.rider_id
+            ? {
+                name: o.rider_id.name,
+                phone: o.rider_id.phone_number,
+                coordinates: o.rider_id.current_coordinates?.coordinates || null,
+              }
+            : null,
+          clusterCoordinates: o.cluster_id?.coordinates?.coordinates || null,
           itemsCount: itemsList.reduce((sum, it) => sum + it.quantity, 0) || subOrders.length,
           stalls: stallNames.length > 0 ? stallNames : [o.cluster_id?.name || "StreetBites Khau Galli"],
           items: itemsList,

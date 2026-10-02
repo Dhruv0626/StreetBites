@@ -6,6 +6,8 @@ export type OrderStatus =
   | "PREPARING"
   | "READY_FOR_PICKUP"
   | "OUT_FOR_DELIVERY"
+  | "RIDER_AT_DOOR"
+  | "AT_DOOR"
   | "DELIVERED"
   | "CANCELLED";
 export type CodDepositStatus = "PENDING_DEPOSIT" | "DEPOSITED_TO_ADMIN";
@@ -43,6 +45,8 @@ export interface IOrder extends Document {
   cod_deposit_status?: CodDepositStatus | null;
   refunded_amount?: number;
   rejection_note?: string;
+  collected_checkpoints?: number[];
+  rider_at_door?: boolean;
   delivered_at?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -109,6 +113,8 @@ const OrderSchema = new mongoose.Schema<IOrder>(
         "PREPARING",
         "READY_FOR_PICKUP",
         "OUT_FOR_DELIVERY",
+        "RIDER_AT_DOOR",
+        "AT_DOOR",
         "DELIVERED",
         "CANCELLED",
       ],
@@ -179,6 +185,10 @@ const OrderSchema = new mongoose.Schema<IOrder>(
     rejection_note: {
       type: String,
       default: null,
+    },
+    collected_checkpoints: {
+      type: [Number],
+      default: [],
     },
     delivered_at: {
       type: Date,

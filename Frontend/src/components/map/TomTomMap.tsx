@@ -261,6 +261,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
         const markerEl = existingMarker.getElement();
         if (markerEl) {
           markerEl.className = getMarkerElementClass(markerData.type);
+          applyMarkerElementDimensions(markerEl, markerData.type);
           markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id, markerData.heading);
         }
         if (markerData.type === 'rider' && typeof markerData.heading === 'number') {
@@ -272,6 +273,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
       } else {
         const markerEl = document.createElement('div');
         markerEl.className = getMarkerElementClass(markerData.type);
+        applyMarkerElementDimensions(markerEl, markerData.type);
         markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id, markerData.heading);
 
         const isBottomAnchored = markerData.type === 'cluster' || markerData.type === 'stall' || markerData.type === 'customer';
@@ -515,6 +517,28 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
 // ── HELPER FUNCTIONS FOR ATTRACTIVE & MEANINGFUL MARKER STYLING ─────────────────
 
+function applyMarkerElementDimensions(el: HTMLElement, type?: string) {
+  el.style.position = 'relative';
+  el.style.willChange = 'transform';
+  el.style.transition = 'none'; // Critical: ensures pan/zoom GPU matrix updates are instantaneous without subpixel drift
+  el.style.overflow = 'visible';
+  el.style.pointerEvents = 'auto';
+
+  if (type === 'cluster') {
+    el.style.width = '44px';
+    el.style.height = '54px';
+  } else if (type === 'stall' || type === 'customer') {
+    el.style.width = '36px';
+    el.style.height = '44px';
+  } else if (type === 'rider') {
+    el.style.width = '42px';
+    el.style.height = '42px';
+  } else {
+    el.style.width = '28px';
+    el.style.height = '28px';
+  }
+}
+
 function getMarkerElementClass(type?: string): string {
   if (type === 'cluster') {
     return 'streetbites-cluster-marker-root cursor-pointer z-30 select-none';
@@ -529,7 +553,7 @@ function getMarkerElementClass(type?: string): string {
     return 'streetbites-rider-marker-root cursor-pointer z-35 select-none';
   }
 
-  return 'cursor-pointer transition-transform duration-200 hover:scale-110 flex items-center justify-center shadow-md border-2 border-white w-7 h-7 rounded-full bg-[#1C1917] text-white z-10';
+  return 'cursor-pointer flex items-center justify-center shadow-md border-2 border-white w-7 h-7 rounded-full bg-[#1C1917] text-white z-10';
 }
 
 function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: number = 0): string {
@@ -550,17 +574,17 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   // Attractive, Rich & Meaningful Cluster / Khau Galli Food Hub Pin
   if (type === 'cluster') {
     return `
-      <div class="streetbites-cluster-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
+      <div class="streetbites-cluster-pin" style="position: relative; width: 44px; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
-        <!-- Floating Mini Name Label Pill -->
-        <div class="cluster-name-tag" style="position: absolute; bottom: 58px; white-space: nowrap; background: rgba(28, 25, 23, 0.94); backdrop-filter: blur(8px); color: #FFF; font-size: 11px; font-weight: 800; font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 10px; border-radius: 9999px; border: 1.5px solid rgba(255,255,255,0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.35); pointer-events: none; display: flex; align-items: center; gap: 6px; z-index: 30; transition: all 0.2s ease;">
+        <!-- Floating Mini Name Label Pill (Offset from top, doesn't interfere with bottom anchor point) -->
+        <div class="cluster-name-tag" style="position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(28, 25, 23, 0.94); backdrop-filter: blur(8px); color: #FFF; font-size: 11px; font-weight: 800; font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 10px; border-radius: 9999px; border: 1.5px solid rgba(255,255,255,0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.35); pointer-events: none; display: flex; align-items: center; gap: 6px; z-index: 30;">
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 8px #22C55E; flex-shrink: 0;"></span>
           <span style="max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
         </div>
 
         <!-- 3D Elevated Teardrop Pin Graphic with Authentic Khau Galli Food Hub Emblem -->
-        <div class="cluster-pin-graphic" style="position: relative; width: 44px; height: 54px; filter: drop-shadow(0 10px 18px rgba(217, 74, 56, 0.55)) drop-shadow(0 2px 5px rgba(0,0,0,0.25)); transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
-          <svg width="44" height="54" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div class="cluster-pin-graphic" style="position: relative; width: 44px; height: 54px; filter: drop-shadow(0 10px 18px rgba(217, 74, 56, 0.55)) drop-shadow(0 2px 5px rgba(0,0,0,0.25)); pointer-events: auto;">
+          <svg width="44" height="54" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
             <defs>
               <linearGradient id="clusterGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#FF5722" />
@@ -592,7 +616,7 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
           </svg>
         </div>
 
-        <div class="cluster-ground-ripple" style="position: absolute; bottom: -3px; width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(217, 74, 56, 0.75) 0%, rgba(217, 74, 56, 0) 75%); animation: clusterPulseRipple 2.2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <div class="cluster-ground-ripple" style="position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(217, 74, 56, 0.75) 0%, rgba(217, 74, 56, 0) 75%); animation: clusterPulseRipple 2.2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
       </div>
     `;
   }
@@ -600,15 +624,15 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   // Dedicated Food Stall Pin with Canopy Logo & Mini Floating Stall Name & Stop Badge
   if (type === 'stall') {
     return `
-      <div class="streetbites-stall-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+      <div class="streetbites-stall-pin" style="position: relative; width: 36px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
-        <div class="stall-name-tag" style="position: absolute; bottom: 46px; white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
+        <div class="stall-name-tag" style="position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
           ${checkpointLetter ? `<span style="background: #D94A38; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 6px #22C55E; flex-shrink: 0;"></span>`}
           <span style="max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
         </div>
 
-        <div class="stall-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(217, 74, 56, 0.45));">
-          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div class="stall-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(217, 74, 56, 0.45)); pointer-events: auto;">
+          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
             <defs>
               <linearGradient id="stallGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#FF7043" />
@@ -635,15 +659,15 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   // Dedicated Customer Delivery Drop Location Pin with Emerald Theme
   if (type === 'customer') {
     return `
-      <div class="streetbites-customer-pin" style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform-origin: bottom center; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+      <div class="streetbites-customer-pin" style="position: relative; width: 36px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
-        <div class="customer-name-tag" style="position: absolute; bottom: 46px; white-space: nowrap; background: rgba(6, 78, 59, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 28;">
+        <div class="customer-name-tag" style="position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(6, 78, 59, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 28;">
           ${checkpointLetter ? `<span style="background: #059669; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #34D399; display: inline-block; box-shadow: 0 0 6px #34D399; flex-shrink: 0;"></span>`}
           <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeTitle}</span>
         </div>
 
-        <div class="customer-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(5, 150, 105, 0.45));">
-          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div class="customer-pin-graphic" style="position: relative; width: 36px; height: 44px; filter: drop-shadow(0 6px 12px rgba(5, 150, 105, 0.45)); pointer-events: auto;">
+          <svg width="36" height="44" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
             <defs>
               <linearGradient id="customerGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#34D399" />
@@ -664,7 +688,7 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
           </svg>
         </div>
 
-        <div class="customer-ground-ripple" style="position: absolute; bottom: -2px; width: 22px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(5, 150, 105, 0.75) 0%, rgba(5, 150, 105, 0) 75%); animation: clusterPulseRipple 2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <div class="customer-ground-ripple" style="position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 22px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(5, 150, 105, 0.75) 0%, rgba(5, 150, 105, 0) 75%); animation: clusterPulseRipple 2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
       </div>
     `;
   }
@@ -673,11 +697,11 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   if (type === 'rider') {
     const deg = typeof heading === 'number' && !isNaN(heading) ? heading : 0;
     return `
-      <div class="streetbites-rider-nav-puck" style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+      <div class="streetbites-rider-nav-puck" style="position: relative; width: 42px; height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
         
         <!-- 3D Glowing Navigation Direction Arrow Puck with Dynamic Heading Rotation -->
         <div class="navigator-arrow-graphic" style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; transform-origin: center center; filter: drop-shadow(0 4px 14px rgba(2, 132, 199, 0.65)); transform: rotate(${deg}deg); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);">
-          <svg width="42" height="42" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="42" height="42" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
             <defs>
               <linearGradient id="navPuckGrad-${safeId}" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#38BDF8" />
@@ -701,7 +725,7 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
         </div>
 
         <!-- Ground Concentric Radar Wave -->
-        <div class="rider-radar-ripple" style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(2, 132, 199, 0) 70%); animation: clusterPulseRipple 1.8s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <div class="rider-radar-ripple" style="position: absolute; width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(2, 132, 199, 0) 70%); animation: clusterPulseRipple 1.8s ease-out infinite; pointer-events: none; z-index: 5;"></div>
       </div>
     `;
   }

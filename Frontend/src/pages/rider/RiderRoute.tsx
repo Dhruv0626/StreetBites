@@ -13,6 +13,8 @@ import {
   X,
   LocateFixed,
   Play,
+  Home,
+  Bell,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
@@ -53,6 +55,8 @@ export const RiderRoute: React.FC = () => {
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isAtDoor, setIsAtDoor] = useState(false);
+  const [isMarkingAtDoor, setIsMarkingAtDoor] = useState(false);
 
   // Live TomTom routing calculation state
   const [routeResult, setRouteResult] = useState<RouteCalculationResult | null>(null);
@@ -72,7 +76,7 @@ export const RiderRoute: React.FC = () => {
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
-    } catch {}
+    } catch { }
   };
 
   const handleStartNavigation = () => {
@@ -135,8 +139,47 @@ export const RiderRoute: React.FC = () => {
           email: user?.email,
         });
 
-        if (isMounted && res && res.success) {
-          setActiveRoute(res.data || null);
+        if (isMounted && res && res.success && res.data) {
+          const routeData = res.data;
+          const targetOrderId = routeData.rawId || routeData.orderId;
+
+          // Retrieve locally stored collected checkpoints as instant fallback
+          let localCollected: number[] = [];
+          try {
+            const raw = localStorage.getItem(`sb_rider_collected_${targetOrderId}`);
+            if (raw) localCollected = JSON.parse(raw);
+          } catch { }
+
+          const serverCollected: number[] = Array.isArray(routeData.collectedCheckpoints)
+            ? routeData.collectedCheckpoints
+            : [];
+
+          const mergedCollected = Array.from(new Set([...serverCollected, ...localCollected]));
+
+          // Sync checkpoints with collected state
+          const updatedCheckpoints = (routeData.checkpoints || []).map((cp, idx) => ({
+            ...cp,
+            isCollected: mergedCollected.includes(idx) || cp.isCollected,
+          }));
+
+          routeData.checkpoints = updatedCheckpoints;
+          routeData.collectedCheckpoints = mergedCollected;
+          if (routeData.status === 'RIDER_AT_DOOR' || routeData.status === 'AT_DOOR') {
+            setIsAtDoor(true);
+          }
+          setActiveRoute(routeData);
+
+          // Calculate current active stop: first stall that is NOT yet collected (or the final drop stop)
+          let firstPendingIdx = 0;
+          while (
+            firstPendingIdx < updatedCheckpoints.length - 1 &&
+            mergedCollected.includes(firstPendingIdx)
+          ) {
+            firstPendingIdx++;
+          }
+          setActiveStopIndex(firstPendingIdx);
+        } else if (isMounted && res && res.success && !res.data) {
+          setActiveRoute(null);
         }
       } catch (err) {
         console.error('Failed to load active route:', err);
@@ -149,10 +192,10 @@ export const RiderRoute: React.FC = () => {
 
     fetchActiveRoute(false);
 
-    // Live sync polling every 3 seconds to get real-time vendor food prep/ready status
+    // Live sync polling every 4 seconds to get real-time vendor food prep/ready status
     const pollInterval = setInterval(() => {
       fetchActiveRoute(true);
-    }, 3000);
+    }, 4000);
 
     return () => {
       isMounted = false;
@@ -165,9 +208,11 @@ export const RiderRoute: React.FC = () => {
     ? checkpoints[Math.min(activeStopIndex, checkpoints.length - 1)]
     : null;
 
-  // Calculate live TomTom route whenever active checkpoints change or live GPS updates
+  // Calculate live TomTom route whenever active checkpoints change or live GPS updates (with fast debouncing)
   useEffect(() => {
     let isMounted = true;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
     const computeRoute = async () => {
       if (!checkpoints || checkpoints.length < 2) {
         if (isMounted) setRouteResult(null);
@@ -178,7 +223,6 @@ export const RiderRoute: React.FC = () => {
 
       // Determine active route stops in sequence:
       // If live GPS is available, start route from rider's exact live GPS coordinate to upcoming stops!
-      // Otherwise start from completed/current checkpoints.
       let stopsToRoute: [number, number][] = [];
 
       if (riderLiveLocation && Array.isArray(riderLiveLocation) && riderLiveLocation.length === 2) {
@@ -214,8 +258,6 @@ export const RiderRoute: React.FC = () => {
             result.coordinates.length > stopsToRoute.length
           ) {
             setRouteResult(result);
-          } else {
-            setRouteResult(null);
           }
         }
       } catch (calcErr) {
@@ -225,12 +267,17 @@ export const RiderRoute: React.FC = () => {
       }
     };
 
-    computeRoute();
+    // Debounce recalculation so route updates instantly without lagging on GPS jitter
+    timerId = setTimeout(() => {
+      computeRoute();
+    }, 300);
+
     return () => {
       isMounted = false;
+      if (timerId) clearTimeout(timerId);
     };
   }, [
-    checkpoints,
+    checkpoints.length,
     activeStopIndex,
     riderLiveLocation?.[0] ? Number(riderLiveLocation[0].toFixed(3)) : null,
     riderLiveLocation?.[1] ? Number(riderLiveLocation[1].toFixed(3)) : null,
@@ -373,26 +420,73 @@ export const RiderRoute: React.FC = () => {
   }, [checkpoints, activeStopIndex, riderLiveLocation, riderHeading]);
 
   const handleNextCheckpoint = async () => {
-    if (activeStopIndex < checkpoints.length - 1) {
+    if (activeStopIndex < checkpoints.length - 1 && activeRoute) {
+      const currentIdx = activeStopIndex;
       const nextIdx = activeStopIndex + 1;
+      const targetOrderId = activeRoute.rawId || activeRoute.orderId;
+
+      // Update local storage immediately for instant persistence across reloads
+      let localCollected: number[] = [];
+      try {
+        const raw = localStorage.getItem(`sb_rider_collected_${targetOrderId}`);
+        if (raw) localCollected = JSON.parse(raw);
+      } catch { }
+      if (!localCollected.includes(currentIdx)) {
+        localCollected.push(currentIdx);
+      }
+      try {
+        localStorage.setItem(`sb_rider_collected_${targetOrderId}`, JSON.stringify(localCollected));
+      } catch { }
+
+      // Update in-memory active route state
+      setActiveRoute(prev => {
+        if (!prev) return prev;
+        const updatedCheckpoints = (prev.checkpoints || []).map((cp, idx) => ({
+          ...cp,
+          isCollected: localCollected.includes(idx) || cp.isCollected,
+        }));
+        return {
+          ...prev,
+          collectedCheckpoints: localCollected,
+          checkpoints: updatedCheckpoints,
+        };
+      });
+
       setActiveStopIndex(nextIdx);
 
-      if (activeRoute) {
-        try {
-          const targetOrderId = activeRoute.rawId || activeRoute.orderId;
-          await riderService.collectCheckpoint(
-            targetOrderId,
-            nextIdx,
-            checkpoints.length,
-            {
-              riderId: user?._id || user?.id,
-              email: user?.email,
-            }
-          );
-        } catch (err) {
-          console.warn('Failed to sync checkpoint progress:', err);
-        }
+      try {
+        await riderService.collectCheckpoint(
+          targetOrderId,
+          currentIdx,
+          checkpoints.length,
+          {
+            riderId: user?._id || user?.id,
+            email: user?.email,
+          }
+        );
+      } catch (err) {
+        console.warn('Failed to sync checkpoint progress to backend:', err);
       }
+    }
+  };
+
+  const handleMarkAtDoor = async () => {
+    if (!activeRoute) return;
+    setIsMarkingAtDoor(true);
+    try {
+      const targetOrderId = activeRoute.rawId || activeRoute.orderId;
+      const res = await riderService.markAtDoor(targetOrderId, {
+        riderId: user?._id || user?.id,
+        email: user?.email,
+      });
+      if (res && res.success) {
+        setIsAtDoor(true);
+        speakInstruction('You have arrived at the customer doorstep. Please request the 4-digit Delivery OTP.');
+      }
+    } catch (err) {
+      console.warn('Failed to mark at door:', err);
+    } finally {
+      setIsMarkingAtDoor(false);
     }
   };
 
@@ -470,8 +564,8 @@ export const RiderRoute: React.FC = () => {
   const mapCenter: [number, number] = riderLiveLocation && Array.isArray(riderLiveLocation) && riderLiveLocation.length === 2
     ? riderLiveLocation
     : (activeCheckpoint && Array.isArray(activeCheckpoint.position) && activeCheckpoint.position.length >= 2
-        ? [activeCheckpoint.position[0], activeCheckpoint.position[1]]
-        : [72.5873, 23.0242]);
+      ? [activeCheckpoint.position[0], activeCheckpoint.position[1]]
+      : [72.5873, 23.0242]);
 
   const mapZoom = isNavigating ? 17.5 : 15;
   const mapPitch = isNavigating ? 55 : 0;
@@ -552,11 +646,10 @@ export const RiderRoute: React.FC = () => {
                     type="button"
                     onClick={() => setIsVoiceMuted(!isVoiceMuted)}
                     title={isVoiceMuted ? 'Unmute Voice Guidance' : 'Mute Voice Guidance'}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
-                      isVoiceMuted
-                        ? 'bg-emerald-900/80 border-emerald-700 text-emerald-400'
-                        : 'bg-emerald-600 border-emerald-400 text-white'
-                    }`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${isVoiceMuted
+                      ? 'bg-emerald-900/80 border-emerald-700 text-emerald-400'
+                      : 'bg-emerald-600 border-emerald-400 text-white'
+                      }`}
                   >
                     {isVoiceMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                   </button>
@@ -721,18 +814,42 @@ export const RiderRoute: React.FC = () => {
                             </div>
                           )
                         ) : (
-                          <div className="mt-4 space-y-2 border-t border-stone-100 pt-3">
-                            <label className="text-[11px] font-bold text-stone-700 block">
-                              Ask Customer for 4-Digit Delivery OTP
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={6}
-                              placeholder="Enter OTP"
-                              value={enteredOtp}
-                              onChange={(e) => setEnteredOtp(e.target.value)}
-                              className="w-full px-3 py-2 border border-stone-300 rounded-xl text-center tracking-widest font-mono font-bold text-base focus:border-[#D94A38] focus:outline-none"
-                            />
+                          <div className="mt-4 space-y-3 border-t border-stone-100 pt-3">
+                            {/* At Doorstep Milestone Button / Status */}
+                            {isAtDoor ? (
+                              <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs animate-fadeIn">
+                                <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                                  <Home className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span>You are at Customer Doorstep</span>
+                                </div>
+                                <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300 shrink-0">
+                                  Customer Notified
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={handleMarkAtDoor}
+                                disabled={isMarkingAtDoor}
+                                className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-2 rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                              >
+                                {isMarkingAtDoor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                                I'm at Customer Doorstep (Notify Customer)
+                              </button>
+                            )}
+
+                            <div>
+                              <label className="text-[11px] font-bold text-stone-700 block mb-1">
+                                Ask Customer for 4-Digit Delivery OTP
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                placeholder="Enter OTP"
+                                value={enteredOtp}
+                                onChange={(e) => setEnteredOtp(e.target.value)}
+                                className="w-full px-3 py-2 border border-stone-300 rounded-xl text-center tracking-widest font-mono font-bold text-base focus:border-[#D94A38] focus:outline-none bg-stone-50/50"
+                              />
+                            </div>
                             {otpError && (
                               <p className="text-[10px] text-red-600 font-bold">{otpError}</p>
                             )}
@@ -764,11 +881,10 @@ export const RiderRoute: React.FC = () => {
                           <span className="text-xs text-stone-500 block">{cp.desc}</span>
                           {cp.dist && <span className="text-[11px] text-stone-400 block mt-0.5">{cp.dist}</span>}
                         </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 border ${
-                          isPickupPending && isReadyPending
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-stone-100 text-stone-600 border-stone-200'
-                        }`}>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 border ${isPickupPending && isReadyPending
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-stone-100 text-stone-600 border-stone-200'
+                          }`}>
                           {isPickupPending && isReadyPending ? 'Food Ready' : 'Pending'}
                         </span>
                       </div>

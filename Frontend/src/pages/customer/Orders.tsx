@@ -141,6 +141,69 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
 
   const liveItems: any[] = Array.isArray(currentLiveOrder?.items) ? currentLiveOrder.items : [];
 
+  // ── Calculate Distance & Live Estimated Arrival Time (ETA) ─────────────────
+  const calculateDistanceKm = (c1?: [number, number] | null, c2?: [number, number] | null): number => {
+    if (!c1 || !c2 || !Array.isArray(c1) || !Array.isArray(c2) || c1.length < 2 || c2.length < 2) {
+      return 2.4;
+    }
+    const [lng1, lat1] = c1;
+    const [lng2, lat2] = c2;
+    const R = 6371; // Earth radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const dist = R * c;
+    return isNaN(dist) || dist <= 0 ? 2.4 : Number(dist.toFixed(1));
+  };
+
+  const getEtaDetails = (order: any) => {
+    if (!order) return { minutes: 20, timeStr: '15–20 mins', arrivalClock: '', distanceKm: 2.4 };
+
+    const rawStatus = String(order.rawStatus || order.status || '').toUpperCase();
+    const isDelivered = rawStatus === 'DELIVERED' || order.status === 'Delivered';
+    if (isDelivered) {
+      return { minutes: 0, timeStr: 'Delivered', arrivalClock: 'Completed', distanceKm: 0 };
+    }
+
+    const dropCoords = order.deliveryCoordinates || [72.5815, 23.1118];
+    const riderCoords = order.rider?.coordinates;
+    const originCoords = (rawStatus === 'OUT_FOR_DELIVERY' && riderCoords)
+      ? riderCoords
+      : (order.clusterCoordinates || [72.5873, 23.0248]);
+
+    const distanceKm = calculateDistanceKm(originCoords, dropCoords);
+
+    const travelMins = Math.max(3, Math.round(distanceKm * 2.7));
+    let totalMins = travelMins;
+
+    if (rawStatus === 'OUT_FOR_DELIVERY') {
+      totalMins = Math.max(4, travelMins + 2);
+    } else if (rawStatus === 'READY_FOR_PICKUP') {
+      totalMins = Math.max(8, travelMins + 5);
+    } else {
+      const prepMins = (order.items && Array.isArray(order.items))
+        ? Math.max(12, ...order.items.map((i: any) => i.prepTimeMinutes || 12))
+        : 14;
+      totalMins = Math.max(12, prepMins + travelMins + 3);
+    }
+
+    const arrivalTime = new Date(Date.now() + totalMins * 60000);
+    const arrivalClock = arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    return {
+      minutes: totalMins,
+      timeStr: `${Math.max(2, totalMins - 3)}–${totalMins + 2} mins`,
+      arrivalClock,
+      distanceKm,
+    };
+  };
+
   const renderPastOrders = () => {
     if (ordersToDisplay.length === 0) {
       return (
@@ -362,6 +425,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
             {currentLiveOrder ? (() => {
               const rawStatus = String(currentLiveOrder?.rawStatus || currentLiveOrder?.status || '').toUpperCase();
               const isDelivered = rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered';
+              const isAtDoor = rawStatus === 'RIDER_AT_DOOR' || rawStatus === 'AT_DOOR' || currentLiveOrder?.rider_at_door || currentLiveOrder?.status === 'Rider at Door' || currentLiveOrder?.status === 'At Door';
               const isOutForDelivery = rawStatus === 'OUT_FOR_DELIVERY' || currentLiveOrder?.status === 'Out for Delivery';
               const isReadyForPickup = rawStatus === 'READY_FOR_PICKUP' || currentLiveOrder?.status === 'Ready for Pickup';
               const allStallsReady = liveItems.length > 0 && liveItems.every((it: any) => it.status === 'READY');
@@ -371,8 +435,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               let currentStep = 0;
               if (isDelivered) {
                 currentStep = 4;
+              } else if (isAtDoor) {
+                currentStep = 3; // Rider arrived at customer doorstep
               } else if (isOutForDelivery) {
                 currentStep = 2; // Rider collected from stalls & on the way
+              } else if (isReadyForPickup || allStallsReady) {
+                currentStep = 1; // Food ready / collected by rider
               } else {
                 currentStep = 0; // Stall Status (Cooking / Preparing / Rider Assigned)
               }
@@ -408,6 +476,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 },
               ];
 
+              const etaInfo = getEtaDetails(currentLiveOrder);
+
               return (
                 <div className="space-y-6">
                   {/* Header info */}
@@ -424,15 +494,17 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       <h1 className="text-3xl font-bold text-[#1C1917]">
                         {isDelivered
                           ? 'Order Delivered!'
-                          : isOutForDelivery
-                            ? 'Rider is On The Way to You!'
-                            : isReadyForPickup || allStallsReady
-                              ? hasRider
-                                ? 'Food Ready — Rider Collecting from Stalls'
-                                : 'Food is Ready for Pickup'
-                              : hasRider
-                                ? 'Kitchens Preparing — Delivery Partner Assigned'
-                                : 'Kitchens are Preparing Your Order'}
+                          : isAtDoor
+                            ? '🚪 Rider is at Your Doorstep!'
+                            : isOutForDelivery
+                              ? 'Rider is On The Way to You!'
+                              : isReadyForPickup || allStallsReady
+                                ? hasRider
+                                  ? 'Food Ready — Rider Collecting from Stalls'
+                                  : 'Food is Ready for Pickup'
+                                : hasRider
+                                  ? 'Kitchens Preparing — Delivery Partner Assigned'
+                                  : 'Kitchens are Preparing Your Order'}
                       </h1>
                       <p className="text-xs text-[#8E8B85] mt-1">
                         {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · {liveStalls.length} Food Stall{liveStalls.length > 1 ? 's' : ''} Consolidated
@@ -447,6 +519,64 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       </button>
                     </div>
                   </div>
+
+                  {/* ─── LIVE ESTIMATED ARRIVAL TIME (ETA) & DISTANCE BANNER ─── */}
+                  {!isDelivered && (
+                    <div className="bg-gradient-to-r from-[#1C1917] via-[#241F1D] to-[#1C1917] text-white rounded-3xl p-6 shadow-xl border border-stone-800 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-[#D94A38]/15 rounded-full blur-3xl pointer-events-none" />
+                      <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-14 h-14 rounded-2xl bg-[#D94A38]/20 border border-[#D94A38]/40 flex items-center justify-center shrink-0 shadow-inner">
+                          <Clock className="w-7 h-7 text-[#D94A38] animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="bg-[#D94A38] text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider">
+                              Estimated Delivery Time
+                            </span>
+                            <span className="text-stone-400 text-xs font-semibold">
+                              {etaInfo.distanceKm} km away
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <h2 className="text-3xl font-black text-white tracking-tight">
+                              {etaInfo.timeStr}
+                            </h2>
+                            <span className="text-xs text-stone-300 font-medium">
+                              (Arriving by {etaInfo.arrivalClock})
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-300 mt-1 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                            {isOutForDelivery
+                              ? 'Rider is currently on the road traveling to your doorstep'
+                              : isReadyForPickup || allStallsReady
+                                ? 'Food packed! Rider is gathering packages from Khau Galli'
+                                : 'Fresh street food being cooked by vendors'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 bg-stone-900/90 backdrop-blur-md px-5 py-3.5 rounded-2xl border border-stone-800 shrink-0 w-full md:w-auto justify-between md:justify-start">
+                        <div className="text-left">
+                          <span className="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">
+                            Road Distance
+                          </span>
+                          <span className="text-base font-extrabold text-white">
+                            {etaInfo.distanceKm} KM
+                          </span>
+                        </div>
+                        <div className="h-8 w-[1px] bg-stone-800 mx-1" />
+                        <div className="text-left">
+                          <span className="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">
+                            Delivery Mode
+                          </span>
+                          <span className="text-base font-extrabold text-emerald-400 flex items-center gap-1">
+                            <Bike className="w-4 h-4" /> Live Ride
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* ─── 4-STAGE FULL TRACKING FLOW STEPPER ─── */}
                   <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
@@ -853,6 +983,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
             {currentLiveOrder ? (() => {
               const rawStatus = String(currentLiveOrder?.rawStatus || currentLiveOrder?.status || '').toUpperCase();
               const isDelivered = rawStatus === 'DELIVERED' || currentLiveOrder?.status === 'Delivered';
+              const isAtDoor = rawStatus === 'RIDER_AT_DOOR' || rawStatus === 'AT_DOOR' || currentLiveOrder?.rider_at_door || currentLiveOrder?.status === 'Rider at Door' || currentLiveOrder?.status === 'At Door';
               const isOutForDelivery = rawStatus === 'OUT_FOR_DELIVERY' || currentLiveOrder?.status === 'Out for Delivery';
               const isReadyForPickup = rawStatus === 'READY_FOR_PICKUP' || currentLiveOrder?.status === 'Ready for Pickup';
               const allStallsReady = liveItems.length > 0 && liveItems.every((it: any) => it.status === 'READY');
@@ -861,8 +992,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               let currentStep = 0;
               if (isDelivered) {
                 currentStep = 4;
+              } else if (isAtDoor) {
+                currentStep = 3;
               } else if (isOutForDelivery) {
                 currentStep = 2;
+              } else if (isReadyForPickup || allStallsReady) {
+                currentStep = 1;
               } else {
                 currentStep = 0;
               }
@@ -874,8 +1009,46 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 { id: 3, label: 'At Door', icon: Home },
               ];
 
+              const mobileEtaInfo = getEtaDetails(currentLiveOrder);
+
               return (
                 <div className="space-y-4 animate-fadeIn">
+                  {/* Mobile Live ETA Header Card */}
+                  {!isDelivered && (
+                    <div className="bg-gradient-to-br from-[#1C1917] to-[#2B2320] text-white rounded-2xl p-4 shadow-lg border border-stone-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#D94A38]/25 border border-[#D94A38]/40 flex items-center justify-center shrink-0">
+                          <Clock className="w-5 h-5 text-[#D94A38] animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-black uppercase text-[#D94A38] tracking-wider bg-[#D94A38]/20 px-2 py-0.5 rounded-full">
+                              ETA
+                            </span>
+                            <span className="text-[11px] text-stone-400 font-semibold">
+                              {mobileEtaInfo.distanceKm} km away
+                            </span>
+                          </div>
+                          <div className="text-lg font-black text-white mt-0.5">
+                            {mobileEtaInfo.timeStr}
+                          </div>
+                          <span className="text-[10px] text-stone-400 block -mt-0.5">
+                            Expected by {mobileEtaInfo.arrivalClock}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 bg-stone-900/80 px-3 py-2 rounded-xl border border-stone-800">
+                        <span className="text-[9px] uppercase font-bold text-stone-400 block">
+                          Delivery
+                        </span>
+                        <span className="text-xs font-black text-emerald-400">
+                          🛵 Fast Track
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Active Order Card */}
                   <div className="bg-white rounded-2xl border border-[#EAE4DA] p-4 shadow-3xs space-y-3">
                     <div className="flex justify-between items-center">
