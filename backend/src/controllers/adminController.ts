@@ -7,6 +7,7 @@ import { User } from "../models/User.ts";
 import { Stall } from "../models/Stall.ts";
 import { FoodItem } from "../models/FoodItem.ts";
 import { Cluster } from "../models/Cluster.ts";
+import { SubOrder } from "../models/SubOrder.ts";
 
 // @desc    Get all transactions & financial summaries
 // @route   GET /api/admin/transactions
@@ -208,31 +209,102 @@ export const updateComplaintStatus = async (req: Request, res: Response): Promis
 export const getAdminLiveOrders = async (_req: Request, res: Response): Promise<void> => {
   try {
     const orders = await Order.find({
-      status: { $in: ["PENDING", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"] },
+      status: { $in: ["PENDING", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "RIDER_AT_DOOR", "AT_DOOR"] },
     })
-      .populate("customer_id", "name phone_number")
-      .populate("rider_id", "name phone_number")
+      .populate("customer_id", "name phone_number email")
+      .populate("rider_id", "name phone_number email")
       .populate("cluster_id", "name coordinates city")
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedOrders = orders.map((o: any) => ({
-      id: `ORD-${o._id.toString().slice(-6).toUpperCase()}`,
-      _id: o._id.toString(),
-      vendor: o.cluster_id?.name || "Food Cluster",
-      rider: o.rider_id?.name || "Unassigned",
-      customer: o.customer_id?.name || "Customer",
-      customerPhone: o.customer_id?.phone_number || "N/A",
-      riderPhone: o.rider_id?.phone_number || "N/A",
-      status: o.status === "OUT_FOR_DELIVERY" ? "In Transit" : o.status === "PREPARING" ? "At Stall" : "Delayed",
-      time: o.createdAt ? new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now",
-      issue: null,
-      position: [
+    const orderIds = orders.map((o: any) => o._id);
+    const subOrders = await SubOrder.find({ order_id: { $in: orderIds } })
+      .populate("stall_id", "name stall_category menu_items rating")
+      .lean();
+
+    const subOrdersByOrderId = new Map<string, any[]>();
+    for (const so of subOrders) {
+      const oid = so.order_id.toString();
+      if (!subOrdersByOrderId.has(oid)) {
+        subOrdersByOrderId.set(oid, []);
+      }
+      subOrdersByOrderId.get(oid)!.push(so);
+    }
+
+    const formattedOrders = orders.map((o: any) => {
+      const orderSubOrders = subOrdersByOrderId.get(o._id.toString()) || [];
+
+      const stallsList: any[] = [];
+      const stallSet = new Set<string>();
+
+      orderSubOrders.forEach((so: any) => {
+        const stall = so.stall_id;
+        if (stall && !stallSet.has(stall._id?.toString())) {
+          stallSet.add(stall._id?.toString());
+          const menuItem = (stall.menu_items || []).find(
+            (m: any) => m._id?.toString() === so.item_id?.toString()
+          );
+          stallsList.push({
+            stallId: stall._id?.toString(),
+            name: stall.name,
+            category: stall.stall_category,
+            status: so.stall_status,
+            item: menuItem?.name || "Street Food Item",
+            quantity: so.quantity,
+          });
+        }
+      });
+
+      // Parse coordinates
+      const pickupCoords: [number, number] = [
         o.cluster_id?.coordinates?.coordinates?.[0] || 72.5714,
         o.cluster_id?.coordinates?.coordinates?.[1] || 23.0225,
-      ],
-      totalAmount: o.total_amount,
-    }));
+      ];
+
+      let dropCoords: [number, number] | null = null;
+      if (o.delivery_coordinates) {
+        if (Array.isArray(o.delivery_coordinates.coordinates)) {
+          dropCoords = [o.delivery_coordinates.coordinates[0], o.delivery_coordinates.coordinates[1]];
+        } else if (Array.isArray(o.delivery_coordinates)) {
+          dropCoords = [o.delivery_coordinates[0], o.delivery_coordinates[1]];
+        }
+      }
+
+      // Friendly display status
+      let displayStatus: "In Transit" | "Delayed" | "At Stall" | "At Door" | "Pending" = "At Stall";
+      if (o.status === "OUT_FOR_DELIVERY") displayStatus = "In Transit";
+      else if (o.status === "RIDER_AT_DOOR" || o.status === "AT_DOOR") displayStatus = "At Door";
+      else if (o.status === "PENDING") displayStatus = "Pending";
+      else if (o.status === "PREPARING" || o.status === "READY_FOR_PICKUP") displayStatus = "At Stall";
+
+      return {
+        id: `ORD-${o._id.toString().slice(-6).toUpperCase()}`,
+        _id: o._id.toString(),
+        vendor: o.cluster_id?.name || (stallsList[0]?.name ? `${stallsList[0].name}` : "Food Hub"),
+        clusterName: o.cluster_id?.name || "Street Food Hub",
+        rider: o.rider_id?.name || "Unassigned",
+        riderPhone: o.rider_id?.phone_number || "N/A",
+        riderEmail: o.rider_id?.email || "",
+        customer: o.customer_id?.name || "Customer",
+        customerPhone: o.customer_id?.phone_number || "N/A",
+        customerEmail: o.customer_id?.email || "",
+        status: displayStatus,
+        rawStatus: o.status,
+        deliveryAddress: o.delivery_address || "Ahmedabad",
+        deliveryOtp: o.delivery_otp,
+        time: o.createdAt
+          ? new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "Just now",
+        issue: null,
+        position: pickupCoords,
+        pickupCoords,
+        dropCoords: dropCoords || pickupCoords,
+        stalls: stallsList,
+        totalAmount: o.total_amount,
+        paymentMethod: o.payment_method || "ONLINE",
+        collectedCheckpoints: o.collected_checkpoints || [],
+      };
+    });
 
     res.status(200).json({
       success: true,
