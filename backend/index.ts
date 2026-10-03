@@ -19,6 +19,7 @@ import riderRoutes from "./src/routes/riderRoutes.ts";
 import paymentRoutes from "./src/routes/paymentRoutes.ts";
 import vendorOrderRoutes from "./src/routes/vendorOrderRoutes.ts";
 import notificationRoutes from "./src/routes/notificationRoutes.ts";
+import reviewRoutes from "./src/routes/reviewRoutes.ts";
 
 import { globalRateLimiter } from "./src/middlewares/rateLimiter.ts";
 
@@ -96,6 +97,7 @@ app.use("/api/rider", riderRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/vendor/orders", vendorOrderRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // Global Error Handler
 app.use(

@@ -8,13 +8,15 @@ import {
   getAdminFoodItems,
   updateFoodItemStatus,
   getAdminCounts,
+  getAdminOverviewStats,
 } from "../controllers/adminController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
 
 const router = Router();
 
-// Dashboard Counts (Approvals, Orders, Complaints)
+// Dashboard Counts & Overview (Approvals, Orders, Complaints, Revenue)
 router.get("/counts", getAdminCounts);
+router.get("/overview", getAdminOverviewStats);
 
 // Transactions & Payouts
 router.get("/transactions", protect, getAdminTransactions);

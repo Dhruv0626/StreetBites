@@ -9,6 +9,141 @@ import { FoodItem } from "../models/FoodItem.ts";
 import { Cluster } from "../models/Cluster.ts";
 import { SubOrder } from "../models/SubOrder.ts";
 
+// @desc    Get admin dashboard overview statistics & dynamic revenue trend
+// @route   GET /api/admin/overview
+// @access  Admin
+export const getAdminOverviewStats = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. User counts
+    const [customersCount, vendorsCount, ridersCount, adminsCount] = await Promise.all([
+      User.countDocuments({ role: "CUSTOMER" }),
+      User.countDocuments({ role: "VENDOR" }),
+      User.countDocuments({ role: "RIDER" }),
+      User.countDocuments({ role: "ADMIN" }),
+    ]);
+
+    // 2. Order metrics & gross revenue
+    const orders = await Order.find({ status: { $ne: "CANCELLED" } })
+      .select("total_amount food_items_total delivery_fee tax_amount platform_fee_earned status payment_method createdAt")
+      .lean();
+
+    let totalGrossRevenue = 0;
+    let totalPlatformFee = 0;
+    let totalDeliveryFees = 0;
+    let todayGrossRevenue = 0;
+    let todayOrdersCount = 0;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const transactions = await Transaction.find().lean();
+    let txGrossTotal = 0;
+    let txPlatformGain = 0;
+    transactions.forEach((t: any) => {
+      txGrossTotal += Number(t.total_order_amount) || 0;
+      txPlatformGain += Number(t.platform_revenue?.total_platform_fee) || 0;
+    });
+
+    orders.forEach((o: any) => {
+      const amt = Number(o.total_amount) || 0;
+      const platFee = Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.15);
+      const delFee = Number(o.delivery_fee) || 0;
+
+      totalGrossRevenue += amt;
+      totalPlatformFee += platFee;
+      totalDeliveryFees += delFee;
+
+      if (o.createdAt && new Date(o.createdAt) >= todayStart) {
+        todayGrossRevenue += amt;
+        todayOrdersCount += 1;
+      }
+    });
+
+    if (txGrossTotal > totalGrossRevenue) {
+      totalGrossRevenue = txGrossTotal;
+    }
+    if (txPlatformGain > totalPlatformFee) {
+      totalPlatformFee = txPlatformGain;
+    }
+
+    // 3. Last 7 Days Daily Revenue Trend Breakdown
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dailyTrend: {
+      name: string;
+      date: string;
+      fullDate: string;
+      revenue: number;
+      orders: number;
+      platformFee: number;
+    }[] = [];
+
+    // Build last 7 days array (from 6 days ago up to today)
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+      const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+      const dayOrders = orders.filter((o: any) => {
+        if (!o.createdAt) return false;
+        const ordDate = new Date(o.createdAt);
+        return ordDate >= startOfDay && ordDate <= endOfDay;
+      });
+
+      const dayRevenue = dayOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+      const dayPlatformFee = dayOrders.reduce(
+        (sum: number, o: any) =>
+          sum + (Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.15)),
+        0
+      );
+
+      const dayTx = transactions.filter((t: any) => {
+        if (!t.createdAt) return false;
+        const txDate = new Date(t.createdAt);
+        return txDate >= startOfDay && txDate <= endOfDay;
+      });
+      const dayTxRevenue = dayTx.reduce((sum: number, t: any) => sum + (Number(t.total_order_amount) || 0), 0);
+
+      const finalDayRevenue = Math.max(dayRevenue, dayTxRevenue);
+
+      dailyTrend.push({
+        name: dayNames[d.getDay()],
+        date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+        fullDate: d.toISOString().split("T")[0],
+        revenue: Math.round(finalDayRevenue * 100) / 100,
+        orders: dayOrders.length || dayTx.length,
+        platformFee: Math.round(dayPlatformFee * 100) / 100,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        stats: {
+          customers: customersCount,
+          vendors: vendorsCount,
+          riders: ridersCount,
+          admins: adminsCount,
+          totalUsers: customersCount + vendorsCount + ridersCount + adminsCount,
+          totalGrossRevenue: Math.round(totalGrossRevenue * 100) / 100,
+          totalPlatformRevenue: Math.round(totalPlatformFee * 100) / 100,
+          totalDeliveryFees: Math.round(totalDeliveryFees * 100) / 100,
+          totalOrders: orders.length,
+          todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
+          todayOrdersCount,
+        },
+        revenueTrend: dailyTrend,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching admin overview stats:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to fetch overview stats",
+    });
+  }
+};
+
 // @desc    Get all transactions & financial summaries
 // @route   GET /api/admin/transactions
 // @access  Admin
@@ -39,24 +174,24 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
         status: t.settlement_status?.toLowerCase() || "pending",
         user: t.customer_id
           ? {
-              id: t.customer_id._id,
-              name: t.customer_id.name,
-              role: "CUSTOMER",
-              email: t.customer_id.email,
-              phone: t.customer_id.phone_number,
-            }
+            id: t.customer_id._id,
+            name: t.customer_id.name,
+            role: "CUSTOMER",
+            email: t.customer_id.email,
+            phone: t.customer_id.phone_number,
+          }
           : null,
         vendorPayouts: t.vendor_payouts || [],
         riderPayout: t.rider_payout || {},
         platformRevenue: t.platform_revenue || {},
         date: t.createdAt
           ? new Date(t.createdAt).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
           : "N/A",
       };
     });

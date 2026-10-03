@@ -8,6 +8,7 @@ import Cart from "../models/Cart.ts";
 import Transaction from "../models/Transaction.ts";
 import User from "../models/User.ts";
 import Address from "../models/Address.ts";
+import Feedback from "../models/Feedback.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
 
@@ -18,8 +19,12 @@ const resolveCustomer = async (req: Request) => {
   const userId =
     (req as any).user?.id ||
     (req as any).user?._id ||
+    (req.headers["x-customer-id"] as string) ||
+    (req.headers["x-user-id"] as string) ||
     req.body?.customer_id ||
-    (req.query?.customer_id as string);
+    req.body?.userId ||
+    (req.query?.customer_id as string) ||
+    (req.query?.userId as string);
   if (!userId) return null;
   return User.findById(userId);
 };
@@ -578,7 +583,6 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
     }));
 
     const deliveryFeeNum = Number(delivery_fee) || 0;
-    const codDebtNum = Math.max(0, Math.round((totalAmount - deliveryFeeNum) * 100) / 100);
 
     await Transaction.findOneAndUpdate(
       { order_id: masterOrder._id },
@@ -594,8 +598,8 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
           rider_id: null,
           amount: deliveryFeeNum,
           status: "PENDING",
-          cod_cash_collected: totalAmount,
-          cod_cash_debt: codDebtNum,
+          cod_cash_collected: 0,
+          cod_cash_debt: 0,
           payout_at: null,
         },
         platform_revenue: {
@@ -962,6 +966,32 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
           new Set(subOrders.map((so: any) => so.stall_id?.name).filter(Boolean))
         );
 
+        // Gather structured stall objects
+        const stallsMap = new Map();
+        subOrders.forEach((so: any) => {
+          if (so.stall_id && so.stall_id._id && !stallsMap.has(so.stall_id._id.toString())) {
+            stallsMap.set(so.stall_id._id.toString(), {
+              id: so.stall_id._id.toString(),
+              name: so.stall_id.name || "Street Stall",
+              imageUrl: so.stall_id.image_url || "",
+            });
+          }
+        });
+        const stallsList = Array.from(stallsMap.values());
+
+        // Check if customer already submitted review for this order
+        const existingReviews = await Feedback.find({
+          order_id: o._id,
+          feedback_type: "REVIEW",
+        }).lean();
+
+        const isReviewed = existingReviews.length > 0;
+        const reviewsData = existingReviews.map((r: any) => ({
+          stallId: r.stall_id?.toString(),
+          rating: r.rating,
+          comment: r.comment,
+        }));
+
         return {
           id: o._id,
           orderNumber: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
@@ -986,6 +1016,9 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
           clusterCoordinates: o.cluster_id?.coordinates?.coordinates || null,
           itemsCount: itemsList.reduce((sum, it) => sum + it.quantity, 0) || subOrders.length,
           stalls: stallNames.length > 0 ? stallNames : [o.cluster_id?.name || "StreetBites Khau Galli"],
+          stallsList: stallsList,
+          isReviewed,
+          reviews: reviewsData,
           items: itemsList,
           createdAt: o.createdAt,
         };

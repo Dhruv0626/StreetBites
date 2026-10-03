@@ -59,6 +59,16 @@ const resolveRider = async (req: Request) => {
   return fallbackRider;
 };
 
+// Helper to calculate exact net COD debt held by rider (Order Total - Rider Delivery Earnings)
+const getOrderNetCodDebt = (order: any): number => {
+  if (order.payment_method !== "COD") return 0;
+  if (order.cod_amount_held !== undefined && order.cod_amount_held < (order.total_amount || 0)) {
+    return order.cod_amount_held;
+  }
+  const riderFee = order.rider_earned_fee || order.delivery_fee || 50;
+  return Math.max(0, Math.round(((order.total_amount || 0) - riderFee) * 100) / 100);
+};
+
 /**
  * @desc    Get Rider Dashboard Statistics & Earnings (Real data, zeroed if fresh)
  * @route   GET /api/rider/stats
@@ -116,7 +126,7 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
     const todayEarnings = todayOrders.reduce((sum, o) => sum + (o.rider_earned_fee || 0), 0);
     const completedTripsCount = todayOrders.length;
 
-    // 2. COD Debt calculation (floating cash held from COD deliveries not yet settled)
+    // 2. COD Debt calculation (floating cash held from COD deliveries minus rider fee not yet settled)
     const pendingCodOrders = await Order.find({
       rider_id: rider._id,
       payment_method: "COD",
@@ -124,7 +134,9 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
       status: "DELIVERED",
     }).sort({ delivered_at: -1 });
 
-    const currentCodDebt = pendingCodOrders.reduce((sum, o) => sum + (o.cod_amount_held || o.total_amount || 0), 0);
+    const currentCodDebt = Math.round(
+      pendingCodOrders.reduce((sum, o) => sum + getOrderNetCodDebt(o), 0) * 100
+    ) / 100;
 
     // COD Transactions list (from pending and settled orders)
     const allCodOrders = await Order.find({
@@ -138,7 +150,7 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
     const codTransactions = allCodOrders.map((o) => ({
       id: `TX-${o._id.toString().slice(-6).toUpperCase()}`,
       type: "collection" as const,
-      amount: `₹${o.cod_amount_held || o.total_amount || 0}`,
+      amount: `₹${getOrderNetCodDebt(o)}`,
       order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
       time: o.delivered_at ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
       status: o.cod_deposit_status === "PENDING_DEPOSIT" ? "pending" : "completed",
@@ -625,8 +637,9 @@ export const acceptQueueOrder = async (req: Request, res: Response): Promise<voi
           cod_deposit_status: "PENDING_DEPOSIT",
           status: "DELIVERED",
         });
-        const currentDebt = pendingCodOrders.reduce((sum, o) => sum + (o.cod_amount_held || o.total_amount || 0), 0);
-        if (currentDebt + (order.total_amount || 0) > effectiveCashLimit) {
+        const currentDebt = pendingCodOrders.reduce((sum, o) => sum + getOrderNetCodDebt(o), 0);
+        const newOrderEstimatedDebt = getOrderNetCodDebt(order);
+        if (currentDebt + newOrderEstimatedDebt > effectiveCashLimit) {
           res.status(400).json({
             success: false,
             message: `Cannot accept COD order. Your floating cash debt (₹${currentDebt}) would exceed the allowed cash limit of ₹${effectiveCashLimit}. Please settle your debt first.`,
@@ -903,7 +916,7 @@ export const getActiveRoute = async (req: Request, res: Response): Promise<void>
         paymentMethod: order.payment_method,
         totalAmount: order.total_amount,
         riderEarnedFee: order.rider_earned_fee || order.delivery_fee || 50,
-        codAmountHeld: order.cod_amount_held || (order.payment_method === "COD" ? order.total_amount : 0),
+        codAmountHeld: getOrderNetCodDebt(order),
         collectedCheckpoints: order.collected_checkpoints || [],
         checkpoints,
       },
@@ -1148,14 +1161,20 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
       return;
     }
 
+    const riderEarned = order.rider_earned_fee || order.delivery_fee || 50;
+    const isCod = order.payment_method === "COD";
+    const codDebtAmount = isCod
+      ? Math.max(0, Math.round(((order.total_amount || 0) - riderEarned) * 100) / 100)
+      : 0;
+
     order.status = "DELIVERED";
     order.delivered_at = new Date();
-    order.rider_earned_fee = order.delivery_fee || 50;
+    order.rider_earned_fee = riderEarned;
+    order.payment_status = "PAID"; // Order is now fully paid
 
-    if (order.payment_method === "COD") {
-      order.payment_status = "PAID";
+    if (isCod) {
       order.cod_deposit_status = "PENDING_DEPOSIT";
-      order.cod_amount_held = order.total_amount;
+      order.cod_amount_held = codDebtAmount; // Net platform debt after deducting rider's earned fee
     }
 
     await order.save();
@@ -1180,40 +1199,68 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
     }
 
     // 2. Rider Payout Notification & Wallet Credit
-    const riderEarned = order.rider_earned_fee || order.delivery_fee || 50;
-    await User.findByIdAndUpdate(rider._id, { $inc: { wallet_balance: riderEarned } });
+    // For online orders: customer paid digitally, credit rider wallet
+    // For COD orders: rider kept cash from customer directly, debt is remaining net
+    if (!isCod) {
+      await User.findByIdAndUpdate(rider._id, { $inc: { wallet_balance: riderEarned } });
+    }
     await createNotification({
       userId: rider._id,
-      title: "Delivery Payout Credited! 💵",
-      message: `₹${riderEarned} delivery payout credited to your wallet for completing Order #${orderNum}.`,
+      title: isCod ? "COD Delivery Completed! 💵" : "Delivery Payout Credited! 💵",
+      message: isCod
+        ? `Order #${orderNum} completed. You retained ₹${riderEarned} cash delivery fee. Remit net ₹${codDebtAmount} to platform.`
+        : `₹${riderEarned} delivery payout credited to your wallet for completing Order #${orderNum}.`,
       type: "PAYOUT",
       orderId: order._id,
       amount: riderEarned,
     });
 
-    // 3. Update Consolidated Single Transaction Document
+    // 3. Update Consolidated Single Transaction Document (Ensure payment_status is PAID)
     try {
-      const isCod = order.payment_method === "COD";
-      const codDebtAmount = Math.max(0, Math.round(((order.total_amount || 0) - riderEarned) * 100) / 100);
-
-      await Transaction.findOneAndUpdate(
-        { order_id: order._id },
-        {
-          $set: {
-            "rider_payout.rider_id": rider._id,
-            "rider_payout.amount": riderEarned,
-            "rider_payout.status": "COMPLETED",
-            "rider_payout.cod_cash_collected": isCod ? (order.total_amount || 0) : 0,
-            "rider_payout.cod_cash_debt": isCod ? codDebtAmount : 0,
-            "rider_payout.payout_at": new Date(),
-            "vendor_payouts.$[].status": "COMPLETED",
-            "vendor_payouts.$[].payout_at": new Date(),
-            "platform_revenue.status": "COMPLETED",
-            "platform_revenue.realized_at": new Date(),
-            settlement_status: "COMPLETED",
-          },
+      const existingTxn = await Transaction.findOne({ order_id: order._id });
+      if (existingTxn) {
+        existingTxn.payment_status = "PAID";
+        existingTxn.settlement_status = "COMPLETED";
+        if (existingTxn.rider_payout) {
+          existingTxn.rider_payout.rider_id = rider._id;
+          existingTxn.rider_payout.amount = riderEarned;
+          existingTxn.rider_payout.status = "COMPLETED";
+          existingTxn.rider_payout.cod_cash_collected = isCod ? (order.total_amount || 0) : 0;
+          existingTxn.rider_payout.cod_cash_debt = isCod ? codDebtAmount : 0;
+          existingTxn.rider_payout.payout_at = new Date();
         }
-      );
+        if (existingTxn.platform_revenue) {
+          existingTxn.platform_revenue.status = "COMPLETED";
+          existingTxn.platform_revenue.realized_at = new Date();
+        }
+        if (Array.isArray(existingTxn.vendor_payouts)) {
+          existingTxn.vendor_payouts.forEach((vp: any) => {
+            vp.status = "COMPLETED";
+            vp.payout_at = new Date();
+          });
+        }
+        await existingTxn.save();
+      } else {
+        await Transaction.findOneAndUpdate(
+          { order_id: order._id },
+          {
+            $set: {
+              payment_status: "PAID",
+              "rider_payout.rider_id": rider._id,
+              "rider_payout.amount": riderEarned,
+              "rider_payout.status": "COMPLETED",
+              "rider_payout.cod_cash_collected": isCod ? (order.total_amount || 0) : 0,
+              "rider_payout.cod_cash_debt": isCod ? codDebtAmount : 0,
+              "rider_payout.payout_at": new Date(),
+              "vendor_payouts.$[].status": "COMPLETED",
+              "vendor_payouts.$[].payout_at": new Date(),
+              "platform_revenue.status": "COMPLETED",
+              "platform_revenue.realized_at": new Date(),
+              settlement_status: "COMPLETED",
+            },
+          }
+        );
+      }
     } catch (txnErr) {
       console.warn("Could not update transaction settlement state:", txnErr);
     }
@@ -1292,7 +1339,9 @@ export const settleRiderDebt = async (req: Request, res: Response): Promise<void
       status: "DELIVERED",
     });
 
-    const totalSettled = pendingOrders.reduce((sum, o) => sum + (o.cod_amount_held || o.total_amount || 0), 0);
+    const totalSettled = Math.round(
+      pendingOrders.reduce((sum, o) => sum + getOrderNetCodDebt(o), 0) * 100
+    ) / 100;
 
     if (totalSettled > 0) {
       await Order.updateMany(

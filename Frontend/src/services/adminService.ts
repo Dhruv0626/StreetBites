@@ -54,6 +54,24 @@ export const adminService = {
   }>> => {
     return api.get('/admin/counts');
   },
+
+  // Admin Platform Overview Stats (Users, Revenue, 7-Day Chart, Recent Orders)
+  getOverviewStats: async (): Promise<ApiResponse<{
+    customers: number;
+    vendors: number;
+    riders: number;
+    admins: number;
+    totalUsers: number;
+    totalOrders: number;
+    liveOrders: number;
+    totalRevenue: number;
+    todayRevenue: number;
+    pendingApprovals: number;
+    revenueChart: { name: string; revenue: number }[];
+    recentOrders: any[];
+  }>> => {
+    return api.get('/admin/overview');
+  },
 };
 
 export default adminService;
