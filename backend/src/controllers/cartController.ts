@@ -31,7 +31,16 @@ const getCustomerId = (req: AuthenticatedRequest): string | null => {
  * Helper to format cart response from the single consolidated Cart document
  */
 const formatCartResponse = async (customerId: string) => {
-  const cart = await Cart.findOne({ customer_id: customerId })
+  const query: any = {
+    $or: [
+      { customer_id: String(customerId) },
+      ...(mongoose.Types.ObjectId.isValid(customerId)
+        ? [{ customer_id: new mongoose.Types.ObjectId(customerId) }]
+        : []),
+    ],
+  };
+
+  const cart = await Cart.findOne(query)
     .populate({
       path: "items.stall_id",
       select: "name stall_category image_url is_accepting_orders status",
@@ -193,8 +202,17 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       }
     }
 
+    const customerQuery: any = {
+      $or: [
+        { customer_id: String(customerId) },
+        ...(mongoose.Types.ObjectId.isValid(customerId)
+          ? [{ customer_id: new mongoose.Types.ObjectId(customerId) }]
+          : []),
+      ],
+    };
+
     // 2. Fetch customer's single unified Cart document
-    let cart = await Cart.findOne({ customer_id: customerId });
+    let cart = await Cart.findOne(customerQuery);
 
     if (cart && cart.items && cart.items.length > 0) {
       const currentClusterId = String(cart.cluster_id?._id || cart.cluster_id || "");
@@ -230,7 +248,7 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
     // If no cart exists yet for this customer, initialize a new single Cart document
     if (!cart) {
       cart = new Cart({
-        customer_id: customerId,
+        customer_id: String(customerId),
         cluster_id: incomingClusterId,
         khau_galli_name: incomingClusterName,
         items: [],
@@ -248,6 +266,7 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
     );
 
     const addQty = Number(quantity) || 1;
+
     if (itemIndex > -1) {
       cart.items[itemIndex].quantity += addQty;
       if (image) cart.items[itemIndex].image = image;
@@ -265,7 +284,45 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       });
     }
 
-    await cart.save();
+    try {
+      await cart.save();
+    } catch (saveErr: any) {
+      if (saveErr.code === 11000) {
+        // E11000 duplicate key error, drop legacy index and merge into existing cart
+        try {
+          await mongoose.connection.collection("carts").dropIndex("customer_id_1_stall_id_1_item_id_1");
+        } catch {}
+
+        const existingCart = await Cart.findOne(customerQuery);
+        if (existingCart) {
+          if (!existingCart.cluster_id && incomingClusterId) {
+            existingCart.cluster_id = incomingClusterId;
+            existingCart.khau_galli_name = incomingClusterName;
+          }
+          const existIdx = existingCart.items.findIndex(
+            (i) => String(i.stall_id) === String(stallId) && String(i.item_id) === String(itemId)
+          );
+          if (existIdx > -1) {
+            existingCart.items[existIdx].quantity += addQty;
+            if (price) existingCart.items[existIdx].price = Number(price);
+            if (name) existingCart.items[existIdx].name = name;
+          } else {
+            existingCart.items.push({
+              stall_id: stallId,
+              stall_name: resolvedStallName,
+              item_id: String(itemId),
+              name: name || "Dish",
+              price: Number(price) || 0,
+              image: image || "",
+              quantity: addQty,
+            });
+          }
+          await existingCart.save();
+        }
+      } else {
+        throw saveErr;
+      }
+    }
 
     // 5. Return freshly calculated cart
     const data = await formatCartResponse(customerId);
@@ -308,7 +365,16 @@ export const updateCartItem = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const cart = await Cart.findOne({ customer_id: customerId });
+    const customerQuery: any = {
+      $or: [
+        { customer_id: String(customerId) },
+        ...(mongoose.Types.ObjectId.isValid(customerId)
+          ? [{ customer_id: new mongoose.Types.ObjectId(customerId) }]
+          : []),
+      ],
+    };
+
+    const cart = await Cart.findOne(customerQuery);
     if (!cart) {
       res.status(404).json({
         success: false,
@@ -377,7 +443,16 @@ export const removeCartItem = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const cart = await Cart.findOne({ customer_id: customerId });
+    const customerQuery: any = {
+      $or: [
+        { customer_id: String(customerId) },
+        ...(mongoose.Types.ObjectId.isValid(customerId)
+          ? [{ customer_id: new mongoose.Types.ObjectId(customerId) }]
+          : []),
+      ],
+    };
+
+    const cart = await Cart.findOne(customerQuery);
     if (cart) {
       const itemIndex = cart.items.findIndex(
         (i) => String(i.stall_id) === String(stallId) && String(i.item_id) === String(itemId)
@@ -428,7 +503,16 @@ export const clearCart = async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    await Cart.deleteOne({ customer_id: customerId });
+    const customerQuery: any = {
+      $or: [
+        { customer_id: String(customerId) },
+        ...(mongoose.Types.ObjectId.isValid(customerId)
+          ? [{ customer_id: new mongoose.Types.ObjectId(customerId) }]
+          : []),
+      ],
+    };
+
+    await Cart.deleteOne(customerQuery);
     res.status(200).json({
       success: true,
       message: "Cart cleared successfully.",

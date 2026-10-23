@@ -581,27 +581,35 @@ export const Signup: React.FC = () => {
               {/* Social Logins */}
               {currentStep === 'form' && (
                 <>
-                  <div className="grid grid-cols-2 gap-3 mt-4">
+                  {/* Divider */}
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-stone-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-white px-3 text-stone-400 font-medium">or continue with</span>
+                    </div>
+                  </div>
+
+                  {/* Social Logins */}
+                  <div className="flex flex-col gap-2.5">
                     <button
                       type="button"
                       onClick={handleGoogleSignUp}
                       disabled={isSubmitting}
-                      className="flex items-center justify-center gap-2 border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 py-3 px-3 rounded-full text-xs font-medium transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-center gap-3 border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 py-2.5 px-4 rounded-full text-xs sm:text-sm font-medium transition-all shadow-xs hover:border-stone-300 hover:shadow-sm active:scale-[0.99] cursor-pointer"
                     >
-                      <span className="flex gap-2 justify-center items-center">
-                        <FcGoogle size={20} /> <b>Google</b>
-                      </span>
+                      <FcGoogle size={19} className="shrink-0" />
+                      <span>Continue with <b>Google</b></span>
                     </button>
                     <button
                       type="button"
                       onClick={handleFacebookSignUp}
                       disabled={isSubmitting}
-                      className="flex items-center justify-center gap-2 border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 py-3 px-3 rounded-full text-xs font-medium transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-center gap-3 border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 py-2.5 px-4 rounded-full text-xs sm:text-sm font-medium transition-all shadow-xs hover:border-stone-300 hover:shadow-sm active:scale-[0.99] cursor-pointer"
                     >
-                      <span className="flex gap-2 justify-center items-center">
-                        <FaFacebook size={18} className="text-[#1877F2]" />
-                        <b>Facebook</b>
-                      </span>
+                      <FaFacebook size={19} className="text-[#1877F2] shrink-0" />
+                      <span>Continue with <b>Facebook</b></span>
                     </button>
                   </div>
 

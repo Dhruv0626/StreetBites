@@ -86,4 +86,10 @@ const CartSchema = new mongoose.Schema<ICart>(
 CartSchema.index({ customer_id: 1, cluster_id: 1 });
 
 export const Cart: Model<ICart> = mongoose.model<ICart>("Cart", CartSchema);
+
+// Safe check: asynchronously drop legacy single-item cart index if it exists in MongoDB
+Cart.on("index", () => {
+  Cart.collection.dropIndex("customer_id_1_stall_id_1_item_id_1").catch(() => {});
+});
+
 export default Cart;

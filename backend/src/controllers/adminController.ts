@@ -15,12 +15,66 @@ import { SubOrder } from "../models/SubOrder.ts";
 export const getAdminOverviewStats = async (_req: Request, res: Response): Promise<void> => {
   try {
     // 1. User counts
-    const [customersCount, vendorsCount, ridersCount, adminsCount] = await Promise.all([
+    const [
+      customersCount,
+      vendorsCount,
+      ridersCount,
+      adminsCount,
+      liveOrdersCount,
+      pendingKycCount,
+      pendingFoodCount,
+      recentOrdersDocs,
+    ] = await Promise.all([
       User.countDocuments({ role: "CUSTOMER" }),
       User.countDocuments({ role: "VENDOR" }),
       User.countDocuments({ role: "RIDER" }),
       User.countDocuments({ role: "ADMIN" }),
+      Order.countDocuments({
+        status: {
+          $in: [
+            "PENDING",
+            "PREPARING",
+            "READY_FOR_PICKUP",
+            "OUT_FOR_DELIVERY",
+            "RIDER_AT_DOOR",
+            "AT_DOOR",
+          ],
+        },
+      }),
+      User.countDocuments({
+        verification_status: "PENDING",
+        role: { $in: ["VENDOR", "RIDER"] },
+      }),
+      FoodItem.countDocuments({
+        status: { $in: ["Review_pending", "PENDING_REVIEW"] },
+      }),
+      Order.find()
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .populate("customer_id", "name email phone_number")
+        .populate("cluster_id", "name city")
+        .lean(),
     ]);
+
+    const pendingApprovals = pendingKycCount + pendingFoodCount;
+
+    const recentOrders = (recentOrdersDocs || []).map((o: any) => ({
+      id: o._id.toString(),
+      orderNumber: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
+      customerName: o.customer_id?.name || "Customer",
+      clusterName: o.cluster_id?.name || "Khau Galli",
+      totalAmount: o.total_amount || 0,
+      paymentMethod: o.payment_method || "ONLINE",
+      status: o.status || "PENDING",
+      date: o.createdAt
+        ? new Date(o.createdAt).toLocaleDateString("en-IN", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Recent",
+    }));
 
     // 2. Order metrics & gross revenue
     const orders = await Order.find({ status: { $ne: "CANCELLED" } })
@@ -31,6 +85,7 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
     let totalPlatformFee = 0;
     let totalDeliveryFees = 0;
     let todayGrossRevenue = 0;
+    let todayPlatformFee = 0;
     let todayOrdersCount = 0;
 
     const todayStart = new Date();
@@ -40,8 +95,13 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
     let txGrossTotal = 0;
     let txPlatformGain = 0;
     transactions.forEach((t: any) => {
-      txGrossTotal += Number(t.total_order_amount) || 0;
-      txPlatformGain += Number(t.platform_revenue?.total_platform_fee) || 0;
+      const tAmt = Number(t.total_order_amount) || 0;
+      const tFee = Number(t.platform_revenue?.total_platform_fee) || 0;
+      txGrossTotal += tAmt;
+      txPlatformGain += tFee;
+      if (t.createdAt && new Date(t.createdAt) >= todayStart) {
+        todayPlatformFee += tFee;
+      }
     });
 
     orders.forEach((o: any) => {
@@ -55,6 +115,7 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
 
       if (o.createdAt && new Date(o.createdAt) >= todayStart) {
         todayGrossRevenue += amt;
+        todayPlatformFee += platFee;
         todayOrdersCount += 1;
       }
     });
@@ -66,15 +127,16 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       totalPlatformFee = txPlatformGain;
     }
 
-    // 3. Last 7 Days Daily Revenue Trend Breakdown
+    // 3. Last 7 Days Daily Revenue Trend Breakdown (Platform Fee Earnings)
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dailyTrend: {
       name: string;
       date: string;
       fullDate: string;
       revenue: number;
-      orders: number;
       platformFee: number;
+      grossRevenue: number;
+      orders: number;
     }[] = [];
 
     // Build last 7 days array (from 6 days ago up to today)
@@ -90,7 +152,7 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         return ordDate >= startOfDay && ordDate <= endOfDay;
       });
 
-      const dayRevenue = dayOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+      const dayGrossRevenue = dayOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
       const dayPlatformFee = dayOrders.reduce(
         (sum: number, o: any) =>
           sum + (Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.15)),
@@ -102,35 +164,62 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         const txDate = new Date(t.createdAt);
         return txDate >= startOfDay && txDate <= endOfDay;
       });
-      const dayTxRevenue = dayTx.reduce((sum: number, t: any) => sum + (Number(t.total_order_amount) || 0), 0);
+      const dayTxGrossRevenue = dayTx.reduce((sum: number, t: any) => sum + (Number(t.total_order_amount) || 0), 0);
+      const dayTxPlatformFee = dayTx.reduce(
+        (sum: number, t: any) => sum + (Number(t.platform_revenue?.total_platform_fee) || 0),
+        0
+      );
 
-      const finalDayRevenue = Math.max(dayRevenue, dayTxRevenue);
+      const finalDayGross = Math.max(dayGrossRevenue, dayTxGrossRevenue);
+      const finalDayPlatform = Math.max(dayPlatformFee, dayTxPlatformFee);
 
       dailyTrend.push({
         name: dayNames[d.getDay()],
         date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
         fullDate: d.toISOString().split("T")[0],
-        revenue: Math.round(finalDayRevenue * 100) / 100,
+        revenue: Math.round(finalDayPlatform * 100) / 100, // Platform earnings for chart
+        platformFee: Math.round(finalDayPlatform * 100) / 100,
+        grossRevenue: Math.round(finalDayGross * 100) / 100,
         orders: dayOrders.length || dayTx.length,
-        platformFee: Math.round(dayPlatformFee * 100) / 100,
       });
     }
 
     res.status(200).json({
       success: true,
       data: {
+        customers: customersCount,
+        vendors: vendorsCount,
+        riders: ridersCount,
+        admins: adminsCount,
+        totalUsers: customersCount + vendorsCount + ridersCount + adminsCount,
+        totalOrders: orders.length,
+        liveOrders: liveOrdersCount,
+        totalRevenue: Math.round(totalPlatformFee * 100) / 100, // Platform earnings
+        todayRevenue: Math.round(todayPlatformFee * 100) / 100, // Today's platform earnings
+        totalPlatformRevenue: Math.round(totalPlatformFee * 100) / 100,
+        todayPlatformRevenue: Math.round(todayPlatformFee * 100) / 100,
+        totalGrossRevenue: Math.round(totalGrossRevenue * 100) / 100,
+        todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
+        pendingApprovals,
+        revenueChart: dailyTrend,
+        recentOrders,
         stats: {
           customers: customersCount,
           vendors: vendorsCount,
           riders: ridersCount,
           admins: adminsCount,
           totalUsers: customersCount + vendorsCount + ridersCount + adminsCount,
+          totalRevenue: Math.round(totalPlatformFee * 100) / 100,
+          todayRevenue: Math.round(todayPlatformFee * 100) / 100,
           totalGrossRevenue: Math.round(totalGrossRevenue * 100) / 100,
           totalPlatformRevenue: Math.round(totalPlatformFee * 100) / 100,
           totalDeliveryFees: Math.round(totalDeliveryFees * 100) / 100,
           totalOrders: orders.length,
+          liveOrders: liveOrdersCount,
           todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
+          todayPlatformRevenue: Math.round(todayPlatformFee * 100) / 100,
           todayOrdersCount,
+          pendingApprovals,
         },
         revenueTrend: dailyTrend,
       },

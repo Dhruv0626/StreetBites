@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch index.ts",
-    "start": "bun index.ts",
-    "seed": "bun run src/seeds/seedDatabase.ts"
+    "start": "bun index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -66,3 +66,17 @@ declare module "argon2" {
   };
   export default argon2;
 }
+
+declare var process: {
+  env: {
+    [key: string]: string | undefined;
+  };
+};
+
+declare module "dns" {
+  export function setServers(servers: string[]): void;
+}
+
+declare module "node:dns" {
+  export function setServers(servers: string[]): void;
+}

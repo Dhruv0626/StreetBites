@@ -17,10 +17,40 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { adminService } from '../../services/adminService';
 import { Skeleton } from '../../components/Skeleton';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
+
+export interface RecentOrder {
+  id?: string;
+  _id?: string;
+  orderNumber?: string;
+  customerName?: string;
+  clusterName?: string;
+  customer_id?: { name?: string; email?: string; phone_number?: string };
+  date?: string;
+  createdAt?: string;
+  totalAmount?: number;
+  total_amount?: number;
+  status?: string;
+  order_status?: string;
+}
+
+export interface OverviewStatsState {
+  customers: number;
+  vendors: number;
+  riders: number;
+  admins: number;
+  totalUsers: number;
+  totalOrders: number;
+  liveOrders: number;
+  totalRevenue: number;
+  todayRevenue: number;
+  pendingApprovals: number;
+  revenueChart: { name: string; revenue: number }[];
+  recentOrders: RecentOrder[];
+}
 
 export const AdminOverview: React.FC = () => {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<OverviewStatsState>({
     customers: 0,
     vendors: 0,
     riders: 0,
@@ -31,8 +61,8 @@ export const AdminOverview: React.FC = () => {
     totalRevenue: 0,
     todayRevenue: 0,
     pendingApprovals: 0,
-    revenueChart: [] as { name: string; revenue: number }[],
-    recentOrders: [] as any[],
+    revenueChart: [],
+    recentOrders: [],
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -42,7 +72,33 @@ export const AdminOverview: React.FC = () => {
     try {
       const res = await adminService.getOverviewStats();
       if (res.success && res.data) {
-        setStats(res.data);
+        const d = res.data;
+        const s = d.stats || {};
+        const chartList = Array.isArray(d.revenueChart) && d.revenueChart.length > 0
+          ? d.revenueChart
+          : Array.isArray(d.revenueTrend) && d.revenueTrend.length > 0
+            ? d.revenueTrend
+            : Array.isArray(s.revenueTrend) && s.revenueTrend.length > 0
+              ? s.revenueTrend
+              : [];
+
+        setStats({
+          customers: Number(d.customers ?? s.customers ?? 0),
+          vendors: Number(d.vendors ?? s.vendors ?? 0),
+          riders: Number(d.riders ?? s.riders ?? 0),
+          admins: Number(d.admins ?? s.admins ?? 0),
+          totalUsers: Number(d.totalUsers ?? s.totalUsers ?? 0),
+          totalOrders: Number(d.totalOrders ?? s.totalOrders ?? 0),
+          liveOrders: Number(d.liveOrders ?? s.liveOrders ?? 0),
+          totalRevenue: Number(d.totalPlatformRevenue ?? d.totalRevenue ?? s.totalPlatformRevenue ?? s.totalRevenue ?? 0),
+          todayRevenue: Number(d.todayPlatformRevenue ?? d.todayRevenue ?? s.todayPlatformRevenue ?? s.todayRevenue ?? 0),
+          pendingApprovals: Number(d.pendingApprovals ?? s.pendingApprovals ?? 0),
+          revenueChart: chartList.map((item: any) => ({
+            name: String(item.name || 'Day'),
+            revenue: Number(item.revenue ?? item.platformFee ?? 0),
+          })),
+          recentOrders: Array.isArray(d.recentOrders) ? d.recentOrders : [],
+        });
       }
     } catch (err) {
       console.error('Error fetching overview metrics:', err);
@@ -108,7 +164,7 @@ export const AdminOverview: React.FC = () => {
         {/* Total Platform Revenue */}
         <div className="bg-gradient-to-br from-white to-amber-50/40 border border-amber-200/60 rounded-2xl p-5 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-widest text-amber-700">Total Revenue</span>
+            <span className="text-xs font-extrabold uppercase tracking-widest text-amber-700">Platform Earnings</span>
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
               <IndianRupee className="w-5 h-5" />
             </div>
@@ -122,8 +178,9 @@ export const AdminOverview: React.FC = () => {
               </h3>
             )}
             <p className="text-xs font-semibold text-stone-500 mt-1 flex items-center gap-1">
-              <span className="text-emerald-600 font-bold">₹{Number(stats.todayRevenue || 0).toLocaleString('en-IN')}</span> today
+              <span className="text-emerald-600 font-bold">₹{Number(stats.todayRevenue || 0).toLocaleString('en-IN')}</span> earned today
             </p>
+            <p className="text-[10px] text-stone-400 font-semibold mt-0.5">Platform commission & fee earnings only</p>
           </div>
         </div>
 
@@ -173,7 +230,7 @@ export const AdminOverview: React.FC = () => {
             )}
             <div className="text-xs font-semibold text-stone-500 mt-1 flex items-center justify-between">
               <span>In kitchen or in transit</span>
-              <Link to="/admin/orders" className="text-emerald-700 hover:underline flex items-center gap-0.5 font-bold">
+              <Link to="/admin/Dashboard/orders" className="text-emerald-700 hover:underline flex items-center gap-0.5 font-bold">
                 View <ArrowUpRight className="w-3 h-3" />
               </Link>
             </div>
@@ -198,7 +255,7 @@ export const AdminOverview: React.FC = () => {
             )}
             <div className="text-xs font-semibold text-stone-500 mt-1 flex items-center justify-between">
               <span>KYC & Menu verification</span>
-              <Link to="/admin/verification" className="text-[#D94A38] hover:underline flex items-center gap-0.5 font-bold">
+              <Link to="/admin/Dashboard/verifications" className="text-[#D94A38] hover:underline flex items-center gap-0.5 font-bold">
                 Review <ArrowUpRight className="w-3 h-3" />
               </Link>
             </div>
@@ -242,14 +299,14 @@ export const AdminOverview: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
             <div>
               <h2 className="text-lg font-bold text-stone-900">Revenue Trends</h2>
-              <p className="text-xs text-stone-500">Gross platform transaction value over the last 7 days</p>
+              <p className="text-xs text-stone-500">Platform fee earnings over the last 7 days</p>
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 self-start sm:self-auto">
               <TrendingUp className="w-4 h-4" /> Live Tracking
             </div>
           </div>
 
-          <div className="flex-1 w-full h-full min-h-[300px]">
+          <div className="w-full h-[320px] min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
@@ -264,11 +321,12 @@ export const AdminOverview: React.FC = () => {
                   tickLine={false}
                   tick={{ fill: '#78716C', fontSize: 12 }}
                   tickFormatter={(value) => `₹${value}`}
+                  domain={[0, (dataMax: number) => (dataMax > 0 ? Math.ceil(dataMax * 1.2) : 500)]}
                 />
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EFEBE4" />
                 <Tooltip
                   contentStyle={{ borderRadius: '12px', border: '1px solid #EFEBE4', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
-                  formatter={(value: any) => [`₹${Number(value || 0).toLocaleString('en-IN')}`, 'Gross Revenue']}
+                  formatter={(value) => [`₹${Number(value || 0).toLocaleString('en-IN')}`, 'Platform Earnings']}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#D94A38" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
               </AreaChart>
@@ -315,7 +373,7 @@ export const AdminOverview: React.FC = () => {
 
           <div className="pt-6 mt-6 border-t border-stone-100">
             <Link
-              to="/admin/orders"
+              to="/admin/Dashboard/orders"
               className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-sm transition-colors shadow-sm"
             >
               <span>Manage Live Orders</span>
@@ -333,7 +391,7 @@ export const AdminOverview: React.FC = () => {
             <p className="text-xs text-stone-500">Latest transactions processed across all clusters and stalls</p>
           </div>
           <Link
-            to="/admin/orders"
+            to="/admin/Dashboard/orders"
             className="text-xs font-bold text-[#D94A38] hover:underline flex items-center gap-1"
           >
             View All <ArrowUpRight className="w-3.5 h-3.5" />
@@ -355,38 +413,38 @@ export const AdminOverview: React.FC = () => {
                   <th className="pb-3">Customer</th>
                   <th className="pb-3">Date</th>
                   <th className="pb-3">Amount</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right pr-2">Action</th>
+                  <th className="pb-3 text-right pr-2">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {stats.recentOrders.map((order: any) => (
-                  <tr key={order._id} className="hover:bg-stone-50/60 transition-colors">
-                    <td className="py-3.5 pl-2 font-mono font-bold text-stone-900 text-xs">
-                      #{order._id?.slice(-6).toUpperCase()}
-                    </td>
-                    <td className="py-3.5 font-medium text-stone-800">
-                      {order.customer_id?.name || 'Customer'}
-                    </td>
-                    <td className="py-3.5 text-stone-500 text-xs">
-                      {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                    </td>
-                    <td className="py-3.5 font-bold text-stone-900">
-                      ₹{order.total_amount ?? 0}
-                    </td>
-                    <td className="py-3.5">
-                      {getStatusBadge(order.order_status)}
-                    </td>
-                    <td className="py-3.5 text-right pr-2">
-                      <Link
-                        to={`/admin/orders`}
-                        className="text-xs font-bold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg transition-colors"
-                      >
-                        Details
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {stats.recentOrders.map((order: RecentOrder, idx: number) => {
+                  const orderId = String(order.id || order._id || `ord_${idx}`);
+                  const displayNum = order.orderNumber || `#${orderId.slice(-6).toUpperCase()}`;
+                  const custName = order.customerName || order.customer_id?.name || 'Customer';
+                  const dateStr = order.date || (order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently');
+                  const amount = Number(order.totalAmount ?? order.total_amount ?? 0);
+                  const orderStatus = order.status || order.order_status || 'PENDING';
+
+                  return (
+                    <tr key={orderId} className="hover:bg-stone-50/60 transition-colors">
+                      <td className="py-3.5 pl-2 font-mono font-bold text-stone-900 text-xs">
+                        {displayNum}
+                      </td>
+                      <td className="py-3.5 font-medium text-stone-800">
+                        {custName}
+                      </td>
+                      <td className="py-3.5 text-stone-500 text-xs">
+                        {dateStr}
+                      </td>
+                      <td className="py-3.5 font-bold text-stone-900">
+                        ₹{amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 text-right pr-2">
+                        {getStatusBadge(orderStatus)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
