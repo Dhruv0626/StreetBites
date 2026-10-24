@@ -91,25 +91,26 @@ export const VendorPayoutsPage: React.FC = () => {
     try {
       const res = await vendorOrderService.withdrawPayout();
       if (res.success && res.data) {
+        const payoutData = res.data;
         setVendorData((prev: any) => ({
           ...prev,
           user: {
             ...(prev?.user || user),
-            wallet_balance: res.data.remainingBalance,
+            wallet_balance: payoutData.remainingBalance,
           },
         }));
 
         const newTx: PayoutTransaction = {
-          id: res.data.transactionId || `WD-${Date.now().toString().slice(-6)}`,
+          id: payoutData.transactionId || `WD-${Date.now().toString().slice(-6)}`,
           date: 'Just now',
-          amount: `-₹${res.data.withdrawnAmount}`,
+          amount: `-₹${payoutData.withdrawnAmount}`,
           status: 'completed',
           type: 'Bank Transfer Settlement',
         };
         setTransactions((prev) => [newTx, ...prev]);
 
         setShowWithdrawModal(false);
-        showAlert(`Withdrawal of ₹${res.data.withdrawnAmount} processed successfully to your registered bank account!`, 'success');
+        showAlert(`Withdrawal of ₹${payoutData.withdrawnAmount} processed successfully to your registered bank account!`, 'success');
         toast.success('Payout withdrawal completed');
       } else {
         showAlert(res.message || 'Failed to process withdrawal.', 'error');

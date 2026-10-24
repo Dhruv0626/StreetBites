@@ -13,7 +13,6 @@ export const VendorSettingsPage: React.FC = () => {
   const [pushEnabled, setPushEnabled] = useState((user as any)?.push_notifications ?? true);
   const [emailEnabled, setEmailEnabled] = useState((user as any)?.email_notifications ?? false);
   const [language, setLanguage] = useState('English');
-  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     if (user) {

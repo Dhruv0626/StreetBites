@@ -30,15 +30,15 @@ import {
   subscribeAddresses,
 } from '../../services/addressService';
 import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding';
+import { razorpayService } from '../../services/razorpayService';
 import type { AddressItem } from '../../types';
 import { AddressModal } from '../../components/customer/AddressModal';
-import { razorpayService } from '../../services/razorpayService';
 import { authService } from '../../services/authService';
 import { useAlert } from '../../context/AlertContext';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout, updateProfile, refreshProfile } = useAuth();
+  const { user, isAuthenticated, logout, refreshProfile, updateProfile } = useAuth();
   const { toast, showConfirm } = useAlert();
   const { favorites } = useFavorites();
   const [openSection, setOpenSection] = useState<string | null>(null);

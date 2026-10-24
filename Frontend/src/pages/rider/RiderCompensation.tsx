@@ -125,7 +125,12 @@ export const RiderCompensationPage: React.FC = () => {
       <div className="bg-white border border-[#EFEBE4] rounded-3xl p-6 shadow-sm">
         <h2 className="text-lg font-bold text-stone-900 mb-6">Filed Claims</h2>
         
-        {claims.length === 0 ? (
+        {isLoading ? (
+          <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-[#D94A38] border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-stone-500 font-semibold">Loading compensation claims...</p>
+          </div>
+        ) : claims.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
               <AlertCircle className="w-7 h-7 text-stone-400" />
