@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { FileText, Clock, CheckCircle2, XCircle, Plus, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Clock, CheckCircle2, XCircle, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { CustomSelect } from '../../components/CustomSelect';
+import { useAuth } from '../../context/AuthContext';
+import { useAlert } from '../../context/AlertContext';
+import riderService from '../../services/riderService';
 
 interface ClaimItem {
   id: string;
+  _id?: string;
   date: string;
   type: string;
   order: string;
@@ -12,41 +16,82 @@ interface ClaimItem {
 }
 
 export const RiderCompensationPage: React.FC = () => {
+  const { user } = useAuth();
+  const { showAlert, toast } = useAlert();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [claimType, setClaimType] = useState('Long wait at stall (>15 mins)');
   const [orderNumber, setOrderNumber] = useState('');
   const [claimAmount, setClaimAmount] = useState('30');
   const [claimNotes, setClaimNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Clean dynamic claims list
-  const [claims, setClaims] = useState<ClaimItem[]>(() => {
-    const saved = localStorage.getItem('sb_rider_claims');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Dynamic claims list fetched from MongoDB
+  const [claims, setClaims] = useState<ClaimItem[]>([]);
+
+  const fetchClaims = async () => {
+    try {
+      setIsLoading(true);
+      const res = await riderService.getClaims({
+        riderId: user?._id || user?.id,
+        email: user?.email,
+      });
+      if (res.success && Array.isArray(res.data)) {
+        setClaims(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch rider claims:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchClaims();
+  }, [user]);
 
   const approvedTotal = claims
     .filter(c => c.status === 'approved')
     .reduce((sum, c) => sum + parseInt(c.amount.replace(/[^0-9]/g, '') || '0', 10), 0);
 
-  const handleSubmitClaim = (e: React.FormEvent) => {
+  const handleSubmitClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orderNumber.trim()) return;
+    if (!orderNumber.trim()) {
+      showAlert('Please enter an order number.', 'warning');
+      return;
+    }
 
-    const newClaim: ClaimItem = {
-      id: `C-${Math.floor(100 + Math.random() * 900)}`,
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      type: claimType,
-      order: orderNumber.startsWith('MO-') ? orderNumber : `MO-${orderNumber}`,
-      amount: `₹${claimAmount}`,
-      status: 'pending',
-    };
+    setIsSubmitting(true);
+    try {
+      const formattedOrder = orderNumber.startsWith('MO-') ? orderNumber : `MO-${orderNumber.trim()}`;
+      const res = await riderService.submitClaim(
+        {
+          type: claimType,
+          order: formattedOrder,
+          orderNumber: formattedOrder,
+          amount: claimAmount,
+          notes: claimNotes,
+        },
+        {
+          riderId: user?._id || user?.id,
+          email: user?.email,
+        }
+      );
 
-    const updated = [newClaim, ...claims];
-    setClaims(updated);
-    localStorage.setItem('sb_rider_claims', JSON.stringify(updated));
-    setOrderNumber('');
-    setClaimNotes('');
-    setIsModalOpen(false);
+      if (res.success && res.data) {
+        setClaims(prev => [res.data, ...prev]);
+        toast.success('Compensation claim submitted to Admin for review');
+        setOrderNumber('');
+        setClaimNotes('');
+        setIsModalOpen(false);
+      } else {
+        showAlert(res.message || 'Failed to submit claim.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error submitting compensation claim.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -210,9 +255,17 @@ export const RiderCompensationPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold py-3 rounded-xl text-sm transition-colors cursor-pointer shadow-md"
+                  disabled={isSubmitting}
+                  className="w-1/2 bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold py-3 rounded-xl text-sm transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  Submit Claim
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    'Submit Claim'
+                  )}
                 </button>
               </div>
             </form>

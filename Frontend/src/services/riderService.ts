@@ -278,6 +278,27 @@ export const riderService = {
       }
     );
   },
+
+  // Get compensation claims
+  getClaims: async (params?: { riderId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<any[]>(`/rider/claims${qs}`);
+  },
+
+  // Submit new compensation claim
+  submitClaim: async (data: { type: string; order?: string; orderNumber?: string; amount?: string; notes?: string }, params?: { riderId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<any>(`/rider/claims${qs}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 export default riderService;

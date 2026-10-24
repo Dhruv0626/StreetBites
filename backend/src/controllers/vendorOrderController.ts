@@ -7,6 +7,7 @@ import Stall from "../models/Stall.ts";
 import User from "../models/User.ts";
 import Transaction from "../models/Transaction.ts";
 import type { AuthRequest } from "../middlewares/authMiddleware.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 /**
  * Safely extract user ID from auth context, cookies, or headers
@@ -909,4 +910,107 @@ export const getVendorAnalytics = async (
     });
   }
 };
+
+// @desc    Vendor Request Payout Withdrawal
+// @route   POST /api/vendor/orders/payouts/withdraw
+export const requestVendorWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized. Vendor identification required." });
+      return;
+    }
+
+    const vendorUser = await User.findById(userId);
+    if (!vendorUser) {
+      res.status(404).json({ success: false, message: "Vendor profile not found." });
+      return;
+    }
+
+    const availableBalance = Number(vendorUser.wallet_balance) || 0;
+    if (availableBalance <= 0) {
+      res.status(400).json({ success: false, message: "You have no available balance to withdraw." });
+      return;
+    }
+
+    if (!vendorUser.bank_name && !vendorUser.bank_account_no && !vendorUser.upi_id) {
+      res.status(400).json({
+        success: false,
+        message: "Please add your bank account or UPI details in onboarding profile before requesting a payout.",
+      });
+      return;
+    }
+
+    const requestedAmount = req.body?.amount ? Math.min(Number(req.body.amount), availableBalance) : availableBalance;
+    if (requestedAmount <= 0) {
+      res.status(400).json({ success: false, message: "Invalid withdrawal amount requested." });
+      return;
+    }
+
+    // Deduct from wallet balance
+    vendorUser.wallet_balance = Math.max(0, availableBalance - requestedAmount);
+    await vendorUser.save();
+
+    // Create a transaction audit record
+    const withdrawalTx = new Transaction({
+      order_id: new mongoose.Types.ObjectId(),
+      order_number: `WD-${Date.now().toString().slice(-6)}`,
+      customer_id: null,
+      payment_method: "ONLINE",
+      payment_status: "PAID",
+      total_order_amount: requestedAmount,
+      vendor_payouts: [
+        {
+          stall_id: vendorUser.stall_id || new mongoose.Types.ObjectId(),
+          vendor_id: vendorUser._id,
+          stall_name: vendorUser.name || "Vendor Stall",
+          amount: requestedAmount,
+          status: "COMPLETED",
+          payout_at: new Date(),
+        },
+      ],
+      rider_payout: {
+        rider_id: null,
+        amount: 0,
+        status: "COMPLETED",
+      },
+      platform_revenue: {
+        vendor_commission_amount: 0,
+        customer_markup_amount: 0,
+        total_platform_fee: 0,
+        tax_amount: 0,
+        status: "COMPLETED",
+      },
+      settlement_status: "COMPLETED",
+      note: `Vendor Payout Settlement: Transfer of ₹${requestedAmount} to ${vendorUser.bank_name || "Bank"} (A/C: ${vendorUser.bank_account_no || vendorUser.upi_id || "Registered Details"})`,
+    });
+    await withdrawalTx.save();
+
+    // Send in-app notification
+    await createNotification({
+      userId: vendorUser._id,
+      title: "Withdrawal Processed",
+      message: `Withdrawal request of ₹${requestedAmount} has been processed for transfer to your registered account.`,
+      type: "PAYOUT",
+      amount: requestedAmount,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Withdrawal request of ₹${requestedAmount} processed successfully.`,
+      data: {
+        withdrawnAmount: requestedAmount,
+        remainingBalance: vendorUser.wallet_balance,
+        transactionId: withdrawalTx.order_number,
+      },
+    });
+  } catch (error: any) {
+    console.error("Vendor Withdrawal Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to process withdrawal request.",
+    });
+  }
+};
+
 

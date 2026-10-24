@@ -122,6 +122,19 @@ export const vendorOrderService = {
       }
     );
   },
+
+  // 6. Request vendor payout withdrawal
+  withdrawPayout: async (amount?: number) => {
+    return apiRequest<{
+      withdrawnAmount: number;
+      remainingBalance: number;
+      transactionId: string;
+    }>('/vendor/orders/payouts/withdraw', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+      requiresAuth: true,
+    });
+  },
 };
 
 export default vendorOrderService;

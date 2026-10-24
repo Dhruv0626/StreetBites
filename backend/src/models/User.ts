@@ -24,6 +24,9 @@ export interface IUser {
   delivery_range_km?: number;
   auto_accept?: boolean;
   push_notifications?: boolean;
+  email_notifications?: boolean;
+  reset_password_token?: string | null;
+  reset_password_expires?: Date | null;
   current_coordinates?: {
     type: string;
     coordinates: [number, number]; // [longitude, latitude]
@@ -140,6 +143,18 @@ const UserSchema = new mongoose.Schema<IUser>(
     push_notifications: {
       type: Boolean,
       default: true,
+    },
+    email_notifications: {
+      type: Boolean,
+      default: false,
+    },
+    reset_password_token: {
+      type: String,
+      select: false,
+    },
+    reset_password_expires: {
+      type: Date,
+      select: false,
     },
     current_coordinates: {
       type: PointSchema,

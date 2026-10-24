@@ -802,7 +802,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// @desc    Update Current User Profile (e.g., mobile number, name)
+// @desc    Update Current User Profile (e.g., mobile number, name, notification preferences)
 // @route   PUT /api/auth/profile
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -812,7 +812,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const { phone_number, name } = req.body || {};
+    const { phone_number, name, push_notifications, email_notifications } = req.body || {};
     const user: any = await User.findById(userId);
     if (!user) {
       res.status(404).json({ success: false, message: "User not found." });
@@ -833,6 +833,14 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       user.name = String(name).trim();
     }
 
+    if (push_notifications !== undefined) {
+      user.push_notifications = Boolean(push_notifications);
+    }
+
+    if (email_notifications !== undefined) {
+      user.email_notifications = Boolean(email_notifications);
+    }
+
     await user.save();
 
     res.status(200).json({
@@ -843,6 +851,124 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     console.error("Update Profile Error:", error);
     res.status(500).json({ success: false, message: error?.message || "Failed to update profile." });
+  }
+};
+
+// @desc    Forgot Password - Request Reset Link / OTP
+// @route   POST /api/auth/forgot-password
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !String(email).trim()) {
+      res.status(400).json({ success: false, message: "Please provide your registered email address." });
+      return;
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
+
+    if (!user) {
+      // Graceful response for security
+      res.status(200).json({
+        success: true,
+        message: "If an account with this email exists, a password reset link has been dispatched.",
+      });
+      return;
+    }
+
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    user.reset_password_token = resetToken;
+    user.reset_password_expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await user.save();
+
+    console.log(`🔑 [StreetBites Auth] Password Reset Code for ${cleanEmail}: ${resetToken}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset instructions sent to your email.",
+      resetToken,
+    });
+  } catch (error: any) {
+    console.error("Forgot Password Error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to process forgot password." });
+  }
+};
+
+// @desc    Reset Password with New Credentials
+// @route   POST /api/auth/reset-password
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, token, password, newPassword } = req.body || {};
+    const finalPassword = password || newPassword;
+
+    if (!finalPassword || String(finalPassword).length < 6) {
+      res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
+      return;
+    }
+
+    let user: any = null;
+    if (token) {
+      user = await User.findOne({
+        reset_password_token: String(token).trim(),
+        reset_password_expires: { $gt: new Date() },
+      });
+    }
+
+    if (!user && email) {
+      user = await User.findOne({ email: String(email).trim().toLowerCase() });
+    }
+
+    if (!user) {
+      res.status(400).json({ success: false, message: "Invalid or expired password reset request." });
+      return;
+    }
+
+    user.password = await argon2.hash(finalPassword);
+    user.reset_password_token = null;
+    user.reset_password_expires = null;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Your password has been reset successfully. You can now sign in.",
+    });
+  } catch (error: any) {
+    console.error("Reset Password Error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to reset password." });
+  }
+};
+
+// @desc    User self-delete account
+// @route   DELETE /api/auth/profile
+export const deleteSelfAccount = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id || (req as any).user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized." });
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found." });
+      return;
+    }
+
+    if (user.role === "VENDOR") {
+      const Stall = (await import("../models/Stall.ts")).default;
+      await Stall.updateMany({ user_id: user._id }, { status: "CLOSED", is_accepting_orders: false });
+    }
+
+    await User.findByIdAndDelete(userId);
+    clearAuthCookies(res);
+
+    res.status(200).json({
+      success: true,
+      message: "Account and associated data deleted successfully.",
+    });
+  } catch (error: any) {
+    console.error("Delete Self Account Error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to delete account." });
   }
 };
 // @desc    Get All Users with optional role and search filters (Admin)

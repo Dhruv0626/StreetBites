@@ -1,25 +1,59 @@
 import React, { useState, type FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router';
-import { ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router';
+import { ChevronLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import SidePanelImg from '../../assets/images/hero_market.jpg';
 import { useAlert } from '../../context/AlertContext';
+import { authService } from '../../services/authService';
 
 export const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const initialEmail = searchParams.get('email') || '';
+
   const { showAlert, toast } = useAlert();
+  const [email, setEmail] = useState<string>(initialEmail);
+  const [resetCode, setResetCode] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (password === confirmPassword) {
-      toast.success('Password updated successfully');
-      navigate('/signin');
-    } else {
+    if (!email.trim()) {
+      showAlert('Please provide your registered email address.', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showAlert('Password must be at least 6 characters long.', 'error');
+      return;
+    }
+    if (password !== confirmPassword) {
       showAlert('Passwords do not match. Please verify and try again.', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await authService.resetPassword({
+        email: email.trim(),
+        token: resetCode.trim() || undefined,
+        newPassword: password,
+      });
+
+      if (res.success) {
+        toast.success(res.message || 'Password updated successfully!');
+        navigate('/signin');
+      } else {
+        showAlert(res.message || 'Failed to update password.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error updating password.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -86,6 +120,33 @@ export const ResetPassword: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-stone-600 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full text-xs py-3 px-4 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20 focus:border-[#E54B3C] transition-all"
+                    placeholder="you@gmail.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-stone-600 mb-1">
+                    Reset Code (if received)
+                  </label>
+                  <input
+                    type="text"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    className="w-full text-xs py-3 px-4 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20 focus:border-[#E54B3C] transition-all"
+                    placeholder="e.g. 123456"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-stone-600 mb-1">
                     New Password
                   </label>
                   <div className="relative">
@@ -100,7 +161,7 @@ export const ResetPassword: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -123,7 +184,7 @@ export const ResetPassword: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
                     >
                       {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -132,9 +193,17 @@ export const ResetPassword: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full bg-[#E54B3C] hover:bg-[#D43B2C] text-white font-semibold py-3 px-4 rounded-full border border-stone-200 transition-colors shadow-2xs cursor-pointer font-sans text-sm mt-4"
+                  disabled={isSubmitting}
+                  className="w-full bg-[#E54B3C] hover:bg-[#D43B2C] text-white font-semibold py-3 px-4 rounded-full border border-stone-200 transition-colors shadow-2xs cursor-pointer font-sans text-sm mt-4 flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  Reset Password
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Updating Password...</span>
+                    </>
+                  ) : (
+                    'Reset Password'
+                  )}
                 </button>
               </form>
             </div>

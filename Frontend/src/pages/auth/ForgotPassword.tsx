@@ -1,18 +1,37 @@
 import React, { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 import SidePanelImg from '../../assets/images/hero_market.jpg';
+import { authService } from '../../services/authService';
+import { useAlert } from '../../context/AlertContext';
 
 export const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
+  const { showAlert } = useAlert();
   const [email, setEmail] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [successInfo, setSuccessInfo] = useState<string>('');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // Logic to send OTP/Link goes here
-    setIsSubmitted(true);
+    if (!email.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await authService.forgotPassword(email.trim());
+      if (res.success) {
+        setIsSubmitted(true);
+        setSuccessInfo(res.message || 'Password reset code has been dispatched.');
+      } else {
+        showAlert(res.message || 'Failed to process request.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error connecting to server.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -85,15 +104,23 @@ export const ForgotPassword: React.FC = () => {
               </div>
 
               {isSubmitted ? (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-sm mb-6">
-                  <p className="font-medium mb-1">Check your inbox</p>
-                  <p>We've sent a password reset link to <strong>{email}</strong>.</p>
-                  <button 
-                    onClick={() => setIsSubmitted(false)}
-                    className="mt-3 text-emerald-700 font-semibold hover:underline text-xs"
-                  >
-                    Try another email address
-                  </button>
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-sm mb-6 space-y-3">
+                  <p className="font-medium">Instructions Dispatched</p>
+                  <p>{successInfo || `We've sent a password reset code to ${email}.`}</p>
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      onClick={() => navigate(`/reset-password?email=${encodeURIComponent(email)}`)}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Set New Password Now &rarr;
+                    </button>
+                    <button 
+                      onClick={() => setIsSubmitted(false)}
+                      className="text-emerald-700 font-semibold hover:underline text-xs cursor-pointer"
+                    >
+                      Try another email
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -102,7 +129,7 @@ export const ForgotPassword: React.FC = () => {
                       Email 
                     </label>
                     <input
-                      type="text"
+                      type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -113,9 +140,17 @@ export const ForgotPassword: React.FC = () => {
 
                   <button
                     type="submit"
-                    className="w-full bg-[#E54B3C] hover:bg-[#D43B2C] text-white font-semibold py-3 px-4 rounded-full border border-stone-200 transition-colors shadow-2xs cursor-pointer font-sans text-sm mt-2"
+                    disabled={isSubmitting}
+                    className="w-full bg-[#E54B3C] hover:bg-[#D43B2C] text-white font-semibold py-3 px-4 rounded-full border border-stone-200 transition-colors shadow-2xs cursor-pointer font-sans text-sm mt-2 flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    Send Reset Link
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending Instructions...</span>
+                      </>
+                    ) : (
+                      'Send Reset Link'
+                    )}
                   </button>
                 </form>
               )}

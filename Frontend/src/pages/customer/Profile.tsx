@@ -33,10 +33,13 @@ import { geocodeAddressText, reverseGeocodeCoords } from '../../utils/geocoding'
 import type { AddressItem } from '../../types';
 import { AddressModal } from '../../components/customer/AddressModal';
 import { razorpayService } from '../../services/razorpayService';
+import { authService } from '../../services/authService';
+import { useAlert } from '../../context/AlertContext';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout, updateProfile, refreshProfile } = useAuth();
+  const { toast, showConfirm } = useAlert();
   const { favorites } = useFavorites();
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
@@ -55,7 +58,11 @@ export const Profile: React.FC = () => {
     phone: user?.phone_number || '',
   });
 
-  // Sync personal details when user loads
+  // Notification Preferences State (Synced with MongoDB)
+  const [pushEnabled, setPushEnabled] = useState<boolean>((user as any)?.push_notifications ?? true);
+  const [emailEnabled, setEmailEnabled] = useState<boolean>((user as any)?.email_notifications ?? true);
+
+  // Sync personal details & notification preferences when user loads
   useEffect(() => {
     if (user) {
       setPersonalDetails({
@@ -63,8 +70,61 @@ export const Profile: React.FC = () => {
         email: user.email || '',
         phone: user.phone_number || '',
       });
+      setPushEnabled((user as any)?.push_notifications ?? true);
+      setEmailEnabled((user as any)?.email_notifications ?? true);
     }
   }, [user]);
+
+  const handleTogglePush = async () => {
+    const nextVal = !pushEnabled;
+    setPushEnabled(nextVal);
+    try {
+      await authService.updateProfile({ push_notifications: nextVal });
+      await refreshProfile();
+      toast.success(nextVal ? 'Push notifications enabled' : 'Push notifications disabled');
+    } catch (e: any) {
+      setPushEnabled(!nextVal);
+      toast.error(e?.message || 'Failed to update push preference');
+    }
+  };
+
+  const handleToggleEmail = async () => {
+    const nextVal = !emailEnabled;
+    setEmailEnabled(nextVal);
+    try {
+      await authService.updateProfile({ email_notifications: nextVal });
+      await refreshProfile();
+      toast.success(nextVal ? 'Email notifications enabled' : 'Email notifications disabled');
+    } catch (e: any) {
+      setEmailEnabled(!nextVal);
+      toast.error(e?.message || 'Failed to update email preference');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = await showConfirm({
+      title: 'Delete StreetBites Account?',
+      message:
+        'This will permanently deactivate your account, order history, and saved addresses. This action cannot be undone.',
+      confirmText: 'Yes, Delete My Account',
+      cancelText: 'Cancel',
+      type: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await authService.deleteAccount();
+      if (res?.success) {
+        toast.success('Your account has been deleted.');
+        logout();
+        navigate('/');
+      } else {
+        toast.error(res?.message || 'Failed to delete account');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error deleting account');
+    }
+  };
 
   // Real Saved Addresses State (Fetched from MongoDB based on user_id)
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
@@ -1111,6 +1171,62 @@ export const Profile: React.FC = () => {
                       ></div>
                     </button>
                   </div>
+
+                  {/* Push Notifications Toggle */}
+                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
+                    <div>
+                      <span className="font-bold text-[#1C1917] block text-xs">Order & Delivery Push Notifications</span>
+                      <span className="text-[10px] text-[#8E8B85]">Receive live updates when food is ready and rider is nearby</span>
+                    </div>
+                    <button
+                      onClick={handleTogglePush}
+                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
+                        pushEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                          pushEnabled ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      ></div>
+                    </button>
+                  </div>
+
+                  {/* Email Notifications Toggle */}
+                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
+                    <div>
+                      <span className="font-bold text-[#1C1917] block text-xs">Email Receipts & Order Summaries</span>
+                      <span className="text-[10px] text-[#8E8B85]">Receive GST tax invoices and order confirmations by email</span>
+                    </div>
+                    <button
+                      onClick={handleToggleEmail}
+                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
+                        emailEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                          emailEnabled ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      ></div>
+                    </button>
+                  </div>
+
+                  {/* Danger Zone: Delete Account */}
+                  {isAuthenticated && (
+                    <div className="bg-red-50/60 p-4 rounded-xl border border-red-200 flex items-center justify-between mt-3">
+                      <div>
+                        <span className="font-bold text-red-700 block text-xs">Deactivate & Delete Account</span>
+                        <span className="text-[10px] text-red-500">Permanently delete your profile, saved addresses, and data</span>
+                      </div>
+                      <button
+                        onClick={handleDeleteAccount}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer border-0 shadow-3xs"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

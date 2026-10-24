@@ -7,6 +7,7 @@ import {
   verifyRiderRepay,
   getAdminFinancialOverview,
   getCustomerOrders,
+  cancelCustomerOrder,
 } from "../controllers/paymentController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
 
@@ -19,8 +20,9 @@ router.post("/razorpay/verify", protect, verifyRazorpayPayment);
 // Customer Cash on Delivery Checkout
 router.post("/cod/create-order", protect, createCodOrder);
 
-// Customer Order History
+// Customer Order History & Cancellation
 router.get("/my-orders", protect, getCustomerOrders);
+router.post("/orders/:orderId/cancel", protect, cancelCustomerOrder);
 
 // Rider Debt Repayment via Razorpay Online Payment
 router.post("/rider/repay-debt/create-order", protect, createRiderRepayOrder);

@@ -6,6 +6,7 @@ import Order from "../models/Order.ts";
 import SubOrder from "../models/SubOrder.ts";
 import User from "../models/User.ts";
 import { memoryCache } from "../utils/cache.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 /**
  * Helper to safely resolve customer ID from token, headers, body, or query
@@ -318,3 +319,87 @@ export const getStallReviews = async (req: Request, res: Response): Promise<void
     });
   }
 };
+
+/**
+ * @desc    Submit a complaint / report an issue for an order
+ * @route   POST /api/reviews/complaint
+ */
+export const submitCustomerComplaint = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const customerId = getCustomerId(req);
+    if (!customerId) {
+      res.status(401).json({
+        success: false,
+        message: "Customer authentication is required to submit a complaint.",
+      });
+      return;
+    }
+
+    const { order_id, stall_id, issue_type, comment } = req.body;
+
+    if (!comment || !String(comment).trim()) {
+      res.status(400).json({
+        success: false,
+        message: "Please describe the problem or issue you encountered.",
+      });
+      return;
+    }
+
+    const validIssueTypes = ["FOOD_QUALITY", "LATE_DELIVERY", "WRONG_ITEM", "RIDER_BEHAVIOR", "OTHER"];
+    const normalizedIssue = validIssueTypes.includes(issue_type) ? issue_type : "OTHER";
+
+    let targetOrderId = null;
+    let targetStallId = null;
+
+    if (order_id) {
+      const orderDoc = await Order.findById(order_id);
+      if (orderDoc) {
+        targetOrderId = orderDoc._id;
+        targetStallId = stall_id ? new mongoose.Types.ObjectId(stall_id) : (orderDoc.cluster_id || null);
+      }
+    }
+
+    if (!targetStallId && stall_id) {
+      targetStallId = new mongoose.Types.ObjectId(stall_id);
+    }
+
+    const complaintDoc = await Feedback.create({
+      user_id: new mongoose.Types.ObjectId(customerId),
+      order_id: targetOrderId,
+      stall_id: targetStallId,
+      feedback_type: "COMPLAINT",
+      issue_type: normalizedIssue,
+      comment: String(comment).trim(),
+      status: "OPEN",
+    });
+
+    // Notify customer
+    await createNotification({
+      user_id: new mongoose.Types.ObjectId(customerId),
+      type: "SYSTEM",
+      title: "Complaint Ticket Raised",
+      message: `Your complaint has been logged (Ticket #TKT-${complaintDoc._id.toString().slice(-6).toUpperCase()}). Our support team will investigate and follow up shortly.`,
+      data: { ticket_id: complaintDoc._id, order_id: targetOrderId },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Support ticket #TKT-${complaintDoc._id.toString().slice(-6).toUpperCase()} created successfully. Our team will resolve it soon.`,
+      data: {
+        ticketId: `TKT-${complaintDoc._id.toString().slice(-6).toUpperCase()}`,
+        _id: complaintDoc._id,
+        status: complaintDoc.status,
+        issueType: complaintDoc.issue_type,
+        comment: complaintDoc.comment,
+        createdAt: complaintDoc.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error("Submit Customer Complaint Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to submit complaint.",
+    });
+  }
+};
+

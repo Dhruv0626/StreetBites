@@ -14,6 +14,7 @@ import {
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
+import { reviewService, type StallReviewsResponse } from '../../services/reviewService';
 import { StallDetailSkeleton } from '../../components/Skeleton';
 import type { Stall, Dish } from '../../data/mockData';
 
@@ -30,6 +31,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
   const [currentStall, setCurrentStall] = useState<Stall | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All Items');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [stallReviews, setStallReviews] = useState<StallReviewsResponse | null>(null);
 
   // Scroll to top on mount / stallId change
   useEffect(() => {
@@ -122,6 +124,22 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
       isMounted = false;
       unsubscribe();
     };
+  }, [stallId]);
+
+  // Load verified customer reviews for this stall
+  useEffect(() => {
+    if (stallId) {
+      reviewService
+        .getStallReviews(stallId)
+        .then((res: any) => {
+          if (res?.success && res?.data) {
+            setStallReviews(res.data);
+          }
+        })
+        .catch((err: any) => {
+          console.warn('Could not fetch stall reviews:', err);
+        });
+    }
   }, [stallId]);
 
   const handleBack = () => {
@@ -716,6 +734,130 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
                     </div>
                   );
                 })
+              )}
+            </div>
+
+            {/* ─── CUSTOMER REVIEWS & RATINGS SECTION ─── */}
+            <div className="mt-10 pt-8 border-t border-[#EAE4DA] space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-[#1C1917] flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    Customer Reviews & Ratings
+                  </h2>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Verified ratings from customers who ordered from {currentStall.name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-black text-[#1C1917]">
+                    {stallReviews?.averageRating ? Number(stallReviews.averageRating).toFixed(1) : Number(currentStall.rating || 0).toFixed(1)}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-0.5 text-amber-500">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-3.5 h-3.5 ${
+                            star <= Math.round(Number(stallReviews?.averageRating || currentStall.rating || 0))
+                              ? 'fill-amber-500'
+                              : 'text-stone-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-stone-400 font-semibold">
+                      {stallReviews?.totalReviews || 0} verified review{(stallReviews?.totalReviews || 0) === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Breakdown Bars & Highlights */}
+              {stallReviews && stallReviews.totalReviews > 0 && (
+                <div className="bg-white p-5 rounded-3xl border border-[#EAE4DA] shadow-3xs grid grid-cols-1 sm:grid-cols-5 gap-4">
+                  <div className="sm:col-span-2 flex flex-col justify-center border-b sm:border-b-0 sm:border-r border-[#F0ECE6] pb-4 sm:pb-0 sm:pr-4">
+                    <span className="text-4xl font-black text-[#1C1917] tracking-tight">
+                      {Number(stallReviews.averageRating).toFixed(1)}
+                    </span>
+                    <span className="text-xs font-semibold text-stone-500 mt-1">out of 5.0 stars</span>
+                    <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full mt-2 w-fit inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 100% Verified Orders
+                    </span>
+                  </div>
+
+                  <div className="sm:col-span-3 space-y-1.5 flex flex-col justify-center">
+                    {[5, 4, 3, 2, 1].map((stars) => {
+                      const count = (stallReviews.distribution as any)?.[stars] || 0;
+                      const percent = stallReviews.totalReviews > 0 ? Math.round((count / stallReviews.totalReviews) * 100) : 0;
+                      return (
+                        <div key={stars} className="flex items-center gap-2 text-xs">
+                          <span className="w-6 text-stone-500 font-bold text-right text-[11px]">{stars}★</span>
+                          <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <span className="w-8 text-stone-400 font-medium text-[10px] text-right">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Reviews List */}
+              {stallReviews && stallReviews.reviews && stallReviews.reviews.length > 0 ? (
+                <div className="space-y-3">
+                  {stallReviews.reviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white p-4 rounded-2xl border border-[#EAE4DA] shadow-3xs space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-[#FAF0ED] text-[#D94A38] font-black text-xs flex items-center justify-center">
+                            {rev.userName ? rev.userName.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-[#1C1917] block leading-tight">
+                              {rev.userName || 'Verified Customer'}
+                            </span>
+                            <span className="text-[10px] text-stone-400">
+                              {rev.createdAt
+                                ? new Date(rev.createdAt).toLocaleDateString('en-IN', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })
+                                : 'Recent order'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-amber-700 text-xs font-extrabold">
+                          <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                          <span>{rev.rating}.0</span>
+                        </div>
+                      </div>
+
+                      {rev.comment && (
+                        <p className="text-xs text-[#4B5563] leading-relaxed pt-1">
+                          "{rev.comment}"
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-white border border-[#EAE4DA] rounded-3xl shadow-3xs space-y-2">
+                  <Star className="w-8 h-8 text-amber-300 mx-auto" />
+                  <h4 className="text-sm font-bold text-[#1C1917]">No Customer Reviews Yet</h4>
+                  <p className="text-xs text-stone-400 max-w-xs mx-auto">
+                    Order your favorite food from {currentStall.name} to share your review and rating here!
+                  </p>
+                </div>
               )}
             </div>
           </>

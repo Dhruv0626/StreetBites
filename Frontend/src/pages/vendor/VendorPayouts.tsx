@@ -86,14 +86,39 @@ export const VendorPayoutsPage: React.FC = () => {
     setShowWithdrawModal(true);
   };
 
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
     setIsWithdrawing(true);
-    setTimeout(() => {
+    try {
+      const res = await vendorOrderService.withdrawPayout();
+      if (res.success && res.data) {
+        setVendorData((prev: any) => ({
+          ...prev,
+          user: {
+            ...(prev?.user || user),
+            wallet_balance: res.data.remainingBalance,
+          },
+        }));
+
+        const newTx: PayoutTransaction = {
+          id: res.data.transactionId || `WD-${Date.now().toString().slice(-6)}`,
+          date: 'Just now',
+          amount: `-₹${res.data.withdrawnAmount}`,
+          status: 'completed',
+          type: 'Bank Transfer Settlement',
+        };
+        setTransactions((prev) => [newTx, ...prev]);
+
+        setShowWithdrawModal(false);
+        showAlert(`Withdrawal of ₹${res.data.withdrawnAmount} processed successfully to your registered bank account!`, 'success');
+        toast.success('Payout withdrawal completed');
+      } else {
+        showAlert(res.message || 'Failed to process withdrawal.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error processing payout withdrawal.', 'error');
+    } finally {
       setIsWithdrawing(false);
-      setShowWithdrawModal(false);
-      showAlert('Withdrawal request submitted successfully! Funds will be transferred to your registered bank account.', 'success');
-      toast.success('Payout withdrawal requested');
-    }, 1200);
+    }
   };
 
   return (

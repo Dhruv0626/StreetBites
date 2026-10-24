@@ -1,17 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, Lock, Globe, Trash2, Smartphone, Mail, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { CustomSelect } from '../../components/CustomSelect';
 import { useAlert } from '../../context/AlertContext';
+import { authService } from '../../services/authService';
 
 export const VendorSettingsPage: React.FC = () => {
-  const { showConfirm, toast } = useAlert();
-  const { logout } = useAuth();
+  const { showConfirm, showAlert, toast } = useAlert();
+  const { user, logout, refreshProfile } = useAuth();
   const [activeSection, setActiveSection] = useState('notifications');
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState((user as any)?.push_notifications ?? true);
+  const [emailEnabled, setEmailEnabled] = useState((user as any)?.email_notifications ?? false);
   const [language, setLanguage] = useState('English');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if ((user as any).push_notifications !== undefined) setPushEnabled(Boolean((user as any).push_notifications));
+      if ((user as any).email_notifications !== undefined) setEmailEnabled(Boolean((user as any).email_notifications));
+    }
+  }, [user]);
+
+  const handleTogglePush = async () => {
+    const nextVal = !pushEnabled;
+    setPushEnabled(nextVal);
+    try {
+      await authService.updateProfile({ push_notifications: nextVal });
+      toast.success(`Push notifications ${nextVal ? 'enabled' : 'disabled'}`);
+      refreshProfile?.();
+    } catch (err: any) {
+      setPushEnabled(!nextVal);
+      showAlert('Failed to update push notification preference.', 'error');
+    }
+  };
+
+  const handleToggleEmail = async () => {
+    const nextVal = !emailEnabled;
+    setEmailEnabled(nextVal);
+    try {
+      await authService.updateProfile({ email_notifications: nextVal });
+      toast.success(`Email summaries ${nextVal ? 'enabled' : 'disabled'}`);
+      refreshProfile?.();
+    } catch (err: any) {
+      setEmailEnabled(!nextVal);
+      showAlert('Failed to update email notification preference.', 'error');
+    }
+  };
 
   const navigate = useNavigate();
   return (
@@ -80,8 +115,8 @@ export const VendorSettingsPage: React.FC = () => {
                   </div>
                   {/* Toggle Switch */}
                   <button
-                    onClick={() => setPushEnabled(!pushEnabled)}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${pushEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
+                    onClick={handleTogglePush}
+                    className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${pushEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
                   >
                     <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${pushEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
@@ -98,8 +133,8 @@ export const VendorSettingsPage: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => setEmailEnabled(!emailEnabled)}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${emailEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
+                    onClick={handleToggleEmail}
+                    className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${emailEnabled ? 'bg-[#D94A38]' : 'bg-stone-300'}`}
                   >
                     <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${emailEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
@@ -186,7 +221,18 @@ export const VendorSettingsPage: React.FC = () => {
                       type: 'danger',
                     });
                     if (confirmed) {
-                      toast.info('Account deletion request initiated.');
+                      try {
+                        const res = await authService.deleteAccount();
+                        if (res.success) {
+                          toast.success('Your vendor account has been permanently deleted.');
+                          await logout();
+                          navigate('/signin');
+                        } else {
+                          showAlert(res.message || 'Failed to delete account.', 'error');
+                        }
+                      } catch (err: any) {
+                        showAlert(err?.message || 'Error deleting account.', 'error');
+                      }
                     }
                   }}
                   className="flex items-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold py-2 px-4 rounded-xl transition-colors text-xs cursor-pointer"

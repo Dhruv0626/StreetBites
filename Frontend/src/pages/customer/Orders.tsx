@@ -12,11 +12,19 @@ import {
   Home,
   Phone,
   ShieldCheck,
+  Star,
+  XCircle,
+  HelpCircle,
+  AlertTriangle,
+  X,
+  Loader2,
 } from 'lucide-react';
 import type { CartItem } from '../../types';
 import { useNavigate } from 'react-router';
 import { OrdersSkeleton } from '../../components';
 import { razorpayService } from '../../services/razorpayService';
+import { reviewService } from '../../services/reviewService';
+import { useAlert } from '../../context/AlertContext';
 import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
 interface OrdersProps {
@@ -30,16 +38,139 @@ interface OrdersProps {
 
 export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   const navigate = useNavigate();
+  const { toast } = useAlert();
   const [activeTab, setActiveTab] = useState<'live' | 'past'>('live');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
+
+  // Cancel Order Modal State
+  const [cancellingOrder, setCancellingOrder] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('Changed my mind');
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+
+  // Review & Rating Modal State
+  const [reviewOrder, setReviewOrder] = useState<any | null>(null);
+  const [ratingScores, setRatingScores] = useState<Record<string, number>>({});
+  const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+
+  // Support / Complaint Modal State
+  const [complaintOrder, setComplaintOrder] = useState<any | null>(null);
+  const [complaintIssueType, setComplaintIssueType] = useState<string>('FOOD_QUALITY');
+  const [complaintComment, setComplaintComment] = useState<string>('');
+  const [isSubmittingComplaint, setIsSubmittingComplaint] = useState<boolean>(false);
 
   const handleNav = (tab: string) => {
     if (onNavigate) {
       onNavigate(tab);
     }
     navigate(tab === 'home' || tab === 'discover' ? '/' : `/${tab}`);
+  };
+
+  // Cancel order handler calling real backend endpoint
+  const handleCancelOrder = async () => {
+    if (!cancellingOrder) return;
+    const targetId = cancellingOrder.realId || cancellingOrder.id;
+    setIsCancelling(true);
+    try {
+      const res = await razorpayService.cancelOrder(targetId, cancelReason);
+      if (res?.success) {
+        toast.success(res.message || 'Order cancelled successfully.');
+        setCancellingOrder(null);
+        // Refresh orders immediately
+        const ordersRes = await razorpayService.getCustomerOrders();
+        if (ordersRes?.success && Array.isArray(ordersRes.data)) {
+          setLiveOrders(ordersRes.data);
+        }
+      } else {
+        toast.error(res?.message || 'Failed to cancel order.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error connecting to server.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Submit reviews handler calling real backend endpoint
+  const handleSubmitReview = async () => {
+    if (!reviewOrder) return;
+    const targetOrderId = reviewOrder.realId || reviewOrder.id;
+
+    const stalls =
+      reviewOrder.stallsList && reviewOrder.stallsList.length > 0
+        ? reviewOrder.stallsList
+        : reviewOrder.stalls.map((sName: string) => ({ id: sName, name: sName }));
+
+    const reviewsPayload: Array<{ stall_id: string; rating: number; comment?: string }> = [];
+
+    for (const st of stalls) {
+      const stId = String(st.id || st._id || st.name);
+      const rScore = ratingScores[stId] || 5;
+      const rComment = reviewComments[stId] || 'Delicious street food!';
+      reviewsPayload.push({
+        stall_id: stId,
+        rating: rScore,
+        comment: rComment,
+      });
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const res = await reviewService.submitReview({
+        order_id: targetOrderId,
+        reviews: reviewsPayload,
+      });
+      if (res?.success) {
+        toast.success(res.message || 'Thank you for your rating and review!');
+        setReviewOrder(null);
+        setLiveOrders((prev) =>
+          prev.map((o) =>
+            o.id === targetOrderId || o._id === targetOrderId ? { ...o, isReviewed: true } : o
+          )
+        );
+      } else {
+        toast.error(res?.message || 'Failed to submit review.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error submitting review.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  // Submit customer complaint handler calling real backend endpoint
+  const handleSubmitComplaint = async () => {
+    if (!complaintOrder) return;
+    if (!complaintComment.trim()) {
+      toast.error('Please describe the problem or issue you experienced.');
+      return;
+    }
+
+    const orderId = complaintOrder.realId || complaintOrder.id;
+    const stallId = complaintOrder.stallsList?.[0]?.id || undefined;
+
+    setIsSubmittingComplaint(true);
+    try {
+      const res = await reviewService.submitComplaint({
+        order_id: orderId,
+        stall_id: stallId,
+        issue_type: complaintIssueType,
+        comment: complaintComment.trim(),
+      });
+      if (res?.success) {
+        toast.success(res.message || 'Support ticket created successfully!');
+        setComplaintOrder(null);
+        setComplaintComment('');
+      } else {
+        toast.error(res?.message || 'Failed to submit complaint.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error connecting to support.');
+    } finally {
+      setIsSubmittingComplaint(false);
+    }
   };
 
   // Load real customer orders from backend MongoDB
@@ -103,12 +234,24 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       stalls: cleanStalls,
       itemsCount: o.itemsCount || (Array.isArray(o.items) ? o.items.length : 1),
       items: Array.isArray(o.items) ? o.items : [],
-      status: o.status === 'DELIVERED' ? 'Delivered' : o.status === 'OUT_FOR_DELIVERY' ? 'Out for Delivery' : 'Preparing',
+      status:
+        o.status === 'DELIVERED'
+          ? 'Delivered'
+          : o.status === 'OUT_FOR_DELIVERY'
+            ? 'Out for Delivery'
+            : o.status === 'CANCELLED'
+              ? 'Cancelled'
+              : 'Preparing',
       rawStatus: o.status,
       payment: o.paymentMethod || 'Online',
-      deliveryOtp: o.status === 'DELIVERED' ? '- - - -' : o.deliveryOtp,
+      paymentStatus: o.paymentStatus || 'PAID',
+      deliveryOtp: o.status === 'DELIVERED' || o.status === 'CANCELLED' ? '- - - -' : o.deliveryOtp,
       address: cleanAddress,
       rider: o.rider,
+      stallsList: o.stallsList || [],
+      isReviewed: Boolean(o.isReviewed),
+      reviews: o.reviews || [],
+      refundedAmount: o.refundedAmount || o.refunded_amount || 0,
     };
   });
 
@@ -246,10 +389,13 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span
-                      className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${order.status === 'Delivered'
-                        ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
-                        : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
-                        }`}
+                      className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider border ${
+                        order.status === 'Delivered'
+                          ? 'bg-[#E6F4EA] text-[#137333] border-[#A7E1BA]'
+                          : order.status === 'Cancelled'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-[#FFF8F0] text-[#B76E00] border-[#FFE1C2]'
+                      }`}
                     >
                       {order.status}
                     </span>
@@ -337,6 +483,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                           <span>Payment Method:</span>
                           <span className="font-bold text-[#1C1917]">{order.payment}</span>
                         </div>
+                        {order.rawStatus === 'CANCELLED' && order.refundedAmount > 0 && (
+                          <div className="flex justify-between text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-xs">
+                            <span className="font-semibold">Refund Status:</span>
+                            <span className="font-bold">₹{order.refundedAmount} Refunded to Wallet</span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-start text-[#4B5563] gap-2">
                           <span className="shrink-0">Delivered to:</span>
                           <span className="font-bold text-[#1C1917] text-right truncate max-w-[220px]">
@@ -346,9 +498,64 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                         <div className="flex justify-between text-[#4B5563]">
                           <span>Delivery OTP:</span>
                           <span className="font-mono font-bold text-[#1C1917]">
-                            {order.status === 'Delivered' || order.rawStatus === 'DELIVERED' ? '- - - -' : (order.deliveryOtp || '- - - -')}
+                            {order.status === 'Delivered' || order.rawStatus === 'DELIVERED' || order.status === 'Cancelled' || order.rawStatus === 'CANCELLED' ? '- - - -' : (order.deliveryOtp || '- - - -')}
                           </span>
                         </div>
+                      </div>
+
+                      {/* Interactive Actions per Order */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#F5F0E8]">
+                        {order.status === 'Delivered' && (
+                          <>
+                            {order.isReviewed ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold shadow-3xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Reviewed & Rated</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setReviewOrder(order);
+                                  const initScores: Record<string, number> = {};
+                                  (order.stallsList && order.stallsList.length > 0
+                                    ? order.stallsList
+                                    : [{ id: 'stall', name: order.stalls[0] || 'Food Stall' }]
+                                  ).forEach((s: any) => {
+                                    initScores[String(s.id || s._id || s.name)] = 5;
+                                  });
+                                  setRatingScores(initScores);
+                                }}
+                                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                              >
+                                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                <span>Rate & Review Food</span>
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {(order.rawStatus === 'PENDING' ||
+                          order.rawStatus === 'PREPARING' ||
+                          order.rawStatus === 'READY_FOR_PICKUP') && (
+                          <button
+                            onClick={() => setCancellingOrder(order)}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Cancel Order</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setComplaintOrder(order);
+                            setComplaintComment('');
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#FAF7F2] border border-[#EAE4DA] text-stone-700 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5 text-stone-400" />
+                          <span>Report Issue</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -510,7 +717,26 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                         {currentLiveOrder?.cluster || 'StreetBites Khau Galli'} · {liveStalls.length} Food Stall{liveStalls.length > 1 ? 's' : ''} Consolidated
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                      {!isDelivered && !isOutForDelivery && !isAtDoor && rawStatus !== 'CANCELLED' && (
+                        <button
+                          onClick={() => setCancellingOrder(currentLiveOrder)}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3.5 py-2 border border-red-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Cancel Order</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setComplaintOrder(currentLiveOrder);
+                          setComplaintComment('');
+                        }}
+                        className="bg-white hover:bg-[#FAF7F2] text-stone-700 text-xs font-bold px-3.5 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 text-stone-400" />
+                        <span>Need Help?</span>
+                      </button>
                       <button
                         onClick={() => handleNav('home')}
                         className="bg-white hover:bg-[#FAF7F2] text-[#4B5563] text-xs font-bold px-4 py-2 border border-[#EAE4DA] rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
@@ -1137,6 +1363,29 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                         </span>
                       </div>
                     ) : null}
+
+                    {/* Mobile Quick Action Buttons */}
+                    <div className="flex gap-2 pt-2 border-t border-[#F5F0E8]">
+                      {!isDelivered && !isOutForDelivery && !isAtDoor && rawStatus !== 'CANCELLED' && (
+                        <button
+                          onClick={() => setCancellingOrder(currentLiveOrder)}
+                          className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold rounded-xl border border-red-200 flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Cancel Order</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setComplaintOrder(currentLiveOrder);
+                          setComplaintComment('');
+                        }}
+                        className="flex-1 py-2 bg-[#FAF7F2] hover:bg-stone-100 text-stone-700 text-[11px] font-bold rounded-xl border border-[#EAE4DA] flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 text-stone-400" />
+                        <span>Need Help?</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Rider Info Mobile Card */}
@@ -1261,8 +1510,292 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           </div>
         )}
       </div>
+
+      {/* ─── CANCEL ORDER CONFIRMATION MODAL ─── */}
+      {cancellingOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center border border-red-200">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#1C1917]">Cancel Order</h3>
+                  <span className="text-[11px] text-[#8E8B85] font-mono">
+                    #{cancellingOrder.orderNumber || cancellingOrder.id}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setCancellingOrder(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF7F2] text-stone-500 hover:text-stone-900 flex items-center justify-center cursor-pointer border-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Are you sure you want to cancel your order from <strong>{cancellingOrder.cluster}</strong>?
+            </p>
+
+            {cancellingOrder.payment !== 'COD' && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Full Refund:</strong> ₹{cancellingOrder.total} will be instantly refunded to your StreetBites wallet.
+                </span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[11px] font-bold text-stone-700 block mb-1.5 uppercase tracking-wider">
+                Reason for Cancellation
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full text-xs font-semibold p-3 border border-[#EAE4DA] rounded-xl bg-[#FAF7F2] outline-none focus:border-[#D94A38]"
+              >
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Ordered wrong food items / quantity">Ordered wrong food items / quantity</option>
+                <option value="Delivery wait time is too long">Delivery wait time is too long</option>
+                <option value="Need to change delivery address">Need to change delivery address</option>
+                <option value="Other reason">Other reason</option>
+              </select>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setCancellingOrder(null)}
+                disabled={isCancelling}
+                className="flex-1 py-2.5 bg-[#FAF7F2] hover:bg-stone-100 text-stone-700 text-xs font-bold rounded-xl border border-[#EAE4DA] transition-all cursor-pointer"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleCancelOrder}
+                disabled={isCancelling}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isCancelling ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <span>Yes, Cancel</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── RATE & REVIEW MODAL ─── */}
+      {reviewOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200">
+                  <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#1C1917]">Rate Your Street Food</h3>
+                  <span className="text-[11px] text-[#8E8B85]">
+                    Order #{reviewOrder.orderNumber || reviewOrder.id} · {reviewOrder.cluster}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewOrder(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF7F2] text-stone-500 hover:text-stone-900 flex items-center justify-center cursor-pointer border-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600">
+              Your honest feedback helps street vendors maintain high standards and helps fellow foodies discover great dishes!
+            </p>
+
+            {/* Individual Stalls Reviews */}
+            <div className="space-y-4">
+              {(reviewOrder.stallsList && reviewOrder.stallsList.length > 0
+                ? reviewOrder.stallsList
+                : reviewOrder.stalls.map((s: string) => ({ id: s, name: s }))
+              ).map((stall: any, sIdx: number) => {
+                const sId = String(stall.id || stall._id || stall.name);
+                const sName = stall.name || stall.stall_name || stall;
+                const currentRating = ratingScores[sId] || 5;
+                const currentComment = reviewComments[sId] || '';
+
+                return (
+                  <div key={sIdx} className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#EAE4DA] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#1C1917]">{sName}</span>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() =>
+                              setRatingScores((prev) => ({ ...prev, [sId]: star }))
+                            }
+                            className="p-1 cursor-pointer bg-transparent border-0"
+                          >
+                            <Star
+                              className={`w-5 h-5 transition-transform hover:scale-110 ${
+                                star <= currentRating
+                                  ? 'text-amber-500 fill-amber-500'
+                                  : 'text-stone-300'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Share your thoughts on taste, quantity, or packaging..."
+                      value={currentComment}
+                      onChange={(e) =>
+                        setReviewComments((prev) => ({ ...prev, [sId]: e.target.value }))
+                      }
+                      className="w-full text-xs font-medium p-2.5 bg-white border border-[#EAE4DA] rounded-xl outline-none focus:border-[#D94A38]"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setReviewOrder(null)}
+                disabled={isSubmittingReview}
+                className="flex-1 py-2.5 bg-[#FAF7F2] hover:bg-stone-100 text-stone-700 text-xs font-bold rounded-xl border border-[#EAE4DA] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitReview}
+                disabled={isSubmittingReview}
+                className="flex-1 py-2.5 bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isSubmittingReview ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <span>Submit Reviews</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── REPORT ISSUE / COMPLAINT MODAL ─── */}
+      {complaintOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#1C1917]">Report Issue / Get Help</h3>
+                  <span className="text-[11px] text-[#8E8B85]">
+                    Order #{complaintOrder.orderNumber || complaintOrder.id}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setComplaintOrder(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF7F2] text-stone-500 hover:text-stone-900 flex items-center justify-center cursor-pointer border-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-stone-700 block mb-1.5 uppercase tracking-wider">
+                What went wrong?
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'FOOD_QUALITY', label: 'Food Quality / Taste' },
+                  { id: 'WRONG_ITEM', label: 'Missing / Wrong Item' },
+                  { id: 'LATE_DELIVERY', label: 'Late Delivery' },
+                  { id: 'RIDER_BEHAVIOR', label: 'Rider Behavior' },
+                  { id: 'OTHER', label: 'Other Support Issue' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setComplaintIssueType(t.id)}
+                    className={`p-2.5 rounded-xl text-xs font-bold text-left border cursor-pointer transition-all ${
+                      complaintIssueType === t.id
+                        ? 'bg-[#1C1917] text-white border-[#1C1917] shadow-xs'
+                        : 'bg-[#FAF7F2] text-stone-700 border-[#EAE4DA] hover:bg-stone-100'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-stone-700 block mb-1.5 uppercase tracking-wider">
+                Describe the problem
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Please describe what happened in detail so our operations team can resolve it..."
+                value={complaintComment}
+                onChange={(e) => setComplaintComment(e.target.value)}
+                className="w-full text-xs font-medium p-3 bg-[#FAF7F2] border border-[#EAE4DA] rounded-xl outline-none focus:border-[#D94A38] resize-none"
+              />
+            </div>
+
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-[11px] text-blue-800">
+              Your ticket will be routed directly to StreetBites admin support for immediate dispute resolution.
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                onClick={() => setComplaintOrder(null)}
+                disabled={isSubmittingComplaint}
+                className="flex-1 py-2.5 bg-[#FAF7F2] hover:bg-stone-100 text-stone-700 text-xs font-bold rounded-xl border border-[#EAE4DA] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitComplaint}
+                disabled={isSubmittingComplaint}
+                className="flex-1 py-2.5 bg-[#D94A38] hover:bg-[#C43D2E] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isSubmittingComplaint ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <span>Submit Ticket</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default Orders;
+

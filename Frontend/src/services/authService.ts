@@ -109,11 +109,37 @@ export const authService = {
     });
   },
 
-  // Update current user profile (e.g. phone number, name)
-  async updateProfile(data: { name?: string; phone_number?: string }) {
+  // Update current user profile (e.g. phone number, name, notifications)
+  async updateProfile(data: { name?: string; phone_number?: string; push_notifications?: boolean; email_notifications?: boolean }) {
     return apiRequest<{ user: User }>("/auth/profile", {
       method: "PUT",
       body: JSON.stringify(data),
+      requiresAuth: true,
+    });
+  },
+
+  // Forgot password - request email reset code
+  async forgotPassword(email: string) {
+    return apiRequest<{ success: boolean; message: string; resetToken?: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+      requiresAuth: false,
+    });
+  },
+
+  // Reset password
+  async resetPassword(payload: { email?: string; token?: string; password?: string; newPassword?: string }) {
+    return apiRequest<{ success: boolean; message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      requiresAuth: false,
+    });
+  },
+
+  // Delete self account
+  async deleteAccount() {
+    return apiRequest<{ success: boolean; message: string }>("/auth/profile", {
+      method: "DELETE",
       requiresAuth: true,
     });
   },

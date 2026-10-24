@@ -1037,3 +1037,122 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
     });
   }
 };
+
+/**
+ * @desc    Cancel customer order
+ * @route   POST /api/payments/orders/:orderId/cancel
+ */
+export const cancelCustomerOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const customer = await resolveCustomer(req);
+    if (!customer) {
+      res.status(401).json({ success: false, message: "Authentication required to cancel order." });
+      return;
+    }
+
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    if (!orderId) {
+      res.status(400).json({ success: false, message: "Order ID is required." });
+      return;
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found." });
+      return;
+    }
+
+    if (order.customer_id.toString() !== customer._id.toString()) {
+      res.status(403).json({ success: false, message: "You can only cancel your own orders." });
+      return;
+    }
+
+    if (order.status === "CANCELLED") {
+      res.status(400).json({ success: false, message: "This order is already cancelled." });
+      return;
+    }
+
+    if (order.status === "DELIVERED") {
+      res.status(400).json({ success: false, message: "Delivered orders cannot be cancelled." });
+      return;
+    }
+
+    if (order.status === "OUT_FOR_DELIVERY" || order.status === "RIDER_AT_DOOR" || order.status === "AT_DOOR") {
+      res.status(400).json({
+        success: false,
+        message: "Order is already on the way with your delivery partner and cannot be cancelled.",
+      });
+      return;
+    }
+
+    order.status = "CANCELLED";
+    order.rejection_note = reason ? String(reason).trim() : "Cancelled by customer";
+
+    // Handle payment refund to customer wallet if paid online
+    if (order.payment_method === "ONLINE") {
+      order.payment_status = "REFUNDED";
+      order.refunded_amount = order.total_amount;
+      await User.findByIdAndUpdate(customer._id, {
+        $inc: { wallet_balance: order.total_amount },
+      });
+    }
+
+    // Cancel all vendor suborders
+    await SubOrder.updateMany(
+      { order_id: order._id },
+      {
+        stall_status: "REJECTED",
+        rejection_reason: reason ? String(reason).trim() : "Order cancelled by customer",
+      }
+    );
+
+    // Update financial transaction ledger
+    await Transaction.findOneAndUpdate(
+      { order_id: order._id },
+      {
+        settlement_status: "CANCELLED",
+        note: `Order cancelled by customer. ${order.payment_method === "ONLINE" ? `₹${order.total_amount} refunded to wallet.` : "COD order voided."}`,
+      }
+    );
+
+    await order.save();
+
+    // Customer Notification
+    await createNotification({
+      user_id: customer._id,
+      type: "ORDER",
+      title: "Order Cancelled",
+      message:
+        order.payment_method === "ONLINE"
+          ? `Your order #${order._id.toString().slice(-5).toUpperCase()} has been cancelled. ₹${order.total_amount} has been refunded to your wallet.`
+          : `Your order #${order._id.toString().slice(-5).toUpperCase()} has been cancelled.`,
+      data: { order_id: order._id },
+    });
+
+    // Notify assigned rider if any
+    if (order.rider_id) {
+      await createNotification({
+        user_id: order.rider_id,
+        type: "ORDER",
+        title: "Order Cancelled",
+        message: `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by the customer.`,
+        data: { order_id: order._id },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Order #${order._id.toString().slice(-5).toUpperCase()} has been successfully cancelled.${order.payment_method === "ONLINE" ? ` ₹${order.total_amount} was refunded to your wallet.` : ""}`,
+      data: order,
+    });
+  } catch (error: any) {
+    console.error("Cancel Customer Order Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to cancel order.",
+    });
+  }
+};
+

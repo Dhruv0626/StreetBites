@@ -162,6 +162,18 @@ export const razorpayService = {
     });
   },
 
+  // Cancel Customer Order
+  cancelOrder: async (orderId: string, reason?: string) => {
+    return apiRequest<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>(`/payments/orders/${orderId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   // 8. Open Razorpay Checkout Modal UI
   openCheckout: async (options: {
     key: string;

@@ -8,6 +8,7 @@ import Stall from "../models/Stall.ts";
 import Transaction from "../models/Transaction.ts";
 import PlatformSetting from "../models/PlatformSetting.ts";
 import Address from "../models/Address.ts";
+import Feedback from "../models/Feedback.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
 
@@ -1384,3 +1385,116 @@ export const settleRiderDebt = async (req: Request, res: Response): Promise<void
     });
   }
 };
+
+// @desc    Get Rider Compensation Claims
+// @route   GET /api/rider/claims
+export const getRiderClaims = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rider = await resolveRider(req);
+    if (!rider) {
+      res.status(401).json({ success: false, message: "Unauthorized. Rider identification required." });
+      return;
+    }
+
+    const feedbacks = await Feedback.find({
+      user_id: rider._id,
+      feedback_type: "COMPLAINT",
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedClaims = feedbacks.map((f: any) => {
+      const amountMatch = f.comment?.match(/Amount:\s*₹?(\d+)/i) || f.comment?.match(/₹(\d+)/);
+      const amount = amountMatch ? `₹${amountMatch[1]}` : "₹30";
+      const typeMatch = f.comment?.match(/\[CLAIM:\s*([^\]]+)\]/i);
+      const type = typeMatch ? typeMatch[1] : "Stall wait time claim";
+      const orderMatch = f.comment?.match(/Order:\s*([A-Za-z0-9_-]+)/i);
+      const order = orderMatch ? orderMatch[1] : (f.order_id ? `ORD-${f.order_id.toString().slice(-5).toUpperCase()}` : "N/A");
+
+      const statusMap: Record<string, string> = {
+        OPEN: "pending",
+        IN_PROGRESS: "pending",
+        RESOLVED: "approved",
+      };
+
+      return {
+        id: `C-${f._id.toString().slice(-4).toUpperCase()}`,
+        _id: f._id.toString(),
+        date: f.createdAt ? new Date(f.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recently",
+        type,
+        order,
+        amount,
+        status: statusMap[f.status] || "pending",
+        notes: f.comment,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: formattedClaims,
+    });
+  } catch (error: any) {
+    console.error("Get Rider Claims Error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to fetch rider claims." });
+  }
+};
+
+// @desc    Submit Rider Compensation Claim
+// @route   POST /api/rider/claims
+export const submitRiderClaim = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rider = await resolveRider(req);
+    if (!rider) {
+      res.status(401).json({ success: false, message: "Unauthorized. Rider identification required." });
+      return;
+    }
+
+    const { type, order, orderNumber, amount, notes } = req.body || {};
+    const finalOrderNumber = order || orderNumber || "N/A";
+    const cleanAmount = String(amount || "30").replace(/[^0-9]/g, "");
+
+    // Check if order exists in DB to link order_id
+    let linkedOrderId: any = null;
+    if (finalOrderNumber && finalOrderNumber !== "N/A") {
+      const cleanNum = finalOrderNumber.replace(/^MO-|^ORD-/, "");
+      const foundOrder = await Order.findOne({
+        $or: [
+          { _id: mongoose.Types.ObjectId.isValid(finalOrderNumber) ? new mongoose.Types.ObjectId(finalOrderNumber) : undefined },
+          { _id: mongoose.Types.ObjectId.isValid(cleanNum) ? new mongoose.Types.ObjectId(cleanNum) : undefined },
+        ].filter(Boolean) as any,
+      });
+      if (foundOrder) linkedOrderId = foundOrder._id;
+    }
+
+    const comment = `[CLAIM: ${type || 'Wait time at stall'}] ${notes ? notes + ' ' : ''}(Order: ${finalOrderNumber}) - Amount: ₹${cleanAmount}`;
+
+    const newClaim = new Feedback({
+      user_id: rider._id,
+      order_id: linkedOrderId,
+      stall_id: null,
+      feedback_type: "COMPLAINT",
+      issue_type: "OTHER",
+      comment,
+      status: "OPEN",
+    });
+    await newClaim.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Compensation claim submitted successfully and forwarded to Admin.",
+      data: {
+        id: `C-${newClaim._id.toString().slice(-4).toUpperCase()}`,
+        _id: newClaim._id.toString(),
+        date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        type: type || "Wait time claim",
+        order: finalOrderNumber,
+        amount: `₹${cleanAmount}`,
+        status: "pending",
+      },
+    });
+  } catch (error: any) {
+    console.error("Submit Rider Claim Error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to submit compensation claim." });
+  }
+};
+

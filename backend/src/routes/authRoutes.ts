@@ -12,6 +12,9 @@ import {
   logout,
   getProfile,
   updateProfile,
+  forgotPassword,
+  resetPassword,
+  deleteSelfAccount,
   getAllUsers,
   updateUserStatus,
   deleteUser,
@@ -25,6 +28,8 @@ const router: any = express.Router();
 router.post("/register", authRateLimiter, register);
 router.post("/login", authRateLimiter, login);
 router.post("/refresh-token", refreshAccessToken);
+router.post("/forgot-password", authRateLimiter, forgotPassword);
+router.post("/reset-password", authRateLimiter, resetPassword);
 
 // Google OAuth2 Routes
 router.post("/google", authRateLimiter, googleAuth);
@@ -42,6 +47,7 @@ router.post("/logout", logout);
 // Protected Routes
 router.get("/profile", protect, getProfile);
 router.put("/profile", protect, updateProfile);
+router.delete("/profile", protect, deleteSelfAccount);
 
 // Admin User Management Routes
 router.get("/users", getAllUsers);

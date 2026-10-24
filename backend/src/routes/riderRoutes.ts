@@ -14,6 +14,8 @@ import {
   getRiderHistory,
   settleRiderDebt,
   completeDeliveryWithOtp,
+  getRiderClaims,
+  submitRiderClaim,
 } from "../controllers/riderController.ts";
 
 const router = Router();
@@ -64,5 +66,9 @@ router.get("/history", getRiderHistory);
 
 // Debt Settlement
 router.post("/settle-debt", settleRiderDebt);
+
+// Compensation Claims (Connected to MongoDB Feedback collection & Admin Disputes)
+router.get("/claims", getRiderClaims);
+router.post("/claims", submitRiderClaim);
 
 export default router;
