@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle, Banknote } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle, Banknote, Wallet } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { TableRowsSkeleton } from '../../components/Skeleton';
 
 export const AdminTransactions: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'payouts' | 'refunds'>('payouts');
+  const [activeTab, setActiveTab] = useState<'payouts' | 'refunds' | 'withdrawals'>('payouts');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [refunds, setRefunds] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [floatingCodCash, setFloatingCodCash] = useState<number>(0);
+  const [totalWithdrawn, setTotalWithdrawn] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -21,7 +23,9 @@ export const AdminTransactions: React.FC = () => {
       if (res.success && res.data) {
         setPayouts(res.data.payouts || []);
         setRefunds(res.data.refunds || []);
+        setWithdrawals(res.data.withdrawals || []);
         setFloatingCodCash(res.data.floatingCodCash || 0);
+        setTotalWithdrawn(res.data.totalWithdrawn || 0);
       } else {
         setErrorMessage(res.message || 'Failed to fetch transactions');
       }
@@ -50,6 +54,14 @@ export const AdminTransactions: React.FC = () => {
     r.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.reason?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredWithdrawals = withdrawals.filter(w =>
+    w.txId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    w.recipientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    w.recipientRole?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    w.bankInfo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    w.note?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalNetRevenue = payouts
@@ -105,19 +117,26 @@ export const AdminTransactions: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    const rows = activeTab === 'payouts' ? filteredPayouts : filteredRefunds;
-    if (rows.length === 0) {
-      alert("No data available to export.");
-      return;
-    }
-
+    let rows: any[];
     let csvContent = "data:text/csv;charset=utf-8,";
+
     if (activeTab === 'payouts') {
+      rows = filteredPayouts;
+      if (rows.length === 0) { alert("No data available to export."); return; }
       csvContent += "Transaction ID,Order ID,User,Role,Vendor Earning,Rider Earning,Platform Fee,Total,Status,Date\n";
       rows.forEach(r => {
         csvContent += `"${r.id}","${r.orderId}","${r.user?.name || ''}","${r.user?.role || ''}","${r.vendorGain}","${r.riderGain}","${r.platformGain}","${r.total}","${r.status}","${r.date}"\n`;
       });
+    } else if (activeTab === 'withdrawals') {
+      rows = filteredWithdrawals;
+      if (rows.length === 0) { alert("No data available to export."); return; }
+      csvContent += "Transaction ID,Recipient,Role,Amount,Bank Details,Status,Date\n";
+      rows.forEach(r => {
+        csvContent += `"${r.txId}","${r.recipientName}","${r.recipientRole}","${r.amount}","${r.bankInfo}","${r.status}","${r.date}"\n`;
+      });
     } else {
+      rows = filteredRefunds;
+      if (rows.length === 0) { alert("No data available to export."); return; }
       csvContent += "Refund ID,Order ID,Customer Name,Reason,Amount,Status,Date\n";
       rows.forEach(r => {
         csvContent += `"${r.id}","${r.orderId}","${r.customerName}","${r.reason}","${r.amount}","${r.status}","${r.date}"\n`;
@@ -171,8 +190,8 @@ export const AdminTransactions: React.FC = () => {
         </div>
       )}
 
-      {/* Financial Overview Cards - Unified Slate Pods */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Financial Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Net Platform Revenue */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
@@ -215,6 +234,20 @@ export const AdminTransactions: React.FC = () => {
           <p className="text-[11px] text-slate-500 mt-1">{payouts.filter(p => p.status === 'pending').length} payouts awaiting settlement</p>
         </div>
         
+        {/* Total Withdrawn */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Withdrawn</span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/80">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${totalWithdrawn.toLocaleString('en-IN')}`}
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-1">{withdrawals.length} vendor & rider payouts</p>
+        </div>
+
         {/* Refunds Processed */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
@@ -230,7 +263,7 @@ export const AdminTransactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Payouts Section */}
+      {/* Main Table Section */}
       <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/40">
           <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
@@ -243,6 +276,16 @@ export const AdminTransactions: React.FC = () => {
               }`}
             >
               Order Settlements ({payouts.length})
+            </button>
+            <button 
+              onClick={() => setActiveTab('withdrawals')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
+                activeTab === 'withdrawals' 
+                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+                  : 'text-slate-600 hover:text-slate-900 font-semibold'
+              }`}
+            >
+              Withdrawals ({withdrawals.length})
             </button>
             <button 
               onClick={() => setActiveTab('refunds')}
@@ -283,14 +326,34 @@ export const AdminTransactions: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-100">
-              <tr>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Reference & Stakeholder</th>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Vendor Earning</th>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Rider Earning</th>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Platform Fee</th>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Total Value</th>
-                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Settlement Status</th>
-              </tr>
+              {activeTab === 'payouts' ? (
+                <tr>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Reference & Stakeholder</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Vendor Earning</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Rider Earning</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Platform Fee</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Total Value</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Settlement Status</th>
+                </tr>
+              ) : activeTab === 'withdrawals' ? (
+                <tr>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Transaction ID</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Recipient</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Role</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Amount</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Paid To</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Status</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Reference & Stakeholder</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Customer</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Reason</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Amount</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Date</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Status</th>
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {isLoading ? (
@@ -343,6 +406,49 @@ export const AdminTransactions: React.FC = () => {
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
                         No financial settlements found in database.
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ) : activeTab === 'withdrawals' ? (
+                <>
+                  {filteredWithdrawals.map(w => (
+                    <tr key={w.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-mono font-bold text-slate-900">{w.txId}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{w.date}</div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="font-semibold text-slate-900">{w.recipientName}</div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          w.recipientRole === 'Vendor'
+                            ? 'bg-violet-50 text-violet-700 border-violet-200/70'
+                            : 'bg-sky-50 text-sky-700 border-sky-200/70'
+                        }`}>
+                          {w.recipientRole}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-900">
+                        ₹{w.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="text-slate-700 text-[11px] font-medium max-w-[220px] truncate" title={w.bankInfo}>
+                          {w.bankInfo || '—'}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                          <CheckCircle2 className="w-3 h-3" /> Paid
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredWithdrawals.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
+                        No vendor or rider withdrawals recorded yet.
                       </td>
                     </tr>
                   )}
