@@ -13,6 +13,7 @@ export interface VendorOrderItem {
 export interface VendorOrder {
   id: string;
   orderId: string;
+  orderNumber?: string;
   status: 'New' | 'Preparing' | 'Completed' | 'Cancelled';
   customer: string;
   customerPhone?: string;

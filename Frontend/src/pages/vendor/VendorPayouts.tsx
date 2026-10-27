@@ -58,20 +58,12 @@ export const VendorPayoutsPage: React.FC = () => {
             ? ordersRes.value.data.orders || []
             : [];
 
-          let pendingTotal = 0;
-          const orderTxns: PayoutTransaction[] = orders.map((o: any) => {
-            const isCompleted = o.status === 'Completed';
-            if (!isCompleted && o.status !== 'Cancelled') {
-              pendingTotal += Number(o.net || o.total * 0.95) || 0;
-            }
-            return {
-              id: o.orderId || o.id,
-              date: o.time || o.createdAt ? new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
-              amount: `+₹${Math.round((Number(o.net || o.total * 0.95) || 0) * 100) / 100}`,
-              status: isCompleted ? 'completed' : 'pending',
-              type: `Food Sales (${o.items?.length || 1} items)`,
-            };
-          });
+          // Helper to extract a normalized 5-char alphanumeric key for deduplication
+          const getNormalizedKey = (val: string): string => {
+            if (!val) return '';
+            const s = String(val).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return s.length >= 5 ? s.slice(-5) : s;
+          };
 
           // Official ledger transactions (withdrawals and settlements from DB)
           const ledgerTxns: PayoutTransaction[] = payoutsRes.status === 'fulfilled' && payoutsRes.value?.success && payoutsRes.value.data
@@ -84,14 +76,47 @@ export const VendorPayoutsPage: React.FC = () => {
               }))
             : [];
 
-          // Merge without duplicate IDs (ledger transactions first for withdrawals)
-          const seenIds = new Set<string>();
+          const seenKeys = new Set<string>();
           const merged: PayoutTransaction[] = [];
-          for (const tx of [...ledgerTxns, ...orderTxns]) {
-            if (!seenIds.has(tx.id)) {
-              seenIds.add(tx.id);
+
+          // 1. Add official ledger transactions first (withdrawals & completed order settlements)
+          for (const tx of ledgerTxns) {
+            const key = getNormalizedKey(tx.id);
+            if (key && !seenKeys.has(key)) {
+              seenKeys.add(key);
               merged.push(tx);
             }
+          }
+
+          // 2. Add pending/recent food orders only if not already recorded in official ledger
+          let pendingTotal = 0;
+          for (const o of orders) {
+            const isCompleted = o.status === 'Completed';
+            const orderNet = Number(o.net || o.total * 0.95) || 0;
+            if (!isCompleted && o.status !== 'Cancelled') {
+              pendingTotal += orderNet;
+            }
+
+            const rawId = (o as any).orderNumber || o.orderId || o.id || '';
+            const key = getNormalizedKey(rawId);
+
+            // Skip if this order is already recorded in the ledger
+            if (key && seenKeys.has(key)) {
+              continue;
+            }
+
+            if (key) {
+              seenKeys.add(key);
+            }
+
+            const displayId = (o as any).orderNumber || (key ? `MO-${key}` : rawId);
+            merged.push({
+              id: displayId,
+              date: o.time || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'),
+              amount: `+₹${Math.round(orderNet * 100) / 100}`,
+              status: isCompleted ? 'completed' : 'pending',
+              type: `Food Sales (${o.items?.length || 1} items)`,
+            });
           }
 
           setTransactions(merged);
@@ -245,7 +270,10 @@ export const VendorPayoutsPage: React.FC = () => {
       {/* Transactions List */}
       <div className="bg-white rounded-3xl border border-[#E7E2D9] shadow-sm overflow-hidden">
         <div className="p-6 border-b border-[#E7E2D9] flex justify-between items-center bg-stone-50/50">
-          <h2 className="text-base font-bold text-stone-900">Recent Withdrawals</h2>
+          <div>
+            <h2 className="text-base font-bold text-stone-900">Recent Settlements & Withdrawals</h2>
+            <p className="text-xs text-stone-500 mt-0.5">Earnings credited from food sales & bank payout transfers</p>
+          </div>
           <span className="text-xs text-stone-400 font-medium">{transactions.length} recorded</span>
         </div>
         
@@ -254,32 +282,78 @@ export const VendorPayoutsPage: React.FC = () => {
             <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mx-auto mb-3">
               <Clock className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-stone-700">No Withdrawal History</h3>
+            <h3 className="text-sm font-bold text-stone-700">No Settlements or Withdrawals Yet</h3>
             <p className="text-xs text-stone-400 max-w-xs mx-auto mt-1 leading-relaxed">
-              When withdrawal payouts are initiated to your linked bank account, their status and settlement logs will appear here.
+              When customer orders are completed, food sales earnings will be credited here automatically. Withdrawal logs to your bank account will also appear here.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-[#E7E2D9]">
-            {transactions.map((txn, i) => (
-              <div key={i} className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-stone-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${txn.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                    {txn.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+            {transactions.map((txn, i) => {
+              const isWithdrawal = txn.amount.startsWith('-') || txn.type.toLowerCase().includes('withdraw') || txn.type.toLowerCase().includes('bank');
+              const cleanCode = txn.id
+                ? (txn.id.startsWith('MO-')
+                    ? txn.id.replace('MO-', '')
+                    : txn.id.startsWith('WD-')
+                      ? txn.id
+                      : txn.id.length > 8
+                        ? txn.id.slice(-5).toUpperCase()
+                        : txn.id)
+                : '';
+
+              const displayTitle = isWithdrawal ? 'Bank Account Withdrawal' : 'Food Order Earnings';
+              const displaySubtitle = isWithdrawal
+                ? `${txn.date} · Transferred to Registered Bank Account`
+                : `Order #${cleanCode} · ${txn.date} · Credited to Wallet`;
+
+              return (
+                <div key={i} className="p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-stone-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      isWithdrawal
+                        ? 'bg-stone-100 text-stone-700'
+                        : txn.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'bg-amber-50 text-amber-600'
+                    }`}>
+                      {isWithdrawal ? (
+                        <Building2 className="w-5 h-5" />
+                      ) : txn.status === 'completed' ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : (
+                        <Clock className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-stone-900">{displayTitle}</h4>
+                        {!isWithdrawal && cleanCode && (
+                          <span className="text-[11px] font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md">
+                            Order #{cleanCode}
+                          </span>
+                        )}
+                        {isWithdrawal && cleanCode && (
+                          <span className="text-[11px] font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md">
+                            Ref: {cleanCode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-500 mt-0.5">{displaySubtitle}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-stone-900">{txn.id}</h4>
-                    <p className="text-xs text-stone-500 mt-0.5">{txn.date} · {txn.type}</p>
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
+                    <span className={`text-base font-bold ${isWithdrawal ? 'text-stone-900' : 'text-emerald-600'}`}>
+                      {txn.amount}
+                    </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      txn.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {txn.status === 'completed' ? 'Completed' : 'Pending'}
+                    </span>
                   </div>
                 </div>
-                <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
-                  <span className="text-base font-bold text-stone-900">{txn.amount}</span>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${txn.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {txn.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -89,36 +89,49 @@ export const RiderHistoryPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {pastDeliveries.map(trip => (
-            <div key={trip.id} className="bg-white border border-[#EFEBE4] rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              
-              <div className="flex gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-base font-bold text-stone-900">{trip.id}</h3>
-                    <span className="text-[10px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-md">{trip.time}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-stone-500 font-medium">
-                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {trip.distance}</span>
-                    <span>·</span>
-                    <span>{trip.stalls} stall{trip.stalls > 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              </div>
+          {pastDeliveries.map(trip => {
+            const cleanCode = trip.id
+              ? (trip.id.startsWith('MO-')
+                  ? trip.id.replace('MO-', '')
+                  : (trip.id.length > 8 ? trip.id.slice(-5).toUpperCase() : trip.id))
+              : '';
 
-              <div className="flex items-center sm:flex-col sm:items-end justify-between border-t sm:border-0 border-stone-100 pt-3 sm:pt-0 gap-4 sm:gap-2">
-                <span className="text-xs font-bold text-stone-400 sm:hidden">Payout</span>
-                <span className="text-lg font-black text-[#D94A38]">{trip.payout}</span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                  Delivered
-                </span>
+            return (
+              <div key={trip.id} className="bg-white border border-[#EFEBE4] rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                
+                <div className="flex gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-base font-bold text-stone-900">Delivered Order</h3>
+                      {cleanCode && (
+                        <span className="text-xs font-bold text-stone-700 bg-stone-100 px-2 py-0.5 rounded-md">
+                          Order #{cleanCode}
+                        </span>
+                      )}
+                      <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-md">{trip.time}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-stone-500 font-medium">
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {trip.distance}</span>
+                      <span>·</span>
+                      <span>{trip.stalls} stall{trip.stalls > 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center sm:flex-col sm:items-end justify-between border-t sm:border-0 border-stone-100 pt-3 sm:pt-0 gap-4 sm:gap-2">
+                  <span className="text-xs font-bold text-stone-400 sm:hidden">Payout</span>
+                  <span className="text-lg font-black text-[#D94A38]">{trip.payout}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                    Delivered
+                  </span>
+                </div>
+                
               </div>
-              
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

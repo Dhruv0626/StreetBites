@@ -425,7 +425,11 @@ export const VendorOrders: React.FC = () => {
                             order.status === 'Completed' ? 'text-stone-600' : 'text-stone-900'
                           }`}
                         >
-                          {order.id}
+                          {order.orderNumber
+                            ? `Order #${order.orderNumber.replace('MO-', '')}`
+                            : (order.id?.startsWith('ORD-')
+                              ? `Order #${order.id.replace('ORD-', '')}`
+                              : `Order #${order.id}`)}
                         </div>
                         <div
                           className={`inline-flex items-center gap-1 text-[10px] font-extrabold uppercase mt-1 px-2 py-0.5 rounded-full ${

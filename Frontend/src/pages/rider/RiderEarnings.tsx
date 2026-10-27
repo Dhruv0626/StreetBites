@@ -242,27 +242,42 @@ export const RiderEarningsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentTrips.map(trip => (
-                  <div 
-                    key={trip.id} 
-                    className="flex items-center justify-between p-4 bg-white border border-[#EFEBE4] rounded-2xl hover:border-[#D94A38]/30 transition-colors cursor-pointer group"
-                    onClick={() => navigate('/rider/Dashboard/history')}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center shrink-0 group-hover:bg-[#FCE8E6] transition-colors">
-                        <MapPin className="w-4 h-4 text-stone-500 group-hover:text-[#D94A38]" />
+                {recentTrips.map(trip => {
+                  const cleanCode = trip.id
+                    ? (trip.id.startsWith('MO-')
+                        ? trip.id.replace('MO-', '')
+                        : (trip.id.length > 8 ? trip.id.slice(-5).toUpperCase() : trip.id))
+                    : '';
+
+                  return (
+                    <div 
+                      key={trip.id} 
+                      className="flex items-center justify-between p-4 bg-white border border-[#EFEBE4] rounded-2xl hover:border-[#D94A38]/30 transition-colors cursor-pointer group"
+                      onClick={() => navigate('/rider/Dashboard/history')}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center shrink-0 group-hover:bg-[#FCE8E6] transition-colors">
+                          <MapPin className="w-4 h-4 text-stone-500 group-hover:text-[#D94A38]" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-stone-900">Delivery Trip Earnings</h4>
+                            {cleanCode && (
+                              <span className="text-[11px] font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md">
+                                Order #{cleanCode}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-stone-500 mt-0.5 block">{trip.time} · {trip.distance} · {trip.stalls} stall{trip.stalls > 1 ? 's' : ''}</span>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-stone-900">{trip.id}</h4>
-                        <span className="text-xs text-stone-500">{trip.time} · {trip.distance} · {trip.stalls} stall{trip.stalls > 1 ? 's' : ''}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-base font-bold text-[#D94A38]">{trip.payout}</span>
+                        <ChevronRight className="w-4 h-4 text-stone-300" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-base font-bold text-[#D94A38]">{trip.payout}</span>
-                      <ChevronRight className="w-4 h-4 text-stone-300" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

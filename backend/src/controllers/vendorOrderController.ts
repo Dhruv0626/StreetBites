@@ -237,6 +237,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
       groupedOrders.push({
         id: `ORD-${parentOrder._id.toString().slice(-6).toUpperCase()}`,
         orderId: parentOrder._id.toString(),
+        orderNumber: `MO-${parentOrder._id.toString().slice(-5).toUpperCase()}`,
         status: vendorStatus,
         customer: parentOrder.customer_id?.name || "Customer",
         customerPhone: parentOrder.customer_id?.phone_number || "",
@@ -1069,7 +1070,7 @@ export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): P
           : "Recently",
         amount: isWithdrawal ? `-₹${amountVal}` : `+₹${amountVal}`,
         status: isSettled ? "completed" : "pending",
-        type: isWithdrawal ? "Bank Transfer Settlement" : `Order Settlement (${t.order_number || "Order"})`,
+        type: isWithdrawal ? "Bank Transfer Settlement" : "Food Order Settlement",
       };
     });
 

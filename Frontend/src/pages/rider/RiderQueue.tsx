@@ -349,7 +349,13 @@ export const RiderQueuePage: React.FC = () => {
                       <span className="text-[11px] font-bold text-[#D94A38] font-mono">{formatTime(order.timeLeft)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-stone-900 block">{order.id}</span>
+                      <span className="text-xs font-bold text-stone-900 block">
+                        {order.id?.startsWith('MO-')
+                          ? `Order #${order.id.replace('MO-', '')}`
+                          : order.id?.startsWith('ORD-')
+                            ? `Order #${order.id.replace('ORD-', '')}`
+                            : `Order #${order.id}`}
+                      </span>
                       {order.status === 'PREPARING' ? (
                         <span className="text-[9px] font-extrabold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
                           Cooking (~{order.prepTimeMinutes || 15}m)
