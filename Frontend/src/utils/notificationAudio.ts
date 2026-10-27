@@ -1,9 +1,10 @@
 /**
- * StreetBites Notification Audio & Voice Announcement Engine
+ * StreetBites Notification Audio Engine
  * 
- * Provides:
- * 1. Web Audio API synthesized notification chimes (zero external assets, 100% reliable).
- * 2. Role-aware Text-To-Speech (TTS) voice announcements for Vendor, Rider, and Customer.
+ * Synthesizes a crisp, modern mobile message drop tone (reminiscent of WhatsApp / Snapchat / iOS)
+ * using the browser's native Web Audio API (zero external assets, instant playback, zero network lag).
+ * 
+ * Per user specification: NO spoken voice (TTS) is used — purely a clean, satisfying mobile message drop tone.
  */
 
 let audioCtx: AudioContext | null = null;
@@ -48,7 +49,7 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Play a rich, multi-tone pleasant chime
+ * Play a modern mobile message drop tone (WhatsApp / Snapchat style "pop & crystal ping")
  */
 export function playNotificationChime(toneType: 'order' | 'delivery' | 'payout' | 'general' = 'order'): void {
   try {
@@ -56,117 +57,123 @@ export function playNotificationChime(toneType: 'order' | 'delivery' | 'payout' 
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    
-    // Frequencies tailored to tone types
-    let notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 (Crisp Order Chime)
-    if (toneType === 'delivery') {
-      notes = [587.33, 739.99, 880.0, 1174.66]; // D5, F#5, A5, D6 (Active Delivery)
-    } else if (toneType === 'payout') {
-      notes = [440.0, 554.37, 659.25, 880.0]; // A4, C#5, E5, A5 (Cash/Payout)
+
+    // Master gain for clear, pleasant volume without clipping
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.42, now);
+    masterGain.connect(ctx.destination);
+
+    // Warm biquad filter for smooth acoustic rounding
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(4500, now);
+    filter.Q.setValueAtTime(1.2, now);
+    filter.connect(masterGain);
+
+    if (toneType === 'payout') {
+      // Payout / Cash register sparkle tone (3-note bright chime)
+      const payoutNotes = [880.0, 1108.73, 1318.51]; // A5, C#6, E6
+      payoutNotes.forEach((freq, idx) => {
+        const start = now + idx * 0.065;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(0.35, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+
+        osc.connect(gain);
+        gain.connect(filter);
+
+        osc.start(start);
+        osc.stop(start + 0.36);
+      });
+      return;
     }
 
-    notes.forEach((freq, idx) => {
-      const startTime = now + idx * 0.08;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+    // Default / Order / Delivery Message Drop Tone:
+    // Signature mobile messaging "bubble-pop & glassy ping" (WhatsApp/Snapchat style)
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, startTime);
+    // --- Component 1: The "Bubble Pop" transient (t = 0 to 0.055s) ---
+    const popOsc = ctx.createOscillator();
+    const popGain = ctx.createGain();
+    popOsc.type = 'sine';
 
-      // Add warmth with soft envelope
-      gain.gain.setValueAtTime(0.0001, startTime);
-      gain.gain.linearRampToValueAtTime(0.22, startTime + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.35);
+    // Upward pitch droplet sweep (820 Hz -> 1180 Hz)
+    popOsc.frequency.setValueAtTime(820, now);
+    popOsc.frequency.exponentialRampToValueAtTime(1180, now + 0.038);
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+    popGain.gain.setValueAtTime(0.0001, now);
+    popGain.gain.linearRampToValueAtTime(0.36, now + 0.008);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.052);
 
-      osc.start(startTime);
-      osc.stop(startTime + 0.36);
-    });
+    popOsc.connect(popGain);
+    popGain.connect(filter);
+    popOsc.start(now);
+    popOsc.stop(now + 0.055);
+
+    // --- Component 2: The Crystal "Ping" / Bell body (t = 0.055s to 0.32s) ---
+    const pingStart = now + 0.055;
+    // Crisp bell tone: 1396.9 Hz (F6) for order/message, 1480 Hz for delivery
+    const pingFreq = toneType === 'delivery' ? 1479.98 : 1396.91;
+
+    // Primary resonant tone
+    const pingOsc = ctx.createOscillator();
+    const pingGain = ctx.createGain();
+    pingOsc.type = 'sine';
+    pingOsc.frequency.setValueAtTime(pingFreq, pingStart);
+    pingOsc.frequency.exponentialRampToValueAtTime(pingFreq * 0.99, pingStart + 0.22);
+
+    pingGain.gain.setValueAtTime(0.0001, pingStart);
+    pingGain.gain.linearRampToValueAtTime(0.40, pingStart + 0.007);
+    pingGain.gain.exponentialRampToValueAtTime(0.0001, pingStart + 0.28);
+
+    pingOsc.connect(pingGain);
+    pingGain.connect(filter);
+    pingOsc.start(pingStart);
+    pingOsc.stop(pingStart + 0.30);
+
+    // Subtle glassy harmonic overtone (gives modern mobile crispness)
+    const overtoneOsc = ctx.createOscillator();
+    const overtoneGain = ctx.createGain();
+    overtoneOsc.type = 'sine';
+    overtoneOsc.frequency.setValueAtTime(pingFreq * 2.02, pingStart);
+
+    overtoneGain.gain.setValueAtTime(0.0001, pingStart);
+    overtoneGain.gain.linearRampToValueAtTime(0.14, pingStart + 0.005);
+    overtoneGain.gain.exponentialRampToValueAtTime(0.0001, pingStart + 0.16);
+
+    overtoneOsc.connect(overtoneGain);
+    overtoneGain.connect(filter);
+    overtoneOsc.start(pingStart);
+    overtoneOsc.stop(pingStart + 0.18);
+
   } catch (err) {
-    console.warn('Failed to play notification chime:', err);
+    console.warn('Failed to play mobile notification tone:', err);
   }
 }
 
 /**
- * Clean text for SpeechSynthesis (remove markdown, extra codes, hashes)
+ * Disabled voice announcement: Notifications now purely play the mobile message drop tone.
+ * Kept for signature compatibility without speaking.
  */
-function sanitizeSpeechText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/[#*_`~[\]]/g, '')
-    .replace(/₹\s*(\d+)/g, '$1 rupees')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+export function speakNotificationVoice(_title: string, _message: string, _role?: string): void {
+  // Purely silent - no voice speaks on notification drop
 }
 
 /**
- * Announce notification via voice (SpeechSynthesis)
- */
-export function speakNotificationVoice(title: string, message: string, role?: string): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-  try {
-    // Cancel any active speech to avoid overlaps
-    window.speechSynthesis.cancel();
-
-    const cleanTitle = sanitizeSpeechText(title);
-    const cleanMessage = sanitizeSpeechText(message);
-
-    let prefix = 'Notification';
-    const roleUpper = (role || '').toUpperCase();
-
-    if (roleUpper === 'VENDOR') {
-      prefix = 'Vendor alert';
-    } else if (roleUpper === 'RIDER') {
-      prefix = 'Rider alert';
-    } else if (roleUpper === 'CUSTOMER' || roleUpper === 'USER') {
-      prefix = 'StreetBites update';
-    }
-
-    // Compose concise, clear sentence
-    const speechSentence = `${prefix}: ${cleanTitle}. ${cleanMessage}`;
-    const utterance = new SpeechSynthesisUtterance(speechSentence);
-
-    utterance.rate = 1.0;
-    utterance.pitch = 1.05;
-    utterance.volume = 1.0;
-
-    // Pick a high-quality natural voice if available
-    const voices = window.speechSynthesis.getVoices();
-    if (voices && voices.length > 0) {
-      const preferredVoice =
-        voices.find(v => v.lang === 'en-IN' || v.name.includes('India')) ||
-        voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google'))) ||
-        voices.find(v => v.lang.startsWith('en'));
-
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-      }
-    }
-
-    window.speechSynthesis.speak(utterance);
-  } catch (err) {
-    console.warn('Text to speech failed:', err);
-  }
-}
-
-/**
- * Trigger combined Chime + Voice announcement
+ * Trigger mobile message notification tone
+ * (No spoken voice — plays WhatsApp/Snapchat style message drop tone)
  */
 export function triggerNotificationSoundAndVoice(
-  title: string,
-  message: string,
-  role?: string,
+  _title: string,
+  _message: string,
+  _role?: string,
   toneType: 'order' | 'delivery' | 'payout' | 'general' = 'order'
 ): void {
-  // 1. Play auditory chime immediately
+  // Play the signature mobile message drop tone immediately
   playNotificationChime(toneType);
-
-  // 2. Announce voice after brief delay so chime isn't drowned out
-  setTimeout(() => {
-    speakNotificationVoice(title, message, role);
-  }, 220);
 }
