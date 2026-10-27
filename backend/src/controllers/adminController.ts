@@ -316,7 +316,21 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedTransactions = transactions.map((t: any) => {
+    // Separate withdrawal transactions from order-based transactions
+    const withdrawalTxns: any[] = [];
+    const orderTxns: any[] = [];
+
+    for (const t of transactions) {
+      const isWithdrawal = (t as any).order_number?.startsWith("WD-") ||
+        (t as any).note?.includes("Payout Settlement");
+      if (isWithdrawal) {
+        withdrawalTxns.push(t);
+      } else {
+        orderTxns.push(t);
+      }
+    }
+
+    const formattedTransactions = orderTxns.map((t: any) => {
       const vendorTotal = Array.isArray(t.vendor_payouts)
         ? t.vendor_payouts.reduce((sum: number, vp: any) => sum + (Number(vp.amount) || 0), 0)
         : 0;
@@ -366,6 +380,52 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
 
     const payouts = formattedTransactions;
 
+    // Format withdrawal transactions for the admin "Withdrawals" tab
+    const withdrawals = withdrawalTxns.map((t: any) => {
+      const isVendorWithdrawal = (t.note || "").includes("Vendor Payout");
+      const isRiderWithdrawal = (t.note || "").includes("Rider Payout");
+
+      // Determine who withdrew
+      let recipientName = "Unknown";
+      let recipientRole: "Vendor" | "Rider" = "Vendor";
+      if (isVendorWithdrawal && Array.isArray(t.vendor_payouts) && t.vendor_payouts.length > 0) {
+        const vp = t.vendor_payouts[0];
+        recipientName = vp.vendor_id?.name || vp.stall_name || "Vendor";
+        recipientRole = "Vendor";
+      } else if (isRiderWithdrawal && t.rider_payout?.rider_id) {
+        recipientName = t.rider_payout.rider_id.name || "Rider";
+        recipientRole = "Rider";
+      }
+
+      // Extract bank info from the note (format: "... to BankName (A/C: AccNo)")
+      let bankInfo = "";
+      const noteStr = t.note || "";
+      const bankMatch = noteStr.match(/to\s+(.+?)$/);
+      if (bankMatch) bankInfo = bankMatch[1];
+
+      return {
+        id: t._id.toString(),
+        txId: t.order_number || `WD-${t._id.toString().slice(-6).toUpperCase()}`,
+        recipientName,
+        recipientRole,
+        amount: Number(t.total_order_amount) || 0,
+        bankInfo,
+        status: (t.settlement_status || "COMPLETED").toLowerCase(),
+        note: noteStr,
+        date: t.createdAt
+          ? new Date(t.createdAt).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          : "Recently",
+      };
+    });
+
+    const totalWithdrawn = withdrawals.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
+
     // 3. Query all customer refunds
     const refundedOrders = await Order.find({
       $or: [
@@ -413,6 +473,8 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
         all: formattedTransactions,
         payouts,
         refunds,
+        withdrawals,
+        totalWithdrawn,
         floatingCodCash,
       },
     });
