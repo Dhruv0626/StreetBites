@@ -6,12 +6,14 @@ interface ClusterCardProps {
   cluster: ClusterItem;
   isMobileFeatured?: boolean;
   onClick?: () => void;
+  showLiveTag?: boolean;
 }
 
 export const ClusterCard: React.FC<ClusterCardProps> = ({
   cluster,
   isMobileFeatured = false,
   onClick,
+  showLiveTag = false,
 }) => {
   const clusterName = cluster.name || '';
   const overlayText = (cluster.imageText || cluster.name || '').toUpperCase();
@@ -63,12 +65,11 @@ export const ClusterCard: React.FC<ClusterCardProps> = ({
             >
               {clusterName}
             </h3>
-
             {isMobileFeatured && cluster.accentTag ? (
               <span className="bg-[#FCE8E6] text-[#D94A38] text-xs font-semibold px-3 py-0.5 rounded-full shrink-0">
                 {cluster.accentTag}
               </span>
-            ) : cluster.isLive ? (
+            ) : showLiveTag && cluster.isLive ? (
               <span className="bg-[#1C1917] text-white text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 Live

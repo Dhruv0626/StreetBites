@@ -252,6 +252,9 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       isReviewed: Boolean(o.isReviewed),
       reviews: o.reviews || [],
       refundedAmount: o.refundedAmount || o.refunded_amount || 0,
+      deliveredAt: o.delivered_at || o.deliveredAt || o.updatedAt || o.createdAt,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
     };
   });
 
@@ -374,6 +377,13 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       <div className="space-y-4 max-w-4xl animate-fadeIn">
         {ordersToDisplay.map((order) => {
           const isExpanded = expandedOrderId === order.id;
+          const isCompleted = order.status === 'Delivered' || order.rawStatus === 'DELIVERED' || order.status === 'Cancelled' || order.rawStatus === 'CANCELLED';
+
+          // 12-hour resolution window after order delivery / completion
+          const completionTimestamp = new Date(order.deliveredAt || order.updatedAt || order.createdAt || Date.now()).getTime();
+          const hoursSinceCompletion = (Date.now() - completionTimestamp) / (1000 * 60 * 60);
+          const isReportAllowed = !isCompleted || hoursSinceCompletion <= 12;
+          const hoursRemaining = Math.max(0, Math.ceil(12 - hoursSinceCompletion));
 
           return (
             <div
@@ -504,7 +514,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                       </div>
 
                       {/* Interactive Actions per Order */}
-                      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#F5F0E8]">
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#F5F0E8] items-center">
                         {order.status === 'Delivered' && (
                           <>
                             {order.isReviewed ? (
@@ -514,20 +524,11 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                               </div>
                             ) : (
                               <button
-                                onClick={() => {
-                                  setReviewOrder(order);
-                                  const initScores: Record<string, number> = {};
-                                  (order.stallsList && order.stallsList.length > 0
-                                    ? order.stallsList
-                                    : [{ id: 'stall', name: order.stalls[0] || 'Food Stall' }]
-                                  ).forEach((s: any) => {
-                                    initScores[String(s.id || s._id || s.name)] = 5;
-                                  });
-                                  setRatingScores(initScores);
-                                }}
-                                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                                disabled={isCompleted}
+                                title={isCompleted ? "Order is completed" : "Rate & Review Food"}
+                                className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-100 border border-stone-200 text-stone-400 rounded-xl text-xs font-bold shadow-3xs cursor-not-allowed select-none"
                               >
-                                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                <Star className="w-3.5 h-3.5 text-stone-300" />
                                 <span>Rate & Review Food</span>
                               </button>
                             )}
@@ -538,24 +539,44 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                           order.rawStatus === 'PREPARING' ||
                           order.rawStatus === 'READY_FOR_PICKUP') && (
                           <button
-                            onClick={() => setCancellingOrder(order)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                            disabled={isCompleted}
+                            onClick={() => !isCompleted && setCancellingOrder(order)}
+                            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-3xs transition-all ${
+                              isCompleted
+                                ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed select-none'
+                                : 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 cursor-pointer'
+                            }`}
                           >
                             <XCircle className="w-3.5 h-3.5" />
                             <span>Cancel Order</span>
                           </button>
                         )}
 
-                        <button
-                          onClick={() => {
-                            setComplaintOrder(order);
-                            setComplaintComment('');
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#FAF7F2] border border-[#EAE4DA] text-stone-700 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
-                        >
-                          <HelpCircle className="w-3.5 h-3.5 text-stone-400" />
-                          <span>Report Issue</span>
-                        </button>
+                        {/* Report Issue Button: Stays enabled for 12 hours after delivery, then disabled */}
+                        {isCompleted && !isReportAllowed ? (
+                          <button
+                            disabled={true}
+                            title="Complaint window expired (12 hours after delivery has passed)"
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-stone-100 border border-stone-200 text-stone-400 rounded-xl text-xs font-bold shadow-3xs cursor-not-allowed select-none"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5 text-stone-300" />
+                            <span>Report Issue (Closed)</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setComplaintOrder(order);
+                              setComplaintComment('');
+                            }}
+                            title={isCompleted ? `Complaint enabled (${hoursRemaining}h remaining in 12h resolution window)` : "Report an issue"}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#FAF7F2] border border-[#EAE4DA] text-stone-700 hover:border-stone-400 rounded-xl text-xs font-bold shadow-3xs transition-all cursor-pointer"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5 text-stone-500" />
+                            <span>
+                              {isCompleted ? `Report Issue (${hoursRemaining}h left)` : 'Report Issue'}
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

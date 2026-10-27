@@ -4,6 +4,7 @@ import { cartService } from '../services/cartService';
 import { clusterService } from '../services/clusterService';
 import { KhauGalliConflictModal } from '../components/KhauGalliConflictModal';
 import { useAuth } from './AuthContext';
+import { appConfirm } from './AlertContext';
 
 export const getCustomerSessionId = (): string => {
   if (typeof window === 'undefined') return 'guest_session_default';
@@ -58,19 +59,31 @@ try {
 } catch {}
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  // Sync logged-in user ID to customer session ID
+  // Sync logged-in user ID to customer session ID and clear cart when unauthenticated
   useEffect(() => {
     if (user?._id || user?.id) {
       const uid = String(user._id || user.id);
       localStorage.setItem('streetbites_customer_id', uid);
+    } else {
+      // Unauthenticated / logged-out user: clear cart so guest cannot retain cart items
+      setCartItems([]);
+      setActiveKhauGalli(null);
+      try {
+        localStorage.removeItem(CART_STORAGE_KEY);
+        localStorage.removeItem(KHAU_GALLI_STORAGE_KEY);
+      } catch {}
     }
   }, [user]);
 
-  // 1. Initialize Cart as 0 items by default until user adds items
+  // 1. Initialize Cart: only load saved cart if user is authenticated
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
+      const hasAuth = typeof window !== 'undefined' && Boolean(localStorage.getItem('streetbites_auth_user'));
+      if (!hasAuth) {
+        return [];
+      }
       const saved = localStorage.getItem(CART_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -187,6 +200,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     item: Omit<CartItem, 'quantity'>,
     options?: { replace?: boolean }
   ): Promise<AddToCartResult> => {
+    // 0. STRICT AUTHENTICATION REQUIREMENT: Authentication is required to add items to cart
+    if (!user && !isAuthenticated) {
+      const shouldLogin = await appConfirm(
+        'Please sign in to your StreetBites account to add items to your cart and place orders.',
+        'Authentication Required',
+        'warning'
+      );
+      if (shouldLogin && typeof window !== 'undefined') {
+        window.location.href = '/signin';
+      }
+      return { success: false, conflict: false };
+    }
+
     const incomingKhauGalliId = item.khauGalliId;
     const incomingKhauGalliName = item.khauGalliName || 'Khau Galli';
 

@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router';
-import { PieChart, Users, ShieldCheck, Map, IndianRupee, Settings, MapPin, MessageSquare, HelpCircle, Activity } from 'lucide-react';
+import {
+  PieChart,
+  Users,
+  ShieldCheck,
+  Map,
+  IndianRupee,
+  Settings,
+  MapPin,
+  MessageSquare,
+  HelpCircle,
+  Activity,
+  Sparkles,
+  ChevronRight,
+} from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 // @ts-ignore
 import { Joyride as OriginalJoyride, STATUS } from 'react-joyride';
 const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { adminService } from '../../services/adminService';
+import { useAuth } from '../../context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
+  const { user } = useAuth();
   const [runTour, setRunTour] = useState(false);
   const [tourKey, setTourKey] = useState(0);
   const [counts, setCounts] = useState<{ approvals: number; orders: number; complaints: number }>({
@@ -16,9 +31,28 @@ export const AdminLayout: React.FC = () => {
     orders: 0,
     complaints: 0,
   });
+  const [currentTime, setCurrentTime] = useState<string>('');
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // Live IST Clock
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setCurrentTime(
+        now.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        })
+      );
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchCounts = async () => {
     try {
@@ -41,32 +75,52 @@ export const AdminLayout: React.FC = () => {
     return () => clearInterval(interval);
   }, [location.pathname]);
 
-  const navItems = [
-    { label: 'Overview', icon: PieChart, path: '/admin/Dashboard/overview' },
-    { label: 'Khau Gallis', icon: MapPin, path: '/admin/Dashboard/khau-gallis' },
-    { label: 'Users', icon: Users, path: '/admin/Dashboard/users' },
+  const navSections = [
     {
-      label: 'Approvals',
-      icon: ShieldCheck,
-      path: '/admin/Dashboard/verifications',
-      badge: counts.approvals > 0 ? String(counts.approvals) : undefined,
+      title: 'OPERATIONS & TELEMETRY',
+      items: [
+        { label: 'Overview', icon: PieChart, path: '/admin/Dashboard/overview' },
+        {
+          label: 'Live Orders',
+          icon: Map,
+          path: '/admin/Dashboard/orders',
+          badge: counts.orders > 0 ? String(counts.orders) : undefined,
+          badgeColor: 'bg-emerald-500 text-white',
+        },
+        { label: 'Khau Gallis', icon: MapPin, path: '/admin/Dashboard/khau-gallis' },
+      ],
     },
     {
-      label: 'Orders',
-      icon: Map,
-      path: '/admin/Dashboard/orders',
-      badge: counts.orders > 0 ? String(counts.orders) : undefined,
+      title: 'MANAGEMENT & GOVERNANCE',
+      items: [
+        { label: 'User Directory', icon: Users, path: '/admin/Dashboard/users' },
+        {
+          label: 'Approvals & KYC',
+          icon: ShieldCheck,
+          path: '/admin/Dashboard/verifications',
+          badge: counts.approvals > 0 ? String(counts.approvals) : undefined,
+          badgeColor: 'bg-[#D94A38] text-white',
+        },
+        { label: 'Transactions & Payouts', icon: IndianRupee, path: '/admin/Dashboard/transactions' },
+        {
+          label: 'Customer Complaints',
+          icon: MessageSquare,
+          path: '/admin/Dashboard/complaints',
+          badge: counts.complaints > 0 ? String(counts.complaints) : undefined,
+          badgeColor: 'bg-amber-500 text-white',
+        },
+      ],
     },
-    { label: 'Transactions', icon: IndianRupee, path: '/admin/Dashboard/transactions' },
     {
-      label: 'Complaints',
-      icon: MessageSquare,
-      path: '/admin/Dashboard/complaints',
-      badge: counts.complaints > 0 ? String(counts.complaints) : undefined,
+      title: 'PLATFORM ENGINE',
+      items: [
+        { label: 'Offers & Campaigns', icon: Activity, path: '/admin/Dashboard/offers' },
+        { label: 'System Settings', icon: Settings, path: '/admin/Dashboard/settings' },
+      ],
     },
-    { label: 'Offers', icon: Activity, path: '/admin/Dashboard/offers' },
-    { label: 'Settings', icon: Settings, path: '/admin/Dashboard/settings' },
   ];
+
+  const allNavItems = navSections.flatMap((s) => s.items);
 
   const getTourSteps = () => {
     const path = location.pathname.toLowerCase();
@@ -82,7 +136,7 @@ export const AdminLayout: React.FC = () => {
           target: '.tour-user-actions',
           content: 'Use these actions to suspend accounts or reset passwords.',
           disableBeacon: true,
-        }
+        },
       ];
     }
 
@@ -90,9 +144,9 @@ export const AdminLayout: React.FC = () => {
       return [
         {
           target: '.tour-approval-queue',
-          content: 'Review pending vendor and rider applications here.',
+          content: 'Review pending vendor KYC and menu item additions here.',
           disableBeacon: true,
-        }
+        },
       ];
     }
 
@@ -102,11 +156,10 @@ export const AdminLayout: React.FC = () => {
           target: '.tour-live-map',
           content: 'Track all active deliveries in real-time across the platform.',
           disableBeacon: true,
-        }
+        },
       ];
     }
 
-    // Default Steps
     return [
       {
         target: '.tour-system-status',
@@ -122,7 +175,7 @@ export const AdminLayout: React.FC = () => {
         target: isMobile ? 'nav .tour-nav-users' : 'aside .tour-nav-users',
         content: 'Manage all users, vendors, and riders across StreetBites.',
         disableBeacon: true,
-      }
+      },
     ];
   };
 
@@ -136,8 +189,13 @@ export const AdminLayout: React.FC = () => {
     }
   };
 
+  const getCurrentPageTitle = () => {
+    const match = allNavItems.find((item) => location.pathname.includes(item.path));
+    return match ? match.label : 'Command Center';
+  };
+
   return (
-    <div className="w-full min-h-screen bg-[#F4F1EA] text-[#1C1917] flex flex-col md:flex-row font-sans selection:bg-[#E54B3C]/20 relative">
+    <div className="w-full min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col md:flex-row font-sans selection:bg-[#D94A38]/15 relative">
       <PageTransitionLoader />
       <Joyride
         key={tourKey}
@@ -149,134 +207,213 @@ export const AdminLayout: React.FC = () => {
         callback={handleJoyrideCallback}
         options={{
           primaryColor: '#D94A38',
-          textColor: '#1C1917',
+          textColor: '#0F172A',
           zIndex: 10000,
         }}
         styles={{
           tooltip: {
             borderRadius: '16px',
             padding: '20px',
+            boxShadow: '0 20px 40px -15px rgba(0,0,0,0.25)',
           },
           buttonPrimary: {
-            borderRadius: '8px',
+            borderRadius: '10px',
             fontWeight: 'bold',
+            padding: '8px 16px',
           },
           buttonBack: {
             marginRight: 10,
-          }
+          },
         }}
       />
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-[#EFEBE4] h-screen sticky top-0 px-4 py-5 justify-between select-none z-20 shrink-0">
-        <div className="space-y-6">
-          {/* Logo */}
-          <div className="flex items-center gap-3 px-2 mb-8 cursor-pointer" onClick={() => navigate('/admin/Dashboard/overview')}>
-            <div className="w-9 h-9 rounded-full overflow-hidden shrink-0">
-              <img src={logoImg} alt="Logo" className="w-full h-full object-cover" />
+      {/* ── Desktop Command Center Sidebar (Obsidian Theme) ── */}
+      <aside className="hidden md:flex flex-col w-72 bg-[#0B0F19] border-r border-slate-800/80 h-screen sticky top-0 px-4 py-5 justify-between select-none z-30 shrink-0 text-slate-300">
+        <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-1">
+          {/* Brand Logo & Platform Badge */}
+          <div
+            className="flex items-center gap-3.5 px-3 py-2 rounded-2xl bg-slate-900/60 border border-slate-800/90 cursor-pointer hover:border-slate-700/80 transition-all shadow-inner group"
+            onClick={() => navigate('/admin/Dashboard/overview')}
+          >
+            <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 ring-2 ring-white/10 group-hover:ring-[#D94A38]/50 transition-all bg-white p-0.5">
+              <img src={logoImg} alt="StreetBites Logo" className="w-full h-full object-cover rounded-lg" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-stone-800 leading-none">        Street<span className="text-[#D94A38]">Bites</span>
-              </h2>
-              <span className="text-[9px] text-stone-500 font-bold uppercase tracking-widest block mt-0.5">Admin Console</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-black text-white tracking-tight leading-none">
+                  Street<span className="text-[#FF5E4D]">Bites</span>
+                </h2>
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-[#D94A38]/20 text-[#FF5E4D] border border-[#D94A38]/30">
+                  HQ
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mt-1">
+                Enterprise Console
+              </span>
             </div>
           </div>
 
-          {/* Navigation */}
-          <div>
-            <span className="text-[10px] text-stone-500 font-bold uppercase tracking-widest block mb-3 px-2">Management</span>
-            <nav className="space-y-1">
-              {navItems.map(item => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `tour-nav-${item.label.toLowerCase()} flex items-center justify-between px-3 py-2.5 text-xs font-bold rounded-xl cursor-pointer transition-colors ${isActive ? 'bg-[#1C1917] text-white shadow-sm' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-50'
-                    }`
-                  }
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="w-4 h-4" />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${window.location.pathname.includes(item.path) ? 'bg-white/20 text-white' : 'bg-[#FCE8E6] text-[#D94A38]'
-                      }`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
+          {/* Nav Categories */}
+          <div className="space-y-5">
+            {navSections.map((section, sIdx) => (
+              <div key={sIdx} className="space-y-1">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block px-3 mb-2">
+                  {section.title}
+                </span>
+                <nav className="space-y-1">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `tour-nav-${item.label.toLowerCase().replace(/[^a-z0-9]/g, '-')} group flex items-center justify-between px-3.5 py-2.5 text-xs font-bold rounded-xl cursor-pointer transition-all duration-200 ${
+                          isActive
+                            ? 'bg-gradient-to-r from-[#D94A38] to-[#FF5E4D] text-white shadow-lg shadow-[#D94A38]/25 font-extrabold translate-x-1'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                        }`
+                      }
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className="w-4 h-4 transition-transform group-hover:scale-110" />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs ${
+                            location.pathname.includes(item.path)
+                              ? 'bg-white text-[#D94A38]'
+                              : item.badgeColor || 'bg-[#D94A38] text-white'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+                </nav>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* System Status Footer */}
-        <div className="tour-system-status pt-4 border-t border-[#EFEBE4]">
-          <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm border border-emerald-200">
-              <Activity className="w-4 h-4 text-emerald-600" />
+        {/* Live System Telemetry Card Footer */}
+        <div className="tour-system-status pt-4 border-t border-slate-800/90 mt-2">
+          <div className="bg-slate-900/90 rounded-2xl p-3.5 border border-slate-800 flex items-center justify-between gap-3 shadow-inner">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative flex items-center justify-center shrink-0">
+                <span className="animate-ping absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-[11px] font-extrabold text-white leading-none truncate">Core Services Active</h4>
+                <span className="text-[10px] text-emerald-400 font-bold block mt-1">99.98% High Uptime</span>
+              </div>
             </div>
-            <div>
-              <h4 className="text-[11px] font-bold text-emerald-800 leading-none">Systems Normal</h4>
-              <span className="text-[9px] text-emerald-600 block mt-0.5 uppercase tracking-wider font-bold">100% Uptime</span>
-            </div>
+            <span className="text-[9px] font-mono font-bold text-slate-300 bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700">
+              24ms
+            </span>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* ── Main Executive Content Area ── */}
       <main className="flex-1 flex flex-col min-h-screen pb-20 md:pb-0 relative max-w-[100vw] overflow-x-hidden">
-        {/* Mobile Header (and Desktop Header for actions) */}
-        <header className="px-6 py-4 flex justify-between items-center sticky top-0 bg-[#F4F1EA]/90 backdrop-blur-md z-10 shrink-0 border-b border-[#EFEBE4] md:border-b-0">
-          <div className="flex items-center gap-2 text-xs text-stone-500 font-medium">
-            <span className="hidden md:inline">Admin</span><span className="hidden md:inline">›</span>
-            <span className="text-stone-900 font-bold uppercase tracking-widest text-[10px]">Command Center</span>
+        {/* Glassmorphic Topbar Header */}
+        <header className="px-5 sm:px-8 py-3.5 flex justify-between items-center sticky top-0 bg-white/85 backdrop-blur-xl z-20 shrink-0 border-b border-slate-200/80 shadow-xs">
+          {/* Left: Breadcrumbs & Current Page Indicator */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <span className="text-slate-500 font-bold hidden sm:inline">StreetBites HQ</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden sm:inline" />
+              <span className="text-slate-900 font-extrabold text-xs sm:text-sm tracking-tight truncate">
+                {getCurrentPageTitle()}
+              </span>
+            </div>
           </div>
 
+          {/* Right: Operational Status, Live IST Clock, Tour & Super Admin Pill */}
           <div className="flex items-center gap-3">
+            {/* Live IST Clock */}
+            {currentTime && (
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-mono font-bold text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{currentTime}</span>
+              </div>
+            )}
+
+            {/* Platform Live Status Pill */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/70 text-emerald-700 text-xs font-bold">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Live Engine</span>
+            </div>
+
+            {/* Quick Interactive Tour Trigger */}
             <button
-              onClick={() => { setRunTour(true); setTourKey(prev => prev + 1); }}
-              className="text-stone-500 hover:text-stone-800 transition-colors bg-white border border-stone-200 w-8 h-8 rounded-full flex items-center justify-center shadow-sm"
-              title="Help & Tour"
+              onClick={() => {
+                setRunTour(true);
+                setTourKey((prev) => prev + 1);
+              }}
+              className="text-slate-500 hover:text-slate-900 transition-colors bg-white hover:bg-slate-50 border border-slate-200/90 w-9 h-9 rounded-xl flex items-center justify-center shadow-xs cursor-pointer active:scale-95"
+              title="Launch Console Tour"
             >
               <HelpCircle className="w-4 h-4" />
             </button>
+
+            {/* Authenticated Admin Profile Pill */}
             <div
               onClick={() => navigate('/admin/Dashboard/settings')}
-              className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center text-xs font-bold text-stone-600 cursor-pointer hover:bg-stone-300 transition-colors"
+              className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl bg-white border border-slate-200/90 hover:border-slate-300 shadow-xs cursor-pointer transition-all active:scale-95 group"
             >
-              AD
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#D94A38] to-[#FF7A68] text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 overflow-hidden">
+                {(user?.profile_image || user?.avatar_url) ? (
+                  <img src={user.profile_image || user.avatar_url} alt={user.name || 'Admin'} className="w-full h-full object-cover" />
+                ) : (
+                  (user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'AD')
+                )}
+              </div>
+              <div className="hidden md:block text-left leading-tight">
+                <div className="text-xs font-extrabold text-slate-900 group-hover:text-[#D94A38] transition-colors truncate max-w-[150px]">
+                  {user?.name || 'Administrator'}
+                </div>
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  {user?.role || 'Super Admin'}
+                </div>
+              </div>
             </div>
           </div>
         </header>
 
-        {/* Render child routes */}
-        <div className="flex-1 p-4 md:p-8 overflow-y-auto">
+        {/* Dynamic Page Content Canvas with ambient background styling */}
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <Outlet />
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation (Horizontal Scroll if needed) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#EFEBE4] flex items-center px-2 py-3 pb-6 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] overflow-x-auto gap-2 hide-scrollbar">
-        {navItems.map(item => (
+      {/* ── Mobile Executive Floating Dock Navigation ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0B0F19]/95 backdrop-blur-xl border-t border-slate-800 flex items-center px-3 py-2.5 pb-5 z-30 shadow-2xl overflow-x-auto gap-2 no-scrollbar">
+        {allNavItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `tour-nav-${item.label.toLowerCase()} flex flex-col items-center justify-center w-16 gap-1.5 transition-colors shrink-0 ${isActive ? 'text-[#1C1917]' : 'text-stone-400 hover:text-stone-600'
+              `tour-nav-${item.label.toLowerCase().replace(/[^a-z0-9]/g, '-')} flex flex-col items-center justify-center min-w-[62px] px-2 py-1.5 rounded-xl gap-1 transition-all shrink-0 ${
+                isActive
+                  ? 'bg-gradient-to-r from-[#D94A38] to-[#FF5E4D] text-white shadow-md font-bold'
+                  : 'text-slate-400 hover:text-white'
               }`
             }
           >
             <div className="relative">
-              <item.icon className={`w-5 h-5 ${window.location.pathname.includes(item.path) ? 'stroke-[2.5]' : 'stroke-[1.5]'}`} />
+              <item.icon className="w-4 h-4" />
               {item.badge && (
-                <span className="absolute -top-1 -right-1.5 w-3 h-3 bg-[#D94A38] rounded-full border border-white flex items-center justify-center text-[7px] text-white font-bold">
+                <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 bg-[#D94A38] rounded-full border border-[#0B0F19] flex items-center justify-center text-[8px] text-white font-extrabold">
                   {item.badge}
                 </span>
               )}
             </div>
-            <span className="text-[8px] font-bold uppercase tracking-wider truncate w-full text-center">{item.label}</span>
+            <span className="text-[9px] font-extrabold truncate w-full text-center">
+              {item.label.split(' ')[0]}
+            </span>
           </NavLink>
         ))}
       </nav>
@@ -285,3 +422,4 @@ export const AdminLayout: React.FC = () => {
 };
 
 export default AdminLayout;
+

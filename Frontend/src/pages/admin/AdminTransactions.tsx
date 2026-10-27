@@ -130,96 +130,123 @@ export const AdminTransactions: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto w-full animate-fadeIn pb-8">
+    <div className="space-y-6 max-w-7xl mx-auto w-full animate-fadeIn pb-12 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Financials & Payouts</h1>
-          <p className="text-sm text-stone-500 mt-1">Manage platform revenue, payouts, and customer refunds.</p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider border border-slate-200">
+              Financial Operations Ledger
+            </span>
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Settlements & Platform Ledger</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Audit platform commission retainers, floating COD debt, and vendor/rider payouts.
+          </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
           <button 
             onClick={fetchTransactions}
-            className="bg-white border border-[#EFEBE4] hover:bg-stone-50 text-stone-700 font-bold py-2.5 px-3 rounded-xl transition-colors shadow-sm flex items-center gap-1.5 text-xs cursor-pointer"
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2 px-3.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 text-xs cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#D94A38]' : ''}`} /> Refresh
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#D94A38]' : 'text-slate-400'}`} /> Sync
           </button>
           <button 
             onClick={handleExportCSV}
-            className="bg-[#1C1917] hover:bg-black text-white font-bold py-2.5 px-4 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-sm shrink-0 cursor-pointer"
+            className="bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs shrink-0 cursor-pointer"
           >
-            <FileDown className="w-4 h-4" /> Export Report
+            <FileDown className="w-3.5 h-3.5 text-slate-300" /> Export CSV
           </button>
         </div>
       </div>
 
       {errorMessage && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded-2xl flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMessage}</span>
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-2xl flex items-center gap-3">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span className="font-medium">{errorMessage}</span>
         </div>
       )}
 
-      {/* Financial Overview Cards */}
+      {/* Financial Overview Cards - Unified Slate Pods */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
+        {/* Net Platform Revenue */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Net Platform Revenue</span>
-            <div className="bg-emerald-50 text-emerald-600 p-1.5 rounded-lg"><ArrowUpRight className="w-4 h-4" /></div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Platform Commission</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
           </div>
-          <h3 className="text-3xl font-black text-stone-900">
-            {isLoading ? '...' : `₹${totalNetRevenue.toLocaleString()}`}
+          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${totalNetRevenue.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-xs text-stone-400 mt-1">Global 15% platform earnings</p>
+          <p className="text-[11px] text-slate-500 mt-1">Net platform earnings retained</p>
         </div>
 
-        <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
+        {/* Floating Cash */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Floating Cash in Field</span>
-            <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg"><Banknote className="w-4 h-4" /></div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Floating Cash (COD)</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
+              <Banknote className="w-4 h-4" />
+            </div>
           </div>
-          <h3 className="text-3xl font-black text-stone-900">
-            {isLoading ? '...' : `₹${floatingCodCash.toLocaleString()}`}
+          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${floatingCodCash.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-xs text-stone-400 mt-1">COD cash held by riders</p>
+          <p className="text-[11px] text-slate-500 mt-1">Cash held by delivery riders</p>
         </div>
         
-        <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
+        {/* Pending Settlements */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Pending Payouts</span>
-            <div className="bg-amber-50 text-amber-600 p-1.5 rounded-lg"><Clock className="w-4 h-4" /></div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pending Settlements</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
-          <h3 className="text-3xl font-black text-stone-900">
-            {isLoading ? '...' : `₹${pendingPayoutTotal.toLocaleString()}`}
+          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${pendingPayoutTotal.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-xs text-stone-400 mt-1">{payouts.filter(p => p.status === 'pending').length} pending settlements</p>
+          <p className="text-[11px] text-slate-500 mt-1">{payouts.filter(p => p.status === 'pending').length} payouts awaiting settlement</p>
         </div>
         
-        <div className="bg-white border border-[#EFEBE4] rounded-2xl p-5 shadow-sm">
+        {/* Refunds Processed */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Refunds Processed</span>
-            <div className="bg-red-50 text-red-600 p-1.5 rounded-lg"><ArrowDownRight className="w-4 h-4" /></div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Refunds</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
+              <ArrowDownRight className="w-4 h-4" />
+            </div>
           </div>
-          <h3 className="text-3xl font-black text-stone-900">
-            {isLoading ? '...' : `₹${totalRefundsProcessed.toLocaleString()}`}
+          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${totalRefundsProcessed.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-xs text-stone-400 mt-1">{refunds.length} total refunds recorded</p>
+          <p className="text-[11px] text-slate-500 mt-1">{refunds.length} customer refunds processed</p>
         </div>
       </div>
 
       {/* Main Payouts Section */}
-      <div className="bg-white border border-[#EFEBE4] rounded-3xl overflow-hidden shadow-sm flex flex-col">
-        <div className="p-5 border-b border-[#EFEBE4] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex gap-2 bg-stone-100 p-1 rounded-xl">
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/40">
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
             <button 
               onClick={() => setActiveTab('payouts')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${activeTab === 'payouts' ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-700'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
+                activeTab === 'payouts' 
+                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+                  : 'text-slate-600 hover:text-slate-900 font-semibold'
+              }`}
             >
               Order Settlements ({payouts.length})
             </button>
             <button 
               onClick={() => setActiveTab('refunds')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${activeTab === 'refunds' ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-700'}`}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
+                activeTab === 'refunds' 
+                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+                  : 'text-slate-600 hover:text-slate-900 font-semibold'
+              }`}
             >
               Customer Refunds ({refunds.length})
             </button>
@@ -227,77 +254,77 @@ export const AdminTransactions: React.FC = () => {
           
           <div className="flex gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search Order or ID..." 
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-[#D94A38] transition-colors" 
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D94A38] transition-colors" 
               />
             </div>
             {activeTab === 'payouts' && (
               <button 
                 disabled={isProcessing || payouts.filter(p => p.status === 'pending').length === 0}
                 onClick={handleProcessAllPending}
-                className="bg-[#D94A38] hover:bg-[#C43D2E] disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+                className="bg-[#D94A38] hover:bg-[#C43D2E] disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors shrink-0 cursor-pointer flex items-center gap-1.5 shadow-xs"
               >
                 {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                Process Pending
+                <span>Process Pending</span>
               </button>
             )}
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[600px]">
-            <thead>
-              <tr className="bg-stone-50 border-b border-[#EFEBE4]">
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Vendor Earning</th>
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Rider Earning</th>
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Platform Fee</th>
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider">Total Value</th>
-                <th className="px-6 py-4 text-xs font-bold text-stone-500 uppercase tracking-wider text-right">Status</th>
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-100">
+              <tr>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Reference & Stakeholder</th>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Vendor Earning</th>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Rider Earning</th>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Platform Fee</th>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Total Value</th>
+                <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Settlement Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EFEBE4]">
+            <tbody className="divide-y divide-slate-100 font-medium">
               {isLoading ? (
                 <TableRowsSkeleton columns={6} rows={5} />
               ) : activeTab === 'payouts' ? (
                 <>
                   {filteredPayouts.map(tx => (
-                    <tr key={tx.id} className="hover:bg-stone-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="text-xs font-mono font-bold text-stone-800">{tx.orderId}</div>
-                        <div className="text-[10px] text-stone-400 mt-0.5">{tx.date}</div>
+                    <tr key={tx.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-mono font-bold text-slate-900">{tx.orderId}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{tx.date}</div>
                         {tx.user?.name ? (
-                          <div className="text-[11px] text-stone-500 mt-0.5">{tx.user.name} ({tx.user.role})</div>
+                          <div className="text-[11px] text-slate-600 mt-0.5">{tx.user.name} ({tx.user.role})</div>
                         ) : (
-                          <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">Global System Revenue</div>
+                          <div className="text-[11px] font-medium text-slate-500 mt-0.5">Platform Direct Ledger</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-emerald-600">
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-900">
                         {tx.vendorGain > 0 ? `+₹${tx.vendorGain}` : '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600">
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-900">
                         {tx.riderGain > 0 ? `+₹${tx.riderGain}` : '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-stone-900">
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-900">
                         {tx.platformGain > 0 ? `+₹${tx.platformGain}` : '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-stone-500">₹{tx.total}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-700">₹{tx.total}</td>
+                      <td className="px-5 py-3.5 text-right">
                         {tx.status === 'pending' ? (
                           <button 
                             disabled={isProcessing}
                             onClick={() => handleProcessSingle(tx.id)}
-                            className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-amber-100 transition-colors"
+                            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors"
                           >
-                            <Clock className="w-3 h-3" /> Settle
+                            <Clock className="w-3 h-3 text-slate-500" /> Settle
                           </button>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
                             <CheckCircle2 className="w-3 h-3" /> Settled
                           </span>
                         )}
@@ -306,7 +333,7 @@ export const AdminTransactions: React.FC = () => {
                   ))}
                   {filteredPayouts.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-stone-500 text-xs font-medium">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
                         No financial settlements found in database.
                       </td>
                     </tr>
@@ -315,17 +342,17 @@ export const AdminTransactions: React.FC = () => {
               ) : (
                 <>
                   {filteredRefunds.map(ref => (
-                    <tr key={ref.id} className="hover:bg-stone-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-mono font-bold text-xs text-stone-800">{ref.orderId}</div>
-                        <div className="text-[10px] text-stone-400 mt-0.5">{ref.id}</div>
+                    <tr key={ref.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-mono font-bold text-slate-900">{ref.orderId}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{ref.id}</div>
                       </td>
-                      <td className="px-6 py-4 text-xs font-medium text-stone-800">{ref.customerName}</td>
-                      <td className="px-6 py-4 text-xs text-stone-600">{ref.reason}</td>
-                      <td className="px-6 py-4 text-xs font-bold text-red-600">₹{ref.amount}</td>
-                      <td className="px-6 py-4 text-xs text-stone-400">{ref.date}</td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                      <td className="px-5 py-3.5 text-slate-800 font-semibold">{ref.customerName}</td>
+                      <td className="px-5 py-3.5 text-slate-600">{ref.reason}</td>
+                      <td className="px-5 py-3.5 font-bold font-mono text-slate-900">₹{ref.amount}</td>
+                      <td className="px-5 py-3.5 text-slate-400">{ref.date}</td>
+                      <td className="px-5 py-3.5 text-right">
+                        <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase">
                           {ref.status || 'Refunded'}
                         </span>
                       </td>
@@ -333,7 +360,7 @@ export const AdminTransactions: React.FC = () => {
                   ))}
                   {filteredRefunds.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-stone-500 text-xs font-medium">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
                         No customer refunds found in database.
                       </td>
                     </tr>

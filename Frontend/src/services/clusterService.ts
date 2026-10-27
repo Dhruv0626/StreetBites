@@ -42,7 +42,8 @@ export interface ClusterData {
   image_url: string;
   is_active?: boolean;
   stalls: ClusterStall[];
-  revenue?: string;
+  revenue?: string | number;
+  total_revenue?: number;
 }
 
 // Client-Side In-Memory Cache for fast, instant navigation (0ms)

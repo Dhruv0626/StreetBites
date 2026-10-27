@@ -42,16 +42,18 @@ export const Home: React.FC = () => {
       setClusters(mapped);
 
       const dynamicStalls = rawClusters.flatMap((c: any) =>
-        (c.stalls || []).map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          rating: Number(s.rating ?? 0.0),
-          time: '20-25 mins',
-          type: s.stall_category || 'Street Food',
-          price: '₹150 for two',
-          image: s.image_url || 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop',
-          menu_items: s.menu_items || [],
-        }))
+        (c.stalls || [])
+          .filter((s: any) => s.status !== 'CLOSED' && Boolean(s.is_accepting_orders))
+          .map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            rating: Number(s.rating ?? 0.0),
+            time: '20-25 mins',
+            type: s.stall_category || 'Street Food',
+            price: '₹150 for two',
+            image: s.image_url || 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500&auto=format&fit=crop',
+            menu_items: s.menu_items || [],
+          }))
       );
       setStalls(dynamicStalls);
       setIsLoadingClusters(false);
@@ -204,6 +206,7 @@ export const Home: React.FC = () => {
                   <ClusterCard
                     cluster={cluster}
                     isMobileFeatured={false}
+                    showLiveTag={false}
                     onClick={() => navigate(`/stalls?khauGalliId=${cluster.id}`)}
                   />
                 </div>

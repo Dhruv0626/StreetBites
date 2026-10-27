@@ -1153,77 +1153,102 @@ export const Profile: React.FC = () => {
               </button>
               {openSection === 'app' && (
                 <div className="p-5 bg-[#FAF7F2]/50 border-t border-[#F5F0E8] text-sm text-[#4B5563] space-y-4 animate-fadeIn">
-                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
-                    <div>
-                      <span className="font-bold text-[#1C1917] block text-xs">Live GPS Location</span>
-                      <span className="text-[10px] text-[#8E8B85]">Enables 1-tap address autofill & closest stall discovery</span>
+                  {/* Live GPS Location */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-[#EAE4DA] shadow-3xs">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-[#1C1917] block text-xs sm:text-sm">Live GPS Location</span>
+                      <span className="text-[11px] text-[#8E8B85] leading-relaxed block mt-0.5">Enables 1-tap address autofill & closest stall discovery</span>
                     </div>
-                    <button
-                      onClick={handleToggleLocation}
-                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                        locationEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          locationEnabled ? 'translate-x-4' : 'translate-x-0'
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${locationEnabled ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-stone-500 bg-stone-100 border border-stone-200'}`}>
+                        {locationEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={locationEnabled}
+                        onClick={handleToggleLocation}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
+                          locationEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
                         }`}
-                      ></div>
-                    </button>
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
+                            locationEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Push Notifications Toggle */}
-                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
-                    <div>
-                      <span className="font-bold text-[#1C1917] block text-xs">Order & Delivery Push Notifications</span>
-                      <span className="text-[10px] text-[#8E8B85]">Receive live updates when food is ready and rider is nearby</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-[#EAE4DA] shadow-3xs">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-[#1C1917] block text-xs sm:text-sm">Order & Delivery Push Notifications</span>
+                      <span className="text-[11px] text-[#8E8B85] leading-relaxed block mt-0.5">Receive live updates when food is ready and rider is nearby</span>
                     </div>
-                    <button
-                      onClick={handleTogglePush}
-                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                        pushEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          pushEnabled ? 'translate-x-4' : 'translate-x-0'
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${pushEnabled ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-stone-500 bg-stone-100 border border-stone-200'}`}>
+                        {pushEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={pushEnabled}
+                        onClick={handleTogglePush}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
+                          pushEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
                         }`}
-                      ></div>
-                    </button>
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
+                            pushEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Email Notifications Toggle */}
-                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-[#EAE4DA]">
-                    <div>
-                      <span className="font-bold text-[#1C1917] block text-xs">Email Receipts & Order Summaries</span>
-                      <span className="text-[10px] text-[#8E8B85]">Receive GST tax invoices and order confirmations by email</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-[#EAE4DA] shadow-3xs">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-[#1C1917] block text-xs sm:text-sm">Email Receipts & Order Summaries</span>
+                      <span className="text-[11px] text-[#8E8B85] leading-relaxed block mt-0.5">Receive GST tax invoices and order confirmations by email</span>
                     </div>
-                    <button
-                      onClick={handleToggleEmail}
-                      className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                        emailEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                      }`}
-                    >
-                      <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                          emailEnabled ? 'translate-x-4' : 'translate-x-0'
+                    <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${emailEnabled ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-stone-500 bg-stone-100 border border-stone-200'}`}>
+                        {emailEnabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={emailEnabled}
+                        onClick={handleToggleEmail}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
+                          emailEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
                         }`}
-                      ></div>
-                    </button>
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
+                            emailEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Danger Zone: Delete Account */}
                   {isAuthenticated && (
-                    <div className="bg-red-50/60 p-4 rounded-xl border border-red-200 flex items-center justify-between mt-3">
-                      <div>
-                        <span className="font-bold text-red-700 block text-xs">Deactivate & Delete Account</span>
-                        <span className="text-[10px] text-red-500">Permanently delete your profile, saved addresses, and data</span>
+                    <div className="bg-red-50/60 p-4 rounded-2xl border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-3 shadow-3xs">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-red-700 block text-xs sm:text-sm">Deactivate & Delete Account</span>
+                        <span className="text-[11px] text-red-500 leading-relaxed block mt-0.5">Permanently delete your profile, saved addresses, and data</span>
                       </div>
                       <button
                         onClick={handleDeleteAccount}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer border-0 shadow-3xs"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer border-0 shadow-3xs shrink-0 self-end sm:self-auto"
                       >
-                        Delete
+                        Delete Account
                       </button>
                     </div>
                   )}

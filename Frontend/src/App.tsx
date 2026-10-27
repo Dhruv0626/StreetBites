@@ -48,6 +48,12 @@ const AllClusters = lazy(() => import('./pages/customer/AllClusters'));
 const AllStalls = lazy(() => import('./pages/customer/AllStalls'));
 const Notifications = lazy(() => import('./pages/customer/Notifications'));
 
+// Legal & Standards pages (Lazy loaded)
+const TermsConditions = lazy(() => import('./pages/legal/TermsConditions'));
+const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy'));
+const FoodHygieneStandards = lazy(() => import('./pages/legal/FoodHygieneStandards'));
+const RefundCancellation = lazy(() => import('./pages/legal/RefundCancellation'));
+
 // Admin pages (Lazy loaded)
 const AdminRegister = lazy(() => import('./pages/admin/AdminRegister').then(m => ({ default: m.AdminRegister })));
 const AdminSignIn = lazy(() => import('./pages/admin/AdminSignIn').then(m => ({ default: m.AdminSignIn })));
@@ -124,6 +130,10 @@ const router = createBrowserRouter([
           { path: 'all-khaugallis', element: withSuspense(AllClusters, {}, <AllClustersSkeleton />) },
           { path: 'all-clusters', element: <Navigate to="/all-khaugallis" replace /> },
           { path: 'all-stalls', element: withSuspense(AllStalls, {}, <AllStallsSkeleton />) },
+          { path: 'terms', element: withSuspense(TermsConditions) },
+          { path: 'privacy', element: withSuspense(PrivacyPolicy) },
+          { path: 'hygiene-standards', element: withSuspense(FoodHygieneStandards) },
+          { path: 'refund-cancellation', element: withSuspense(RefundCancellation) },
 
           // Customer-only authenticated pages
           {

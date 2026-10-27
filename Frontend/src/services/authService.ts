@@ -11,6 +11,7 @@ export interface User {
   account_status?: string;
   wallet_balance?: number;
   avatar_url?: string;
+  profile_image?: string;
   favorite_stalls?: any[];
 }
 

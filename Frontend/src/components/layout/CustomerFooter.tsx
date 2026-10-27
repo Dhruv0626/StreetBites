@@ -44,7 +44,13 @@ export const CustomerFooter: React.FC = () => {
 
           {/* Brand Column */}
           <div className="md:col-span-1 space-y-4">
-            <h2 className="text-2xl font-black tracking-tight cursor-pointer" onClick={() => navigate('/home')}>
+            <h2 
+              className="text-2xl font-black tracking-tight cursor-pointer inline-block" 
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigate('/home');
+              }}
+            >
               <span className="text-[#1C1917]">Street</span><span className="text-[#D94A38]">Bites.</span>
             </h2>
             <p className="text-sm text-[#8E8B85] leading-relaxed">
@@ -59,7 +65,10 @@ export const CustomerFooter: React.FC = () => {
               {displayClusters.map((cluster) => (
                 <li key={cluster.id || (cluster as any)._id}>
                   <button
-                    onClick={() => navigate(`/stalls?khauGalliId=${cluster.id || (cluster as any)._id}`)}
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      navigate(`/stalls?khauGalliId=${cluster.id || (cluster as any)._id}`);
+                    }}
                     className="text-sm text-[#5C5954] hover:text-[#D94A38] transition-colors flex items-center gap-2 cursor-pointer text-left group"
                   >
                     <MapPin className="w-3.5 h-3.5 text-[#D94A38] shrink-0 group-hover:scale-110 transition-transform" />
@@ -82,7 +91,10 @@ export const CustomerFooter: React.FC = () => {
               ].map((item) => (
                 <li key={item.label}>
                   <button
-                    onClick={() => navigate(item.path)}
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      navigate(item.path);
+                    }}
                     className="text-sm text-[#5C5954] hover:text-[#D94A38] transition-colors cursor-pointer text-left"
                   >
                     {item.label}
@@ -97,15 +109,21 @@ export const CustomerFooter: React.FC = () => {
             <h3 className="text-xs font-black uppercase tracking-widest text-[#1C1917]">Legal & Standards</h3>
             <ul className="space-y-3">
               {[
-                'Terms & Conditions',
-                'Privacy Policy',
-                'Food Hygiene Standards',
-                'Refund & Cancellation'
+                { label: 'Terms & Conditions', path: '/terms' },
+                { label: 'Privacy Policy', path: '/privacy' },
+                { label: 'Food Hygiene Standards', path: '/hygiene-standards' },
+                { label: 'Refund & Cancellation', path: '/refund-cancellation' },
               ].map((item) => (
-                <li key={item}>
-                  <span className="text-sm text-[#5C5954] hover:text-[#D94A38] transition-colors cursor-pointer">
-                    {item}
-                  </span>
+                <li key={item.path}>
+                  <button
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      navigate(item.path);
+                    }}
+                    className="text-sm text-[#5C5954] hover:text-[#D94A38] transition-colors cursor-pointer text-left"
+                  >
+                    {item.label}
+                  </button>
                 </li>
               ))}
             </ul>

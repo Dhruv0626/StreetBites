@@ -17,7 +17,7 @@ import {
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { clusterService } from '../../services/clusterService';
-import { StallDetailSkeleton } from '../../components';
+import { StallDetailSkeleton, FoodItemDetailModal } from '../../components';
 import type { Stall, Dish } from '../../data/mockData';
 
 interface StallsNearMeProps {
@@ -37,6 +37,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
   const [activeStallId, setActiveStallId] = useState<string>('');
   const [activeCategory, setActiveCategory] = useState<string>('All Items');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [selectedFoodItem, setSelectedFoodItem] = useState<Dish | null>(null);
 
   // Scroll to top when loading the stalls page or switching active stall
   useEffect(() => {
@@ -512,7 +513,10 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                               key={dish.id}
                               className="bg-white rounded-3xl border border-[#EAE4DA] p-3.5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
                             >
-                              <div>
+                              <div
+                                className="cursor-pointer"
+                                onClick={() => setSelectedFoodItem(dish)}
+                              >
                                 {/* Dish Image */}
                                 <div className="w-full h-40 rounded-2xl overflow-hidden bg-stone-100 relative mb-3 border border-stone-200/60 flex items-center justify-center">
                                   {dish.image_url ? (
@@ -534,12 +538,16 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                                     <div className="absolute top-2.5 right-2.5 bg-white/95 backdrop-blur-xs text-[#D94A38] text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-xs border border-red-100 tracking-wider">
                                       BESTSELLER
                                     </div>
-                                  ) : null}
+                                  ) : (
+                                    <div className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-xs text-[#1C1917] text-[9px] font-black px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-xs border border-stone-200/80">
+                                      View Details
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Dish Info */}
                                 <div className="flex items-start justify-between gap-2">
-                                  <h3 className={`font-bold text-sm leading-snug line-clamp-1 ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
+                                  <h3 className={`font-bold text-sm leading-snug line-clamp-1 group-hover:text-[#D94A38] transition-colors ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
                                     {dish.name}
                                   </h3>
                                   <span className={`font-black text-sm shrink-0 ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
@@ -827,14 +835,17 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                       const isBestseller = idx === 0 || dish.price >= 100;
 
                       return (
-                        <div key={dish.id} className="bg-white p-3.5 rounded-3xl border border-[#EAE4DA] shadow-3xs flex flex-col justify-between">
-                          <div>
+                        <div key={dish.id} className="bg-white p-3.5 rounded-3xl border border-[#EAE4DA] shadow-3xs flex flex-col justify-between group">
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => setSelectedFoodItem(dish)}
+                          >
                             <div className="w-full h-36 rounded-2xl bg-stone-100 overflow-hidden flex items-center justify-center border border-[#EAE4DA] mb-2.5 relative">
                               {dish.image_url ? (
                                 <img
                                   src={dish.image_url}
                                   alt={dish.name}
-                                  className={`w-full h-full object-cover ${!dish.is_available ? 'grayscale opacity-60' : ''}`}
+                                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${!dish.is_available ? 'grayscale opacity-60' : ''}`}
                                 />
                               ) : (
                                 <UtensilsCrossed className="w-6 h-6 text-stone-400" />
@@ -847,11 +858,15 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
                                 <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs text-[#D94A38] text-[8px] font-black uppercase px-2 py-0.5 rounded-md border border-red-100">
                                   BESTSELLER
                                 </div>
-                              ) : null}
+                              ) : (
+                                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-xs text-[#1C1917] text-[8px] font-black px-1.5 py-0.5 rounded shadow-xs border border-stone-200">
+                                  Details
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex items-start justify-between gap-1">
-                              <h3 className={`font-bold text-sm leading-snug line-clamp-1 ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
+                              <h3 className={`font-bold text-sm leading-snug line-clamp-1 group-hover:text-[#D94A38] transition-colors ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
                                 {dish.name}
                               </h3>
                               <span className={`font-extrabold text-sm ${dish.is_available ? 'text-[#1C1917]' : 'text-stone-400'}`}>
@@ -934,6 +949,33 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
           </div>
         </>
       )}
+
+      {/* Food Item Details Modal */}
+      <FoodItemDetailModal
+        isOpen={Boolean(selectedFoodItem)}
+        onClose={() => setSelectedFoodItem(null)}
+        dish={selectedFoodItem}
+        stall={currentStall}
+        currentQuantity={selectedFoodItem ? getDishQuantity(selectedFoodItem.id) : 0}
+        onAddToCart={(dishToCart) => {
+          if (!currentStall) return;
+          addToCart({
+            id: dishToCart.id,
+            name: dishToCart.name,
+            price: dishToCart.price,
+            vendorId: currentStall.id,
+            vendorName: currentStall.name,
+            stallName: currentStall.name,
+            image: dishToCart.image_url,
+            khauGalliId: activeClusterId || (activeCluster?.id ? String(activeCluster.id) : ''),
+            khauGalliName: activeCluster?.name || currentStall.cluster || 'Khau Galli',
+          });
+        }}
+        onRemoveFromCart={(dishId) => {
+          if (!currentStall) return;
+          removeFromCart(dishId, currentStall.id);
+        }}
+      />
     </div>
   );
 };
