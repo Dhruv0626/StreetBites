@@ -14,7 +14,8 @@ export interface VendorOrder {
   id: string;
   orderId: string;
   orderNumber?: string;
-  status: 'New' | 'Preparing' | 'Completed' | 'Cancelled';
+  status: 'New' | 'Preparing' | 'Completed' | 'Cancelled' | 'Rejected';
+  rejectionReason?: string;
   customer: string;
   customerPhone?: string;
   deliveryAddress?: string;
@@ -30,6 +31,7 @@ export interface VendorOrder {
 
 export interface VendorOrderMetrics {
   liveCount: number;
+  rejectedCount?: number;
   avgPrep: string;
   rating: string;
   todayPayout: number;

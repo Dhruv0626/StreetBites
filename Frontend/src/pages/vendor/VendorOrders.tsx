@@ -11,7 +11,8 @@ import {
   BellRing,
   Phone,
   MapPin,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import {
   vendorOrderService,
@@ -24,18 +25,24 @@ import { useNotification } from '../../context/NotificationContext';
 
 interface MetricsProps {
   liveCount: number;
+  rejectedCount?: number;
   avgPrep: string;
   rating: string;
   todayPayout: number;
 }
 
-const MetricsBar: React.FC<MetricsProps> = ({ liveCount, avgPrep, rating, todayPayout }) => (
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+const MetricsBar: React.FC<MetricsProps> = ({ liveCount, rejectedCount = 0, avgPrep, rating, todayPayout }) => (
+  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
     {[
       {
         label: 'Live Orders',
         value: liveCount.toString(),
         highlight: liveCount > 0,
+      },
+      {
+        label: 'Rejected',
+        value: rejectedCount.toString(),
+        isRejected: rejectedCount > 0,
       },
       { label: 'Avg Prep', value: avgPrep },
       { label: 'Rating', value: rating },
@@ -44,7 +51,11 @@ const MetricsBar: React.FC<MetricsProps> = ({ liveCount, avgPrep, rating, todayP
       <div
         key={m.label}
         className={`bg-white border rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all ${
-          m.highlight ? 'border-[#E54B3C]/50 ring-1 ring-[#E54B3C]/30 bg-[#FFF9F9]' : 'border-[#EFEBE4]'
+          m.highlight 
+            ? 'border-[#E54B3C]/50 ring-1 ring-[#E54B3C]/30 bg-[#FFF9F9]' 
+            : (m as any).isRejected
+            ? 'border-rose-200 bg-rose-50/30'
+            : 'border-[#EFEBE4]'
         }`}
       >
         <div className="flex items-center justify-between">
@@ -52,9 +63,12 @@ const MetricsBar: React.FC<MetricsProps> = ({ liveCount, avgPrep, rating, todayP
           {m.highlight && (
             <span className="w-2.5 h-2.5 rounded-full bg-[#E54B3C] animate-ping" />
           )}
+          {(m as any).isRejected && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          )}
         </div>
         <div className="mt-4">
-          <span className={`text-2xl font-bold leading-none ${m.highlight ? 'text-[#D94A38]' : 'text-stone-900'}`}>
+          <span className={`text-2xl font-bold leading-none ${m.highlight ? 'text-[#D94A38]' : (m as any).isRejected ? 'text-rose-700' : 'text-stone-900'}`}>
             {m.value}
           </span>
         </div>
@@ -156,6 +170,7 @@ export const VendorOrders: React.FC = () => {
       Preparing: 2,
       Completed: 3,
       Cancelled: 4,
+      Rejected: 5,
     };
 
     return [...orders].sort((a, b) => {
@@ -167,13 +182,14 @@ export const VendorOrders: React.FC = () => {
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
-    if (activeFilter === 'All') return sortedOrders;
+    if (activeFilter === 'All') return sortedOrders.filter(order => order.status !== 'Rejected');
     return sortedOrders.filter(order => order.status === activeFilter);
   }, [sortedOrders, activeFilter]);
 
   const newOrdersCount = orders.filter(o => o.status === 'New').length;
   const preparingOrdersCount = orders.filter(o => o.status === 'Preparing').length;
   const liveOrdersCount = newOrdersCount + preparingOrdersCount;
+  const rejectedOrdersCount = orders.filter(o => o.status === 'Rejected').length;
 
   // Handle status update (Accept with manual ETA, Prep, Ready for Pickup, Cancel)
   const handleUpdateOrderStatus = async (
@@ -262,7 +278,7 @@ export const VendorOrders: React.FC = () => {
         setOrders(prev =>
           prev.map(o =>
             o.id === rejectModalOrder.id || o.orderId === targetOrderId
-              ? { ...o, status: 'Cancelled' }
+              ? { ...o, status: 'Rejected', rejectionReason: reasonLabel }
               : o
           )
         );
@@ -289,6 +305,7 @@ export const VendorOrders: React.FC = () => {
       {/* Top Metrics Bar */}
       <MetricsBar
         liveCount={liveOrdersCount}
+        rejectedCount={rejectedOrdersCount}
         avgPrep={metrics.avgPrep}
         rating={metrics.rating}
         todayPayout={metrics.todayPayout}
@@ -347,10 +364,11 @@ export const VendorOrders: React.FC = () => {
             {/* Order Filters */}
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
               {[
-                { label: 'All', count: orders.length },
+                { label: 'All', count: orders.filter(o => o.status !== 'Rejected').length },
                 { label: 'New', count: newOrdersCount },
                 { label: 'Preparing', count: preparingOrdersCount },
                 { label: 'Completed', count: orders.filter(o => o.status === 'Completed').length },
+                { label: 'Rejected', count: rejectedOrdersCount },
               ].map(f => (
                 <button
                   key={f.label}
@@ -467,11 +485,14 @@ export const VendorOrders: React.FC = () => {
                               ? 'bg-[#E54B3C] text-white animate-pulse'
                               : order.status === 'Preparing'
                               ? 'bg-amber-100 text-amber-800'
+                              : order.status === 'Rejected'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
                               : 'bg-emerald-100 text-emerald-800'
                           }`}
                         >
                           {order.status === 'New' && <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />}
                           {order.status === 'Preparing' && <ChefHat className="w-3 h-3" />}
+                          {order.status === 'Rejected' && <X className="w-3 h-3 text-rose-600" />}
                           {order.status}
                         </div>
                       </div>
@@ -479,7 +500,7 @@ export const VendorOrders: React.FC = () => {
                       <div className="flex-1">
                         <div
                           className={`text-sm font-bold leading-snug ${
-                            order.status === 'Completed' ? 'text-stone-600' : 'text-stone-900'
+                            order.status === 'Completed' ? 'text-stone-600' : order.status === 'Rejected' ? 'text-stone-700' : 'text-stone-900'
                           }`}
                         >
                           {order.customer} · {order.items.reduce((s, it) => s + (it.quantity || 1), 0)} items
@@ -491,10 +512,24 @@ export const VendorOrders: React.FC = () => {
                         >
                           {order.status === 'Completed' ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          ) : order.status === 'Rejected' ? (
+                            <X className="w-3 h-3 text-rose-500" />
                           ) : (
                             <Clock className="w-3 h-3 text-stone-400" />
                           )}
-                          <span>{order.status === 'Completed' ? 'Ready for Pickup' : order.time}</span>
+                          <span>
+                            {order.status === 'Completed'
+                              ? 'Ready for Pickup'
+                              : order.status === 'Rejected'
+                              ? 'Order Rejected'
+                              : order.time}
+                          </span>
+
+                          {order.status === 'Rejected' && order.rejectionReason && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                              Reason: {order.rejectionReason}
+                            </span>
+                          )}
 
                           {order.status === 'Preparing' && (
                             <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
@@ -706,53 +741,68 @@ export const VendorOrders: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <button
-                          onClick={() => {
-                            if (order.status === 'New') {
-                              setRejectModalOrder(order);
-                            } else {
-                              handleUpdateOrderStatus(order, 'Cancelled');
+                      {/* Action Buttons or Rejected Notice */}
+                      {order.status === 'Rejected' ? (
+                        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5">
+                          <X className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="font-bold">Order was rejected by your stall</div>
+                            <div className="text-rose-700 mt-0.5">
+                              Reason: <strong>{order.rejectionReason || 'Kitchen unable to fulfill order'}</strong>
+                            </div>
+                            <div className="text-stone-500 text-[11px] mt-1">
+                              Customer was notified and automated refund / item cancellation was processed.
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <button
+                            onClick={() => {
+                              if (order.status === 'New') {
+                                setRejectModalOrder(order);
+                              } else {
+                                handleUpdateOrderStatus(order, 'Cancelled');
+                              }
+                            }}
+                            disabled={updatingOrderId === order.id}
+                            className="flex-1 bg-white border border-stone-300 hover:border-red-300 hover:text-red-700 text-stone-700 text-sm font-bold py-3.5 rounded-xl hover:bg-red-50/40 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {order.status === 'New' ? 'Reject Order' : 'Cancel Order'}
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleUpdateOrderStatus(
+                                order,
+                                order.status === 'New' ? 'Preparing' : 'Completed',
+                                order.status === 'New' ? currentPrepTime : undefined
+                              )
                             }
-                          }}
-                          disabled={updatingOrderId === order.id}
-                          className="flex-1 bg-white border border-stone-300 hover:border-red-300 hover:text-red-700 text-stone-700 text-sm font-bold py-3.5 rounded-xl hover:bg-red-50/40 transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          {order.status === 'New' ? 'Reject Order' : 'Cancel Order'}
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleUpdateOrderStatus(
-                              order,
-                              order.status === 'New' ? 'Preparing' : 'Completed',
-                              order.status === 'New' ? currentPrepTime : undefined
-                            )
-                          }
-                          disabled={updatingOrderId === order.id}
-                          className={`flex-1 text-white text-sm font-bold py-3.5 rounded-xl transition-all cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2 ${
-                            order.status === 'New'
-                              ? 'bg-[#E54B3C] hover:bg-[#D43B2C] shadow-[0_4px_12px_rgba(229,75,60,0.25)]'
-                              : 'bg-[#1C1917] hover:bg-black'
-                          }`}
-                        >
-                          {updatingOrderId === order.id ? (
-                            <span className="flex items-center gap-2">
-                              <RotateCw className="w-4 h-4 animate-spin" /> Updating...
-                            </span>
-                          ) : order.status === 'New' ? (
-                            <>
-                              <ChefHat className="w-4 h-4" />
-                              <span>Accept & Prep ({currentPrepTime} min)</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                              <span>Mark Ready for Pickup</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+                            disabled={updatingOrderId === order.id}
+                            className={`flex-1 text-white text-sm font-bold py-3.5 rounded-xl transition-all cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2 ${
+                              order.status === 'New'
+                                ? 'bg-[#E54B3C] hover:bg-[#D43B2C] shadow-[0_4px_12px_rgba(229,75,60,0.25)]'
+                                : 'bg-[#1C1917] hover:bg-black'
+                            }`}
+                          >
+                            {updatingOrderId === order.id ? (
+                              <span className="flex items-center gap-2">
+                                <RotateCw className="w-4 h-4 animate-spin" /> Updating...
+                              </span>
+                            ) : order.status === 'New' ? (
+                              <>
+                                <ChefHat className="w-4 h-4" />
+                                <span>Accept & Prep ({currentPrepTime} min)</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <span>Mark Ready for Pickup</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

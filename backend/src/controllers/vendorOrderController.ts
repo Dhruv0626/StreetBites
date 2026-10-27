@@ -221,8 +221,14 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
       );
 
       // Determine vendor status
-      let vendorStatus: "New" | "Preparing" | "Completed" | "Cancelled" = "New";
-      if (parentOrder.status === "CANCELLED") {
+      let vendorStatus: "New" | "Preparing" | "Completed" | "Cancelled" | "Rejected" = "New";
+      const isAllItemsRejected = itemsForThisStall.length > 0 && itemsForThisStall.every((so: any) => so.stall_status === "REJECTED");
+      const hasAnyRejected = itemsForThisStall.some((so: any) => so.stall_status === "REJECTED");
+      const rejectionReason = itemsForThisStall.find((so: any) => so.rejection_reason)?.rejection_reason || parentOrder.rejection_note || "";
+
+      if (isAllItemsRejected || (parentOrder.status === "CANCELLED" && hasAnyRejected) || (parentOrder.status === "CANCELLED" && Boolean(rejectionReason))) {
+        vendorStatus = "Rejected";
+      } else if (parentOrder.status === "CANCELLED") {
         vendorStatus = "Cancelled";
       } else if (itemsForThisStall.every((so: any) => so.stall_status === "READY")) {
         vendorStatus = "Completed";
@@ -239,6 +245,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
         orderId: parentOrder._id.toString(),
         orderNumber: `MO-${parentOrder._id.toString().slice(-5).toUpperCase()}`,
         status: vendorStatus,
+        rejectionReason: vendorStatus === "Rejected" ? (rejectionReason || "Order rejected by vendor") : undefined,
         customer: parentOrder.customer_id?.name || "Customer",
         customerPhone: parentOrder.customer_id?.phone_number || "",
         deliveryAddress: parentOrder.delivery_address || "",
@@ -261,6 +268,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
       Preparing: 2,
       Completed: 3,
       Cancelled: 4,
+      Rejected: 5,
     };
 
     groupedOrders.sort((a, b) => {
@@ -272,6 +280,10 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
 
     const liveCount = groupedOrders.filter(
       (o) => o.status === "New" || o.status === "Preparing"
+    ).length;
+
+    const rejectedCount = groupedOrders.filter(
+      (o) => o.status === "Rejected"
     ).length;
 
     const todayStart = new Date();
@@ -292,6 +304,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
         orders: groupedOrders,
         metrics: {
           liveCount,
+          rejectedCount,
           avgPrep,
           rating: stallRating,
           todayPayout,
