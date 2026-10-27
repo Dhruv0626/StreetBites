@@ -1,16 +1,120 @@
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, TrendingUp, Clock, MapPin, ChevronRight, Loader2, Package } from 'lucide-react';
+import { IndianRupee, TrendingUp, Clock, MapPin, ChevronRight, Loader2, Package, ArrowDownLeft, Building2, ShieldCheck, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
+import { useAlert } from '../../context/AlertContext';
 import riderService, { type RiderStats } from '../../services/riderService';
 
 export const RiderEarningsPage: React.FC = () => {
   const { user } = useAuth();
+  const { showAlert, toast } = useAlert();
   const navigate = useNavigate();
   const [timeFilter, setTimeFilter] = useState('This Week');
   const [stats, setStats] = useState<RiderStats | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [isSavingBank, setIsSavingBank] = useState(false);
+  const [bankFormData, setBankFormData] = useState({
+    bankName: '',
+    bankAccountNo: '',
+    bankIfsc: '',
+    upiId: '',
+  });
+
+  const availableBalance = stats?.walletBalance ?? user?.wallet_balance ?? 0;
+  const bankName = stats?.bankName || user?.bank_name;
+  const bankAccountNo = stats?.bankAccountNo || user?.bank_account_no;
+  const bankIfsc = stats?.bankIfsc || user?.bank_ifsc;
+  const upiId = stats?.upiId || user?.upi_id;
+
+  const handleWithdrawClick = () => {
+    if (availableBalance <= 0) {
+      showAlert('You have ₹0 available balance. Complete deliveries to accumulate earnings.', 'info');
+      return;
+    }
+    if (!bankName || !bankAccountNo) {
+      setBankFormData({
+        bankName: bankName || '',
+        bankAccountNo: bankAccountNo || '',
+        bankIfsc: bankIfsc || '',
+        upiId: upiId || '',
+      });
+      setShowBankModal(true);
+      return;
+    }
+    setShowWithdrawModal(true);
+  };
+
+  const handleSaveBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankFormData.bankName.trim() || !bankFormData.bankAccountNo.trim()) {
+      showAlert('Please enter bank name and account number.', 'warning');
+      return;
+    }
+    setIsSavingBank(true);
+    try {
+      const res = await riderService.updateBankDetails(bankFormData, {
+        riderId: user?._id || user?.id,
+        email: user?.email,
+      });
+      if (res.success && res.data) {
+        setStats((prev: any) => prev ? ({
+          ...prev,
+          bankName: res.data.bankName,
+          bankAccountNo: res.data.bankAccountNo,
+          bankIfsc: res.data.bankIfsc,
+          upiId: res.data.upiId,
+        }) : prev);
+        setShowBankModal(false);
+        toast.success('Bank details linked successfully!');
+      } else {
+        showAlert(res.message || 'Failed to save bank details.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error saving bank details.', 'error');
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    setIsWithdrawing(true);
+    try {
+      const res = await riderService.withdrawPayout(
+        {
+          amount: availableBalance,
+          bankName: bankName || undefined,
+          bankAccountNo: bankAccountNo || undefined,
+          bankIfsc: bankIfsc || undefined,
+          upiId: upiId || undefined,
+        },
+        {
+          riderId: user?._id || user?.id,
+          email: user?.email,
+        }
+      );
+      if (res.success && res.data) {
+        const payoutData = res.data;
+        setStats((prev: any) => prev ? ({
+          ...prev,
+          walletBalance: payoutData.remainingBalance,
+        }) : prev);
+
+        setShowWithdrawModal(false);
+        showAlert(`Withdrawal of ₹${payoutData.withdrawnAmount} processed successfully to your registered bank account!`, 'success');
+        toast.success('Payout withdrawal completed');
+      } else {
+        showAlert(res.message || 'Failed to process withdrawal.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error processing payout withdrawal.', 'error');
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +208,88 @@ export const RiderEarningsPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {/* Balance & Withdrawal Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+            {/* Available Balance Card */}
+            <div className="bg-gradient-to-br from-[#1C1917] to-[#2d2825] rounded-3xl p-6 text-white relative overflow-hidden shadow-lg flex flex-col justify-between min-h-[190px]">
+              <div className="absolute top-0 right-0 p-6 opacity-10">
+                <IndianRupee className="w-28 h-28 rotate-12" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 text-stone-400 mb-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold uppercase tracking-widest">Available to Withdraw</span>
+                </div>
+                <div className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-6">
+                  ₹{availableBalance.toLocaleString('en-IN')}<span className="text-lg text-stone-500">.00</span>
+                </div>
+              </div>
+
+              <div className="relative z-10">
+                <button 
+                  onClick={handleWithdrawClick}
+                  className="w-full sm:w-auto bg-white text-stone-900 hover:bg-stone-100 font-bold py-2.5 px-6 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm"
+                >
+                  <ArrowDownLeft className="w-4 h-4" />
+                  Withdraw Now
+                </button>
+              </div>
+            </div>
+
+            {/* Linked Bank Account Card */}
+            <div className="bg-white rounded-3xl border border-[#EFEBE4] p-6 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 uppercase tracking-widest">Linked Bank Account</span>
+                <button 
+                  onClick={() => {
+                    setBankFormData({
+                      bankName: bankName || '',
+                      bankAccountNo: bankAccountNo || '',
+                      bankIfsc: bankIfsc || '',
+                      upiId: upiId || '',
+                    });
+                    setShowBankModal(true);
+                  }}
+                  className="text-xs font-bold text-[#D94A38] hover:text-[#B83E2F] cursor-pointer"
+                >
+                  {bankName ? 'Edit Details' : 'Add Bank'}
+                </button>
+              </div>
+              {bankName ? (
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-stone-900">{bankName}</h4>
+                    <p className="text-xs font-medium text-stone-500 font-mono mt-0.5">
+                      •••• {bankAccountNo ? bankAccountNo.slice(-4) : '----'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => {
+                    setBankFormData({
+                      bankName: bankName || '',
+                      bankAccountNo: bankAccountNo || '',
+                      bankIfsc: bankIfsc || '',
+                      upiId: upiId || '',
+                    });
+                    setShowBankModal(true);
+                  }}
+                  className="flex items-center gap-3 text-stone-500 py-2 cursor-pointer hover:text-stone-800 transition-colors"
+                >
+                  <Building2 className="w-5 h-5 text-stone-400" />
+                  <span className="text-xs underline decoration-dotted">No bank account linked. Click to link bank details for payouts.</span>
+                </div>
+              )}
+              <div className="text-[11px] text-stone-400 mt-2">
+                Delivery fees are credited to your wallet balance after each completed order.
+              </div>
+            </div>
+          </div>
+
           {/* Top Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -282,6 +468,146 @@ export const RiderEarningsPage: React.FC = () => {
             )}
           </div>
         </>
+      )}
+
+      {/* Withdraw Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+            <div className="p-6 border-b border-[#EFEBE4] flex justify-between items-center">
+              <h3 className="text-lg font-bold text-stone-900">Withdraw Delivery Earnings</h3>
+              <button onClick={() => setShowWithdrawModal(false)} className="text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-stone-600 mb-6">
+                You are about to withdraw your available earnings to your linked bank account at {bankName || 'your registered bank'}.
+              </p>
+              
+              <div className="bg-stone-50 rounded-2xl p-6 flex flex-col items-center mb-6">
+                <span className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-2">Available Balance</span>
+                <span className="text-4xl font-extrabold text-stone-900 tracking-tight">
+                  ₹{availableBalance.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <button 
+                onClick={handleWithdraw}
+                disabled={isWithdrawing || availableBalance <= 0}
+                className="w-full bg-[#1C1917] hover:bg-black text-white font-bold py-4 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isWithdrawing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Confirm Withdrawal'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link / Edit Bank Account Modal */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+            <div className="p-6 border-b border-[#EFEBE4] flex justify-between items-center bg-stone-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Link Bank Account</h3>
+                  <p className="text-xs text-stone-500">For rider payouts and settlements</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBankModal(false)} className="text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveBank} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                  Bank Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. State Bank of India / HDFC Bank"
+                  value={bankFormData.bankName}
+                  onChange={(e) => setBankFormData({ ...bankFormData, bankName: e.target.value })}
+                  className="w-full bg-stone-50 border border-[#EFEBE4] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                  Account Number
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter 9-18 digit account number"
+                  value={bankFormData.bankAccountNo}
+                  onChange={(e) => setBankFormData({ ...bankFormData, bankAccountNo: e.target.value })}
+                  className="w-full bg-stone-50 border border-[#EFEBE4] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                    IFSC Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. SBIN0001234"
+                    value={bankFormData.bankIfsc}
+                    onChange={(e) => setBankFormData({ ...bankFormData, bankIfsc: e.target.value.toUpperCase() })}
+                    className="w-full bg-stone-50 border border-[#EFEBE4] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors font-mono uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                    UPI ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. rider@okhdfc"
+                    value={bankFormData.upiId}
+                    onChange={(e) => setBankFormData({ ...bankFormData, upiId: e.target.value })}
+                    className="w-full bg-stone-50 border border-[#EFEBE4] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBankModal(false)}
+                  className="flex-1 py-3 border border-[#EFEBE4] hover:bg-stone-50 text-stone-700 font-bold text-sm rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBank}
+                  className="flex-1 py-3 bg-[#1C1917] hover:bg-black text-white font-bold text-sm rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSavingBank ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save & Link
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

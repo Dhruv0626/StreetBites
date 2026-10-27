@@ -8,6 +8,11 @@ export interface RiderStats {
   autoAccept?: boolean;
   pushNotifications?: boolean;
   todayEarnings: number;
+  walletBalance?: number;
+  bankName?: string | null;
+  bankAccountNo?: string | null;
+  bankIfsc?: string | null;
+  upiId?: string | null;
   completedTripsCount: number;
   timeOnline: string;
   currentCodDebt: number;
@@ -297,6 +302,41 @@ export const riderService = {
     return apiRequest<any>(`/rider/claims${qs}`, {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+
+  // Request rider payout withdrawal to bank/UPI
+  withdrawPayout: async (data: { amount?: number; bankName?: string; bankAccountNo?: string; bankIfsc?: string; upiId?: string }, params?: { riderId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{
+      withdrawnAmount: number;
+      remainingBalance: number;
+      transactionId: string;
+    }>(`/rider/payouts/withdraw${qs}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      requiresAuth: true,
+    });
+  },
+
+  // Update rider bank and payout details
+  updateBankDetails: async (data: { bankName?: string; bankAccountNo?: string; bankIfsc?: string; upiId?: string }, params?: { riderId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.riderId) query.append("riderId", params.riderId);
+    if (params?.email) query.append("email", params.email);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiRequest<{
+      bankName: string;
+      bankAccountNo: string;
+      bankIfsc: string;
+      upiId: string;
+    }>(`/rider/bank-details${qs}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      requiresAuth: true,
     });
   },
 };

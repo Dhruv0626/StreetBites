@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Clock, MapPin, Check, X, History, Store, Loader2, RefreshCw, Power, Sliders, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import riderService, { type QueueOrder } from '../../services/riderService';
 
 export const RiderQueuePage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { triggerDrop } = useNotification();
+  const knownQueueIdsRef = React.useRef<Set<string>>(new Set());
+  const isFirstFetchRef = React.useRef<boolean>(true);
+
   const [orders, setOrders] = useState<QueueOrder[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(() => {
@@ -41,7 +46,33 @@ export const RiderQueuePage: React.FC = () => {
           setRangeKm((res as any).deliveryRangeKm);
         }
         if (Array.isArray(res.data)) {
-          setOrders(res.data);
+          const queueData = res.data;
+          setOrders(queueData);
+
+          if (isFirstFetchRef.current) {
+            queueData.forEach((q: any) => knownQueueIdsRef.current.add(q.rawId || q.id));
+            isFirstFetchRef.current = false;
+          } else {
+            const newArrivals = queueData.filter((q: any) => {
+              const id = q.rawId || q.id;
+              return id && !knownQueueIdsRef.current.has(id);
+            });
+
+            if (newArrivals.length > 0) {
+              newArrivals.forEach((q: any) => knownQueueIdsRef.current.add(q.rawId || q.id));
+              const newest = newArrivals[0];
+              const cleanCode = newest.id
+                ? (newest.id.startsWith('MO-') ? newest.id.replace('MO-', '') : newest.id)
+                : '';
+              triggerDrop({
+                title: `New Delivery Task #${cleanCode}`,
+                message: `Pickup from ${newest.cluster} · Drop: ${newest.drop} · Earn ${newest.payout}`,
+                type: 'DELIVERY',
+                role: 'RIDER',
+                orderId: newest.rawId,
+              });
+            }
+          }
         } else {
           setOrders([]);
         }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, ArrowDownLeft, Building2, ShieldCheck, Clock, CheckCircle2, X } from 'lucide-react';
+import { IndianRupee, ArrowDownLeft, Building2, ShieldCheck, Clock, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
@@ -22,6 +22,14 @@ export const VendorPayoutsPage: React.FC = () => {
   const [vendorData, setVendorData] = useState<{ user?: any; stall?: any } | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [isSavingBank, setIsSavingBank] = useState(false);
+  const [bankFormData, setBankFormData] = useState({
+    bankName: '',
+    bankAccountNo: '',
+    bankIfsc: '',
+    upiId: '',
+  });
   const [transactions, setTransactions] = useState<PayoutTransaction[]>([]);
   const [pendingSettlement, setPendingSettlement] = useState<number>(0);
 
@@ -30,27 +38,29 @@ export const VendorPayoutsPage: React.FC = () => {
     const fetchDetails = async () => {
       try {
         const [detailsRes, ordersRes, payoutsRes] = await Promise.allSettled([
-          onboardingService.getVendorDetails(),
+          onboardingService.getVendorDetails({ userId: user?._id || user?.id, email: user?.email }),
           vendorOrderService.getOrders(),
-          vendorOrderService.getPayoutHistory(),
+          vendorOrderService.getPayoutHistory({ userId: user?._id || user?.id, email: user?.email }),
         ]);
 
         if (isMounted && detailsRes.status === 'fulfilled' && detailsRes.value?.success && detailsRes.value.data) {
           setVendorData(detailsRes.value.data);
         }
 
-        // If official payout history returned updated wallet balance, synchronize it
+        // If official payout history returned updated wallet balance or bank details, synchronize them
         if (isMounted && payoutsRes.status === 'fulfilled' && payoutsRes.value?.success && payoutsRes.value.data) {
           const pData = payoutsRes.value.data;
-          if (typeof pData.walletBalance === 'number') {
-            setVendorData((prev: any) => ({
-              ...prev,
-              user: {
-                ...(prev?.user || user),
-                wallet_balance: pData.walletBalance,
-              },
-            }));
-          }
+          setVendorData((prev: any) => ({
+            ...prev,
+            user: {
+              ...(prev?.user || user),
+              ...(typeof pData.walletBalance === 'number' ? { wallet_balance: pData.walletBalance } : {}),
+              ...(pData.bankName ? { bank_name: pData.bankName } : {}),
+              ...(pData.bankAccountNo ? { bank_account_no: pData.bankAccountNo } : {}),
+              ...(pData.bankIfsc ? { bank_ifsc: pData.bankIfsc } : {}),
+              ...(pData.upiId ? { upi_id: pData.upiId } : {}),
+            },
+          }));
         }
 
         if (isMounted) {
@@ -130,21 +140,61 @@ export const VendorPayoutsPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
 
   const currentUser = vendorData?.user || user;
   const availableBalance = currentUser?.wallet_balance ?? 0;
   const bankName = currentUser?.bank_name;
   const bankAccountNo = currentUser?.bank_account_no;
 
-  const handleWithdrawClick = () => {
-    if (!bankName || !bankAccountNo) {
-      showAlert('Please add your bank account details in Onboarding Details first.', 'warning');
-      navigate('/vendor/registration');
+  const handleSaveBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankFormData.bankName.trim() || !bankFormData.bankAccountNo.trim()) {
+      showAlert('Please enter bank name and account number.', 'warning');
       return;
     }
+    setIsSavingBank(true);
+    try {
+      const res = await vendorOrderService.updateBankDetails(bankFormData, {
+        userId: user?._id || user?.id,
+        email: user?.email,
+      });
+      if (res.success && res.data) {
+        setVendorData((prev: any) => ({
+          ...prev,
+          user: {
+            ...(prev?.user || user),
+            bank_name: res.data.bankName,
+            bank_account_no: res.data.bankAccountNo,
+            bankIfsc: res.data.bankIfsc,
+            upi_id: res.data.upiId,
+          },
+        }));
+        setShowBankModal(false);
+        toast.success('Bank details saved successfully!');
+      } else {
+        showAlert(res.message || 'Failed to save bank details.', 'error');
+      }
+    } catch (err: any) {
+      showAlert(err?.message || 'Error saving bank details.', 'error');
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
+  const handleWithdrawClick = () => {
     if (availableBalance <= 0) {
       showAlert('You have ₹0 available balance. Complete customer orders to accumulate earnings.', 'info');
+      return;
+    }
+    if (!bankName || !bankAccountNo) {
+      setBankFormData({
+        bankName: currentUser?.bank_name || '',
+        bankAccountNo: currentUser?.bank_account_no || '',
+        bankIfsc: currentUser?.bank_ifsc || '',
+        upiId: currentUser?.upi_id || '',
+      });
+      setShowBankModal(true);
       return;
     }
     setShowWithdrawModal(true);
@@ -153,7 +203,19 @@ export const VendorPayoutsPage: React.FC = () => {
   const handleWithdraw = async () => {
     setIsWithdrawing(true);
     try {
-      const res = await vendorOrderService.withdrawPayout();
+      const res = await vendorOrderService.withdrawPayout(
+        {
+          amount: availableBalance,
+          bankName: bankName || undefined,
+          bankAccountNo: bankAccountNo || undefined,
+          bankIfsc: currentUser?.bank_ifsc || undefined,
+          upiId: currentUser?.upi_id || undefined,
+        },
+        {
+          userId: user?._id || user?.id,
+          email: user?.email,
+        }
+      );
       if (res.success && res.data) {
         const payoutData = res.data;
         setVendorData((prev: any) => ({
@@ -239,10 +301,18 @@ export const VendorPayoutsPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold text-stone-500 uppercase tracking-widest">Linked Bank Account</span>
               <button 
-                onClick={() => navigate('/vendor/registration')}
+                onClick={() => {
+                  setBankFormData({
+                    bankName: currentUser?.bank_name || '',
+                    bankAccountNo: currentUser?.bank_account_no || '',
+                    bankIfsc: currentUser?.bank_ifsc || '',
+                    upiId: currentUser?.upi_id || '',
+                  });
+                  setShowBankModal(true);
+                }}
                 className="text-xs font-bold text-[#D94A38] hover:text-[#B83E2F] cursor-pointer"
               >
-                {bankName ? 'Edit' : 'Add Bank'}
+                {bankName ? 'Edit Details' : 'Add Bank'}
               </button>
             </div>
             {bankName ? (
@@ -258,9 +328,20 @@ export const VendorPayoutsPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 text-stone-500 py-1">
+              <div 
+                onClick={() => {
+                  setBankFormData({
+                    bankName: currentUser?.bank_name || '',
+                    bankAccountNo: currentUser?.bank_account_no || '',
+                    bankIfsc: currentUser?.bank_ifsc || '',
+                    upiId: currentUser?.upi_id || '',
+                  });
+                  setShowBankModal(true);
+                }}
+                className="flex items-center gap-3 text-stone-500 py-1 cursor-pointer hover:text-stone-800 transition-colors"
+              >
                 <Building2 className="w-5 h-5 text-stone-400" />
-                <span className="text-xs">No bank account linked. Add bank details to enable payouts.</span>
+                <span className="text-xs underline decoration-dotted">No bank account linked. Click to link bank details for payouts.</span>
               </div>
             )}
           </div>
@@ -395,6 +476,105 @@ export const VendorPayoutsPage: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link / Edit Bank Account Modal */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-scaleIn">
+            <div className="p-6 border-b border-[#E7E2D9] flex justify-between items-center bg-stone-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Link Bank Account</h3>
+                  <p className="text-xs text-stone-500">For daily withdrawal settlements</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBankModal(false)} className="text-stone-400 hover:text-stone-600 transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveBank} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                  Bank Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. State Bank of India / HDFC Bank"
+                  value={bankFormData.bankName}
+                  onChange={(e) => setBankFormData({ ...bankFormData, bankName: e.target.value })}
+                  className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                  Account Number
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter 9-18 digit account number"
+                  value={bankFormData.bankAccountNo}
+                  onChange={(e) => setBankFormData({ ...bankFormData, bankAccountNo: e.target.value })}
+                  className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                    IFSC Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. SBIN0001234"
+                    value={bankFormData.bankIfsc}
+                    onChange={(e) => setBankFormData({ ...bankFormData, bankIfsc: e.target.value.toUpperCase() })}
+                    className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors font-mono uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1.5">
+                    UPI ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. vendor@okhdfc"
+                    value={bankFormData.upiId}
+                    onChange={(e) => setBankFormData({ ...bankFormData, upiId: e.target.value })}
+                    className="w-full bg-stone-50 border border-[#E7E2D9] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBankModal(false)}
+                  className="flex-1 py-3 border border-[#E7E2D9] hover:bg-stone-50 text-stone-700 font-bold text-sm rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBank}
+                  className="flex-1 py-3 bg-[#1C1917] hover:bg-black text-white font-bold text-sm rounded-xl transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSavingBank ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save & Link
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

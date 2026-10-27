@@ -125,22 +125,59 @@ export const vendorOrderService = {
   },
 
   // 6. Request vendor payout withdrawal
-  withdrawPayout: async (amount?: number) => {
+  withdrawPayout: async (
+    data?: { amount?: number; bankName?: string; bankAccountNo?: string; bankIfsc?: string; upiId?: string } | number,
+    params?: { userId?: string; email?: string }
+  ) => {
+    const payload = typeof data === 'number' ? { amount: data } : (data || {});
+    const query = new URLSearchParams();
+    if (params?.userId) query.append('userId', params.userId);
+    if (params?.email) query.append('email', params.email);
+    const qs = query.toString() ? `?${query.toString()}` : '';
     return apiRequest<{
       withdrawnAmount: number;
       remainingBalance: number;
       transactionId: string;
-    }>('/vendor/orders/payouts/withdraw', {
+    }>(`/vendor/orders/payouts/withdraw${qs}`, {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify(payload),
       requiresAuth: true,
     });
   },
 
-  // 7. Get vendor settlement and payout transaction history
-  getPayoutHistory: async () => {
+  // 7. Update vendor bank & payout details
+  updateBankDetails: async (
+    data: { bankName?: string; bankAccountNo?: string; bankIfsc?: string; upiId?: string },
+    params?: { userId?: string; email?: string }
+  ) => {
+    const query = new URLSearchParams();
+    if (params?.userId) query.append('userId', params.userId);
+    if (params?.email) query.append('email', params.email);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest<{
+      bankName: string;
+      bankAccountNo: string;
+      bankIfsc: string;
+      upiId: string;
+    }>(`/vendor/orders/payouts/bank-details${qs}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      requiresAuth: true,
+    });
+  },
+
+  // 8. Get vendor settlement and payout transaction history
+  getPayoutHistory: async (params?: { userId?: string; email?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.userId) query.append('userId', params.userId);
+    if (params?.email) query.append('email', params.email);
+    const qs = query.toString() ? `?${query.toString()}` : '';
     return apiRequest<{
       walletBalance: number;
+      bankName?: string | null;
+      bankAccountNo?: string | null;
+      bankIfsc?: string | null;
+      upiId?: string | null;
       transactions: Array<{
         id: string;
         date: string;
@@ -148,7 +185,7 @@ export const vendorOrderService = {
         status: 'pending' | 'completed' | 'failed';
         type: string;
       }>;
-    }>('/vendor/orders/payouts', {
+    }>(`/vendor/orders/payouts${qs}`, {
       method: 'GET',
       requiresAuth: true,
     });

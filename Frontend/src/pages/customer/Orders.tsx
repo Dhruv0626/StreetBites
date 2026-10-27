@@ -25,6 +25,7 @@ import { OrdersSkeleton } from '../../components';
 import { razorpayService } from '../../services/razorpayService';
 import { reviewService } from '../../services/reviewService';
 import { useAlert } from '../../context/AlertContext';
+import { useNotification } from '../../context/NotificationContext';
 import riderAvatarImg from '../../assets/images/rider_avatar.jpg';
 
 interface OrdersProps {
@@ -39,6 +40,8 @@ interface OrdersProps {
 export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
   const navigate = useNavigate();
   const { toast } = useAlert();
+  const { triggerDrop } = useNotification();
+  const knownOrderStatusRef = React.useRef<Map<string, string>>(new Map());
   const [activeTab, setActiveTab] = useState<'live' | 'past'>('live');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -181,6 +184,40 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         const res = await razorpayService.getCustomerOrders();
         if (res.success && res.data && Array.isArray(res.data)) {
           setLiveOrders(res.data);
+
+          // Check for status changes to trigger voice & drop notification
+          res.data.forEach((o: any) => {
+            const oId = String(o.id || o._id || '');
+            const prevStatus = knownOrderStatusRef.current.get(oId);
+            if (prevStatus && prevStatus !== o.status) {
+              const cleanId = (o.orderNumber || oId).replace(/^MO-/, '');
+              let statusMsg = `Order #${cleanId} status updated to ${o.status}.`;
+              if (o.status === 'PREPARING') statusMsg = `Stalls are now preparing your order #${cleanId}!`;
+              if (o.status === 'READY_FOR_PICKUP') statusMsg = `Your order #${cleanId} is packaged and waiting for rider pickup!`;
+              if (o.status === 'OUT_FOR_DELIVERY') statusMsg = `Rider has collected your order #${cleanId} and is on the way to your door!`;
+              if (o.status === 'DELIVERED') statusMsg = `Order #${cleanId} has arrived! Enjoy your delicious meal!`;
+
+              const isCod = o.paymentMethod === 'COD' || o.payment_method === 'COD';
+              let notifTitle = `Order Update: ${o.status.replace(/_/g, ' ')}`;
+
+              if (o.status === 'CANCELLED') {
+                notifTitle = isCod ? 'Order Cancelled' : 'Order Cancelled & Refunded';
+                statusMsg = isCod
+                  ? `Your order #${cleanId} has been cancelled.`
+                  : `Your order #${cleanId} has been cancelled. ₹${o.totalAmount || o.total || ''} has been refunded to your wallet.`;
+              }
+
+              triggerDrop({
+                title: notifTitle,
+                message: statusMsg,
+                type: 'ORDER',
+                role: 'CUSTOMER',
+                orderId: oId,
+              });
+            }
+            knownOrderStatusRef.current.set(oId, o.status);
+          });
+
           // If there's an ongoing live order, keep 'live' tab; otherwise switch to 'past'
           const hasActive = res.data.some(
             (o: any) => o.status && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
@@ -202,7 +239,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [activeOrder]);
+  }, [activeOrder, triggerDrop]);
 
   // Convert real MongoDB orders into UI display items
   const ordersToDisplay = liveOrders.map((o: any) => {

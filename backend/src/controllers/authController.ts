@@ -60,6 +60,10 @@ const formatUserResponse = (user: any) => ({
   account_status: user.account_status,
   wallet_balance: user.wallet_balance || 0,
   avatar_url: user.avatar_url,
+  bank_name: user.bank_name || null,
+  bank_account_no: user.bank_account_no || null,
+  bank_ifsc: user.bank_ifsc || null,
+  upi_id: user.upi_id || null,
 });
 
 // ─── Controller Handlers ──────────────────────────────────────────────

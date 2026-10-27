@@ -7,6 +7,7 @@ import {
   getVendorAnalytics,
   requestVendorWithdrawal,
   getVendorPayoutHistory,
+  updateVendorBankDetails,
 } from "../controllers/vendorOrderController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
 
@@ -23,6 +24,9 @@ router.get("/analytics", protect, getVendorAnalytics);
 
 // Vendor Payouts & Settlement History
 router.get("/payouts", protect, getVendorPayoutHistory);
+
+// Vendor Update Bank & Payout Details
+router.put("/payouts/bank-details", protect, updateVendorBankDetails);
 
 // Vendor Request Payout Withdrawal
 router.post("/payouts/withdraw", protect, requestVendorWithdrawal);

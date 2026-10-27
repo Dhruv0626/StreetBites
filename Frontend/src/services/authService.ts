@@ -12,6 +12,10 @@ export interface User {
   wallet_balance?: number;
   avatar_url?: string;
   profile_image?: string;
+  bank_name?: string;
+  bank_account_no?: string;
+  bank_ifsc?: string;
+  upi_id?: string;
   favorite_stalls?: any[];
 }
 

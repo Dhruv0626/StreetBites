@@ -627,8 +627,9 @@ export const RiderRoute: React.FC = () => {
                         Stop {activeStopIndex + 1} of {checkpoints.length} · {activeCheckpoint?.type === 'drop' ? 'Customer Delivery' : 'Pickup'}
                       </span>
                       {isRouting && (
-                        <span className="text-[10px] text-emerald-200 flex items-center gap-1">
-                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> recalculating...
+                        <span className="text-[10px] text-amber-200 font-bold flex items-center gap-1.5 bg-black/30 px-2 py-0.5 rounded-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                          the best route is loading.........
                         </span>
                       )}
                     </div>
@@ -678,6 +679,7 @@ export const RiderRoute: React.FC = () => {
                 ? routeResult.coordinates
                 : undefined
             }
+            isRouteLoading={isRouting || (checkpoints.length >= 2 && (!routeResult || !routeResult.coordinates || routeResult.coordinates.length <= checkpoints.length))}
             className="w-full h-full rounded-3xl overflow-hidden relative"
           />
 

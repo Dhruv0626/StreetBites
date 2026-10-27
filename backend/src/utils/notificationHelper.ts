@@ -13,15 +13,19 @@ export interface CreateNotificationParams {
 /**
  * Creates an in-app notification for a user (Vendor, Rider, Customer, Admin)
  */
-export const createNotification = async (params: CreateNotificationParams) => {
+export const createNotification = async (params: CreateNotificationParams | any) => {
   try {
-    if (!params.userId) return null;
+    const rawUserId = params?.userId || params?.user_id;
+    if (!rawUserId) return null;
+
+    const rawOrderId = params?.orderId || params?.order_id || (params?.data && params.data.order_id);
+
     const notif = await Notification.create({
-      user_id: new mongoose.Types.ObjectId(params.userId),
+      user_id: new mongoose.Types.ObjectId(rawUserId),
       title: params.title,
       message: params.message,
       type: params.type || "SYSTEM",
-      order_id: params.orderId ? new mongoose.Types.ObjectId(params.orderId) : undefined,
+      order_id: rawOrderId ? new mongoose.Types.ObjectId(rawOrderId) : undefined,
       amount: params.amount,
       is_read: false,
     });

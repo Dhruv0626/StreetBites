@@ -28,6 +28,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
   onZoomChange,
   showControls = true,
   showMarkers = true,
+  isRouteLoading = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any | null>(null);
@@ -495,6 +496,21 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
       {/* TomTom Map Container Div */}
       <div ref={mapContainerRef} className="w-full h-full" />
+
+      {/* Route Calculation Floating Box */}
+      {isRouteLoading && (
+        <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-fadeIn">
+          <div className="bg-stone-900/95 backdrop-blur-md text-white px-5 py-2.5 rounded-2xl shadow-2xl border border-stone-700/80 flex items-center gap-3">
+            <div className="relative flex items-center justify-center">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E54B3C] animate-ping absolute" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E54B3C]" />
+            </div>
+            <span className="text-xs font-bold tracking-wide text-stone-100 whitespace-nowrap">
+              the best route is loading.........
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Loading Overlay */}
       {isLoading && (

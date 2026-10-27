@@ -19,6 +19,7 @@ import {
   type VendorOrderMetrics
 } from '../../services/vendorOrderService';
 import { useAlert } from '../../context/AlertContext';
+import { useNotification } from '../../context/NotificationContext';
 
 
 interface MetricsProps {
@@ -64,6 +65,10 @@ const MetricsBar: React.FC<MetricsProps> = ({ liveCount, avgPrep, rating, todayP
 
 export const VendorOrders: React.FC = () => {
   const { toast, showConfirm } = useAlert();
+  const { triggerDrop } = useNotification();
+  const knownOrderIdsRef = React.useRef<Set<string>>(new Set());
+  const isFirstFetchRef = React.useRef<boolean>(true);
+
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [metrics, setMetrics] = useState<VendorOrderMetrics>({
     liveCount: 0,
@@ -92,9 +97,34 @@ export const VendorOrders: React.FC = () => {
     try {
       const res = await vendorOrderService.getOrders();
       if (res.success && res.data) {
-        setOrders(res.data.orders || []);
+        const fetchedOrders = res.data.orders || [];
+        setOrders(fetchedOrders);
         if (res.data.metrics) {
           setMetrics(res.data.metrics);
+        }
+
+        if (isFirstFetchRef.current) {
+          fetchedOrders.forEach((o: any) => knownOrderIdsRef.current.add(o.id || o.orderId || ''));
+          isFirstFetchRef.current = false;
+        } else {
+          // Check for newly arriving orders with status 'New'
+          const newArrivals = fetchedOrders.filter((o: any) => {
+            const id = o.id || o.orderId || '';
+            return id && !knownOrderIdsRef.current.has(id) && o.status === 'New';
+          });
+
+          if (newArrivals.length > 0) {
+            newArrivals.forEach((o: any) => knownOrderIdsRef.current.add(o.id || o.orderId || ''));
+            const newest = newArrivals[0];
+            const cleanId = (newest.orderNumber || newest.id || '').replace(/^MO-/, '');
+            triggerDrop({
+              title: `New Food Order #${cleanId}`,
+              message: `${newest.customer?.name || 'Customer'} ordered ${newest.items?.length || 1} item(s) (₹${newest.total || 0}).`,
+              type: 'ORDER',
+              role: 'VENDOR',
+              orderId: newest.id || newest.orderId,
+            });
+          }
         }
       }
     } catch (err) {
@@ -103,7 +133,7 @@ export const VendorOrders: React.FC = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [triggerDrop]);
 
   // Poll live kitchen orders every 6 seconds
   useEffect(() => {

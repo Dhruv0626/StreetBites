@@ -245,6 +245,11 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
         autoAccept: Boolean(rider.auto_accept),
         pushNotifications: rider.push_notifications !== false,
         todayEarnings,
+        walletBalance: Number(rider.wallet_balance) || 0,
+        bankName: rider.bank_name || null,
+        bankAccountNo: rider.bank_account_no || null,
+        bankIfsc: rider.bank_ifsc || null,
+        upiId: rider.upi_id || null,
         completedTripsCount,
         timeOnline: rider.is_online ? "Active Now" : "Offline",
         currentCodDebt,
@@ -1512,3 +1517,135 @@ export const submitRiderClaim = async (req: Request, res: Response): Promise<voi
   }
 };
 
+// @desc    Rider Request Payout Withdrawal
+// @route   POST /api/rider/payouts/withdraw
+export const requestRiderWithdrawal = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rider = await resolveRider(req);
+    if (!rider) {
+      res.status(401).json({ success: false, message: "Unauthorized. Rider identification required." });
+      return;
+    }
+
+    if (req.body?.bankName) rider.bank_name = String(req.body.bankName).trim();
+    if (req.body?.bankAccountNo) rider.bank_account_no = String(req.body.bankAccountNo).trim();
+    if (req.body?.bankIfsc) rider.bank_ifsc = String(req.body.bankIfsc).trim().toUpperCase();
+    if (req.body?.upiId) rider.upi_id = String(req.body.upiId).trim();
+
+    const availableBalance = Number(rider.wallet_balance) || 0;
+    if (availableBalance <= 0) {
+      res.status(400).json({ success: false, message: "You have no available balance to withdraw." });
+      return;
+    }
+
+    if (!rider.bank_name && !rider.bank_account_no && !rider.upi_id) {
+      res.status(400).json({
+        success: false,
+        message: "Please add your bank account or UPI details before requesting a payout.",
+      });
+      return;
+    }
+
+    const requestedAmount = req.body?.amount ? Math.min(Number(req.body.amount), availableBalance) : availableBalance;
+    if (requestedAmount <= 0) {
+      res.status(400).json({ success: false, message: "Invalid withdrawal amount requested." });
+      return;
+    }
+
+    // Deduct from wallet balance
+    rider.wallet_balance = Math.max(0, availableBalance - requestedAmount);
+    await rider.save();
+
+    // Create Transaction audit record for rider withdrawal
+    const withdrawalTx = new Transaction({
+      order_id: new mongoose.Types.ObjectId(),
+      order_number: `WD-${Date.now().toString().slice(-6)}`,
+      customer_id: null,
+      payment_method: "ONLINE",
+      payment_status: "PAID",
+      total_order_amount: requestedAmount,
+      vendor_payouts: [],
+      rider_payout: {
+        rider_id: rider._id,
+        amount: requestedAmount,
+        status: "COMPLETED",
+        payout_at: new Date(),
+      },
+      platform_revenue: {
+        vendor_commission_amount: 0,
+        customer_markup_amount: 0,
+        total_platform_fee: 0,
+        tax_amount: 0,
+        status: "COMPLETED",
+      },
+      settlement_status: "COMPLETED",
+      note: `Rider Payout Settlement: Transfer of ₹${requestedAmount} to ${rider.bank_name || "Bank"} (A/C: ${rider.bank_account_no || rider.upi_id || "Registered Details"})`,
+    });
+    await withdrawalTx.save();
+
+    await createNotification({
+      userId: rider._id,
+      title: "Withdrawal Processed",
+      message: `Withdrawal request of ₹${requestedAmount} has been processed for transfer to your account.`,
+      type: "PAYOUT",
+      amount: requestedAmount,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Withdrawal of ₹${requestedAmount} processed successfully.`,
+      data: {
+        withdrawnAmount: requestedAmount,
+        remainingBalance: rider.wallet_balance,
+        transactionId: withdrawalTx.order_number,
+      },
+    });
+  } catch (error: any) {
+    console.error("Rider Withdrawal Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to process withdrawal request.",
+    });
+  }
+};
+
+// @desc    Update Rider Bank & Payout Details
+// @route   PUT /api/rider/bank-details
+export const updateRiderBankDetails = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rider = await resolveRider(req);
+    if (!rider) {
+      res.status(401).json({ success: false, message: "Unauthorized. Rider identification required." });
+      return;
+    }
+
+    const { bankName, bankAccountNo, bankIfsc, upiId } = req.body || {};
+    if (!bankName && !bankAccountNo && !upiId) {
+      res.status(400).json({ success: false, message: "Please provide valid bank name, account number or UPI ID." });
+      return;
+    }
+
+    if (bankName) rider.bank_name = String(bankName).trim();
+    if (bankAccountNo) rider.bank_account_no = String(bankAccountNo).trim();
+    if (bankIfsc) rider.bank_ifsc = String(bankIfsc).trim().toUpperCase();
+    if (upiId) rider.upi_id = String(upiId).trim();
+    await rider.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Bank details saved successfully.",
+      data: {
+        bankName: rider.bank_name,
+        bankAccountNo: rider.bank_account_no,
+        bankIfsc: rider.bank_ifsc,
+        upiId: rider.upi_id,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating rider bank details:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to update bank details.",
+    });
+  }
+};

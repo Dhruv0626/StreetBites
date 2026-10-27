@@ -1120,25 +1120,27 @@ export const cancelCustomerOrder = async (req: Request, res: Response): Promise<
     await order.save();
 
     // Customer Notification
+    const cleanCode = (order.order_number || order._id.toString().slice(-5)).toUpperCase().replace(/^MO-/, "");
     await createNotification({
-      user_id: customer._id,
+      userId: customer._id,
       type: "ORDER",
-      title: "Order Cancelled",
+      title: order.payment_method === "ONLINE" ? "Order Cancelled & Refunded" : "Order Cancelled",
       message:
         order.payment_method === "ONLINE"
-          ? `Your order #${order._id.toString().slice(-5).toUpperCase()} has been cancelled. ₹${order.total_amount} has been refunded to your wallet.`
-          : `Your order #${order._id.toString().slice(-5).toUpperCase()} has been cancelled.`,
-      data: { order_id: order._id },
+          ? `Your order #${cleanCode} has been cancelled. ₹${order.total_amount} has been refunded to your wallet.`
+          : `Your order #${cleanCode} has been cancelled.`,
+      orderId: order._id,
+      amount: order.payment_method === "ONLINE" ? order.total_amount : undefined,
     });
 
     // Notify assigned rider if any
     if (order.rider_id) {
       await createNotification({
-        user_id: order.rider_id,
-        type: "ORDER",
-        title: "Order Cancelled",
-        message: `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by the customer.`,
-        data: { order_id: order._id },
+        userId: order.rider_id,
+        type: "DELIVERY",
+        title: "Delivery Task Cancelled",
+        message: `Order #${cleanCode} was cancelled by the customer.`,
+        orderId: order._id,
       });
     }
 

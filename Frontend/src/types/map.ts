@@ -37,5 +37,6 @@ export interface TomTomMapProps {
   onZoomChange?: (zoom: number) => void;
   showControls?: boolean;
   showMarkers?: boolean;
+  isRouteLoading?: boolean;
 }
 

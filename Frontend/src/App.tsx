@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { AlertProvider } from './context/AlertContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 // Route Guards & Layouts
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -230,7 +231,9 @@ const App: React.FC = () => (
   <AuthProvider>
     <CartProvider>
       <AlertProvider>
-        <RouterProvider router={router} />
+        <NotificationProvider>
+          <RouterProvider router={router} />
+        </NotificationProvider>
       </AlertProvider>
     </CartProvider>
   </AuthProvider>

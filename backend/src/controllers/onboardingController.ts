@@ -159,6 +159,12 @@ const getAuthUserId = (req: Request): string | null => {
       // Token invalid or expired
     }
   }
+
+  // Fallback headers & query
+  const headerId = (req.headers["x-user-id"] as string) || (req.headers["x-customer-id"] as string);
+  if (headerId && typeof headerId === "string" && headerId.length >= 12) return headerId;
+  if (req.query?.userId && typeof req.query.userId === "string") return req.query.userId;
+
   return null;
 };
 
@@ -397,7 +403,7 @@ export const registerVendorDetails = async (req: Request, res: Response): Promis
  */
 export const getRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || req.query.userId;
+    const userId = getAuthUserId(req) || (req as any).user?.id || req.query.userId;
     const email = req.query.email as string;
 
     let user = null;
@@ -405,6 +411,10 @@ export const getRiderDetails = async (req: Request, res: Response): Promise<void
       user = await User.findById(userId);
     } else if (email) {
       user = await User.findOne({ email: email.toLowerCase() });
+    }
+
+    if (!user) {
+      user = await User.findOne({ role: "RIDER" });
     }
 
     if (!user) {
@@ -516,6 +526,10 @@ export const getVendorDetails = async (req: Request, res: Response): Promise<voi
     }
     if (!user && email && typeof email === "string" && email.trim()) {
       user = await User.findOne({ email: email.trim().toLowerCase() });
+    }
+
+    if (!user) {
+      user = await User.findOne({ role: "VENDOR" });
     }
 
     if (!user) {

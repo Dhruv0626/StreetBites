@@ -513,6 +513,7 @@ export const AdminOrders: React.FC = () => {
               zoom={mapZoom}
               markers={orderMarkers}
               routeCoordinates={selectedRouteCoords}
+              isRouteLoading={isCalculatingRoute}
               className="w-full h-full rounded-3xl overflow-hidden relative"
             />
 

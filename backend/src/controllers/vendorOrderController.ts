@@ -437,13 +437,20 @@ export const updateVendorOrderStatus = async (
       const rejectedDeduction = rejectedFoodTotal + rejectedTax;
 
       if (activeSubOrders.length === 0) {
-        // Case A: 100% Rejection - Cancel whole order and issue 100% full refund
+        // Case A: 100% Rejection - Cancel whole order and issue full refund if online
         order.status = "CANCELLED";
         order.rejection_note = `Order cancelled. Stalls were unable to fulfill the request (${reason}).`;
+
+        const cleanCode = (order.order_number || order._id.toString().slice(-5)).toUpperCase().replace(/^MO-/, "");
 
         if (order.payment_method === "ONLINE" && order.payment_status === "PAID") {
           order.payment_status = "REFUNDED";
           order.refunded_amount = order.total_amount;
+
+          // Credit customer wallet balance
+          await User.findByIdAndUpdate(order.customer_id, {
+            $inc: { wallet_balance: order.total_amount },
+          });
 
           await Transaction.create({
             user_id: order.customer_id,
@@ -451,28 +458,67 @@ export const updateVendorOrderStatus = async (
             amount: order.total_amount,
             type: "CUSTOMER_REFUND",
             status: "COMPLETED",
-            note: `100% Full refund processed for cancelled Order #${order._id.toString().slice(-6).toUpperCase()}`,
+            note: `100% Full refund processed for cancelled Order #${cleanCode}`,
+          });
+
+          // Customer Notification for ONLINE payment (includes money/refund text)
+          await createNotification({
+            userId: order.customer_id,
+            type: "ORDER",
+            title: "Order Cancelled & Refunded",
+            message: `Your order #${cleanCode} was cancelled because stalls were unable to fulfill it. ₹${order.total_amount} has been refunded to your wallet.`,
+            orderId: order._id,
+            amount: order.total_amount,
           });
         } else if (order.payment_method === "COD") {
           order.total_amount = 0;
           order.food_items_total = 0;
           order.tax_amount = 0;
+
+          // Customer Notification for COD payment (NO MONEY TEXT, ONLY CANCELLATION TEXT)
+          await createNotification({
+            userId: order.customer_id,
+            type: "ORDER",
+            title: "Order Cancelled",
+            message: `Your order #${cleanCode} was cancelled because stalls were unable to fulfill it.`,
+            orderId: order._id,
+          });
+        }
+
+        // Notify assigned rider if any
+        if (order.rider_id) {
+          await createNotification({
+            userId: order.rider_id,
+            type: "DELIVERY",
+            title: "Delivery Task Cancelled",
+            message: `Order #${cleanCode} has been cancelled by stalls.`,
+            orderId: order._id,
+          });
         }
 
         await order.save();
 
         res.status(200).json({
           success: true,
-          message: "Order rejected. Since all stalls were rejected, 100% full refund processed.",
+          message: order.payment_method === "ONLINE"
+            ? "Order rejected. Since all stalls were rejected, 100% full refund was processed."
+            : "Order rejected. Since all stalls were rejected, order has been cancelled.",
           orderStatus: "CANCELLED",
           consecutiveMissedOrders: primaryStall.consecutive_missed_orders,
           isStallOffline: !primaryStall.is_accepting_orders,
         });
         return;
       } else {
-        // Case B: Partial Rejection - Continue order with active stalls & issue partial refund
+        // Case B: Partial Rejection - Continue order with active stalls & issue partial refund if online
+        const cleanCode = (order.order_number || order._id.toString().slice(-5)).toUpperCase().replace(/^MO-/, "");
+
         if (order.payment_method === "ONLINE") {
           order.refunded_amount = (order.refunded_amount || 0) + rejectedDeduction;
+
+          // Credit customer wallet balance for partial refund
+          await User.findByIdAndUpdate(order.customer_id, {
+            $inc: { wallet_balance: rejectedDeduction },
+          });
 
           await Transaction.create({
             user_id: order.customer_id,
@@ -482,10 +528,29 @@ export const updateVendorOrderStatus = async (
             status: "COMPLETED",
             note: `Partial refund of ₹${rejectedDeduction} issued for items rejected by ${primaryStall.name}`,
           });
+
+          // Customer Notification for ONLINE partial rejection (includes partial refund text)
+          await createNotification({
+            userId: order.customer_id,
+            type: "ORDER",
+            title: "Item Unavailable - Refund Issued",
+            message: `${primaryStall.name} was unable to fulfill item(s) for Order #${cleanCode}. ₹${rejectedDeduction} has been refunded to your wallet. Remaining stalls continue cooking.`,
+            orderId: order._id,
+            amount: rejectedDeduction,
+          });
         } else if (order.payment_method === "COD") {
           order.food_items_total = Math.max(0, order.food_items_total - rejectedFoodTotal);
           order.tax_amount = Math.max(0, order.tax_amount - rejectedTax);
           order.total_amount = Math.max(0, order.total_amount - rejectedDeduction);
+
+          // Customer Notification for COD partial rejection (NO MONEY TEXT, NO REFUND TEXT)
+          await createNotification({
+            userId: order.customer_id,
+            type: "ORDER",
+            title: "Item Unavailable",
+            message: `${primaryStall.name} was unable to fulfill item(s) for Order #${cleanCode} (${reason}). The item has been removed from your order. Remaining stalls continue cooking.`,
+            orderId: order._id,
+          });
         }
 
         // Advance master order if all remaining stalls are READY
@@ -499,8 +564,10 @@ export const updateVendorOrderStatus = async (
 
         res.status(200).json({
           success: true,
-          message: `Stall order rejected (${reason}). Automated partial refund of ₹${rejectedDeduction} processed for customer. Remaining stalls continue cooking.`,
-          refundedAmount: rejectedDeduction,
+          message: order.payment_method === "ONLINE"
+            ? `Stall order rejected (${reason}). Automated partial refund of ₹${rejectedDeduction} processed for customer. Remaining stalls continue cooking.`
+            : `Stall order rejected (${reason}). Item removed from COD order. Remaining stalls continue cooking.`,
+          refundedAmount: order.payment_method === "ONLINE" ? rejectedDeduction : 0,
           newTotalAmount: order.total_amount,
           consecutiveMissedOrders: primaryStall.consecutive_missed_orders,
           isStallOffline: !primaryStall.is_accepting_orders,
@@ -934,10 +1001,15 @@ export const requestVendorWithdrawal = async (req: AuthRequest, res: Response): 
       return;
     }
 
+    if (req.body?.bankName) vendorUser.bank_name = String(req.body.bankName).trim();
+    if (req.body?.bankAccountNo) vendorUser.bank_account_no = String(req.body.bankAccountNo).trim();
+    if (req.body?.bankIfsc) vendorUser.bank_ifsc = String(req.body.bankIfsc).trim().toUpperCase();
+    if (req.body?.upiId) vendorUser.upi_id = String(req.body.upiId).trim();
+
     if (!vendorUser.bank_name && !vendorUser.bank_account_no && !vendorUser.upi_id) {
       res.status(400).json({
         success: false,
-        message: "Please add your bank account or UPI details in onboarding profile before requesting a payout.",
+        message: "Please add your bank account or UPI details before requesting a payout.",
       });
       return;
     }
@@ -1078,6 +1150,10 @@ export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): P
       success: true,
       data: {
         walletBalance: vendorUser.wallet_balance || 0,
+        bankName: vendorUser.bank_name || null,
+        bankAccountNo: vendorUser.bank_account_no || null,
+        bankIfsc: vendorUser.bank_ifsc || null,
+        upiId: vendorUser.upi_id || null,
         transactions: formattedHistory,
       },
     });
@@ -1090,4 +1166,49 @@ export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): P
   }
 };
 
+// @desc    Update Vendor Bank & Payout Details
+// @route   PUT /api/vendor/orders/payouts/bank-details
+export const updateVendorBankDetails = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized. Vendor identification required." });
+      return;
+    }
 
+    const { bankName, bankAccountNo, bankIfsc, upiId } = req.body || {};
+    if (!bankName && !bankAccountNo && !upiId) {
+      res.status(400).json({ success: false, message: "Please provide valid bank name, account number or UPI ID." });
+      return;
+    }
+
+    const vendorUser = await User.findById(userId);
+    if (!vendorUser) {
+      res.status(404).json({ success: false, message: "Vendor profile not found." });
+      return;
+    }
+
+    if (bankName) vendorUser.bank_name = String(bankName).trim();
+    if (bankAccountNo) vendorUser.bank_account_no = String(bankAccountNo).trim();
+    if (bankIfsc) vendorUser.bank_ifsc = String(bankIfsc).trim().toUpperCase();
+    if (upiId) vendorUser.upi_id = String(upiId).trim();
+    await vendorUser.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Bank details saved successfully.",
+      data: {
+        bankName: vendorUser.bank_name,
+        bankAccountNo: vendorUser.bank_account_no,
+        bankIfsc: vendorUser.bank_ifsc,
+        upiId: vendorUser.upi_id,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating vendor bank details:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to update bank details.",
+    });
+  }
+};

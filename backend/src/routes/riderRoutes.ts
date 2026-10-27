@@ -16,6 +16,8 @@ import {
   completeDeliveryWithOtp,
   getRiderClaims,
   submitRiderClaim,
+  requestRiderWithdrawal,
+  updateRiderBankDetails,
 } from "../controllers/riderController.ts";
 
 const router = Router();
@@ -66,6 +68,10 @@ router.get("/history", getRiderHistory);
 
 // Debt Settlement
 router.post("/settle-debt", settleRiderDebt);
+
+// Rider Payout Withdrawal & Bank Details
+router.post("/payouts/withdraw", requestRiderWithdrawal);
+router.put("/bank-details", updateRiderBankDetails);
 
 // Compensation Claims (Connected to MongoDB Feedback collection & Admin Disputes)
 router.get("/claims", getRiderClaims);
