@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { IndianRupee, ArrowDownLeft, Building2, ShieldCheck, Clock, CheckCircle2, X, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
 import { useAuth } from '../../context/AuthContext';
 import { onboardingService } from '../../services/onboardingService';
 import { useAlert } from '../../context/AlertContext';
@@ -18,7 +17,6 @@ export interface PayoutTransaction {
 export const VendorPayoutsPage: React.FC = () => {
   const { user } = useAuth();
   const { showAlert, toast } = useAlert();
-  const navigate = useNavigate();
   const [vendorData, setVendorData] = useState<{ user?: any; stall?: any } | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -160,14 +158,15 @@ export const VendorPayoutsPage: React.FC = () => {
         email: user?.email,
       });
       if (res.success && res.data) {
+        const d = res.data;
         setVendorData((prev: any) => ({
           ...prev,
           user: {
             ...(prev?.user || user),
-            bank_name: res.data.bankName,
-            bank_account_no: res.data.bankAccountNo,
-            bankIfsc: res.data.bankIfsc,
-            upi_id: res.data.upiId,
+            bank_name: d.bankName,
+            bank_account_no: d.bankAccountNo,
+            bankIfsc: d.bankIfsc,
+            upi_id: d.upiId,
           },
         }));
         setShowBankModal(false);

@@ -61,12 +61,13 @@ export const RiderEarningsPage: React.FC = () => {
         email: user?.email,
       });
       if (res.success && res.data) {
+        const d = res.data;
         setStats((prev: any) => prev ? ({
           ...prev,
-          bankName: res.data.bankName,
-          bankAccountNo: res.data.bankAccountNo,
-          bankIfsc: res.data.bankIfsc,
-          upiId: res.data.upiId,
+          bankName: d.bankName,
+          bankAccountNo: d.bankAccountNo,
+          bankIfsc: d.bankIfsc,
+          upiId: d.upiId,
         }) : prev);
         setShowBankModal(false);
         toast.success('Bank details linked successfully!');

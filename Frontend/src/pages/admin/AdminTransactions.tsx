@@ -40,7 +40,7 @@ export const AdminTransactions: React.FC = () => {
     fetchTransactions();
   }, []);
 
-  const filteredPayouts = payouts.filter(p => 
+  const filteredPayouts = payouts.filter(p =>
     p.orderId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -49,7 +49,7 @@ export const AdminTransactions: React.FC = () => {
     p.note?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredRefunds = refunds.filter(r => 
+  const filteredRefunds = refunds.filter(r =>
     r.orderId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -146,7 +146,7 @@ export const AdminTransactions: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `streetbites_${activeTab}_report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `streetbites_${activeTab}_report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -168,13 +168,13 @@ export const AdminTransactions: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
-          <button 
+          <button
             onClick={fetchTransactions}
             className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2 px-3.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 text-xs cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#D94A38]' : 'text-slate-400'}`} /> Sync
           </button>
-          <button 
+          <button
             onClick={handleExportCSV}
             className="bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 px-4 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 text-xs shrink-0 cursor-pointer"
           >
@@ -219,7 +219,7 @@ export const AdminTransactions: React.FC = () => {
           </h3>
           <p className="text-[11px] text-slate-500 mt-1">Cash held by delivery riders</p>
         </div>
-        
+
         {/* Pending Settlements */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
@@ -233,7 +233,7 @@ export const AdminTransactions: React.FC = () => {
           </h3>
           <p className="text-[11px] text-slate-500 mt-1">{payouts.filter(p => p.status === 'pending').length} payouts awaiting settlement</p>
         </div>
-        
+
         {/* Total Withdrawn */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
@@ -267,51 +267,48 @@ export const AdminTransactions: React.FC = () => {
       <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/40">
           <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
-            <button 
+            <button
               onClick={() => setActiveTab('payouts')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
-                activeTab === 'payouts' 
-                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'payouts'
+                  ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
-              }`}
+                }`}
             >
               Order Settlements ({payouts.length})
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('withdrawals')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
-                activeTab === 'withdrawals' 
-                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'withdrawals'
+                  ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
-              }`}
+                }`}
             >
               Withdrawals ({withdrawals.length})
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('refunds')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${
-                activeTab === 'refunds' 
-                  ? 'bg-white shadow-xs text-slate-900 font-bold' 
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'refunds'
+                  ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
-              }`}
+                }`}
             >
               Customer Refunds ({refunds.length})
             </button>
           </div>
-          
+
           <div className="flex gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Order or ID..." 
-                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D94A38] transition-colors" 
+                placeholder="Search Order or ID..."
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D94A38] transition-colors"
               />
             </div>
             {activeTab === 'payouts' && (
-              <button 
+              <button
                 disabled={isProcessing || payouts.filter(p => p.status === 'pending').length === 0}
                 onClick={handleProcessAllPending}
                 className="bg-[#D94A38] hover:bg-[#C43D2E] disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors shrink-0 cursor-pointer flex items-center gap-1.5 shadow-xs"
@@ -387,7 +384,7 @@ export const AdminTransactions: React.FC = () => {
                       <td className="px-5 py-3.5 font-bold font-mono text-slate-700">₹{tx.total}</td>
                       <td className="px-5 py-3.5 text-right">
                         {tx.status === 'pending' ? (
-                          <button 
+                          <button
                             disabled={isProcessing}
                             onClick={() => handleProcessSingle(tx.id)}
                             className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors"
@@ -422,11 +419,10 @@ export const AdminTransactions: React.FC = () => {
                         <div className="font-semibold text-slate-900">{w.recipientName}</div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                          w.recipientRole === 'Vendor'
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${w.recipientRole === 'Vendor'
                             ? 'bg-violet-50 text-violet-700 border-violet-200/70'
                             : 'bg-sky-50 text-sky-700 border-sky-200/70'
-                        }`}>
+                          }`}>
                           {w.recipientRole}
                         </span>
                       </td>

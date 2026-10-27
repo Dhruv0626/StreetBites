@@ -119,7 +119,7 @@ export const VendorOrders: React.FC = () => {
             const cleanId = (newest.orderNumber || newest.id || '').replace(/^MO-/, '');
             triggerDrop({
               title: `New Food Order #${cleanId}`,
-              message: `${newest.customer?.name || 'Customer'} ordered ${newest.items?.length || 1} item(s) (₹${newest.total || 0}).`,
+              message: `${newest.customer || 'Customer'} ordered ${newest.items?.length || 1} item(s) (₹${newest.total || 0}).`,
               type: 'ORDER',
               role: 'VENDOR',
               orderId: newest.id || newest.orderId,
