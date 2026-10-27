@@ -6,6 +6,7 @@ import {
   getVendorMetrics,
   getVendorAnalytics,
   requestVendorWithdrawal,
+  getVendorPayoutHistory,
 } from "../controllers/vendorOrderController.ts";
 import { protect } from "../middlewares/authMiddleware.ts";
 
@@ -19,6 +20,9 @@ router.get("/metrics", protect, getVendorMetrics);
 
 // Detailed vendor analytics dashboard (KPIs, revenue breakdown, top items)
 router.get("/analytics", protect, getVendorAnalytics);
+
+// Vendor Payouts & Settlement History
+router.get("/payouts", protect, getVendorPayoutHistory);
 
 // Vendor Request Payout Withdrawal
 router.post("/payouts/withdraw", protect, requestVendorWithdrawal);

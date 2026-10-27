@@ -135,6 +135,23 @@ export const vendorOrderService = {
       requiresAuth: true,
     });
   },
+
+  // 7. Get vendor settlement and payout transaction history
+  getPayoutHistory: async () => {
+    return apiRequest<{
+      walletBalance: number;
+      transactions: Array<{
+        id: string;
+        date: string;
+        amount: string;
+        status: 'pending' | 'completed' | 'failed';
+        type: string;
+      }>;
+    }>('/vendor/orders/payouts', {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
 };
 
 export default vendorOrderService;

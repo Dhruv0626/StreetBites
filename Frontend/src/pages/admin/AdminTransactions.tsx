@@ -39,17 +39,20 @@ export const AdminTransactions: React.FC = () => {
   const filteredPayouts = payouts.filter(p => 
     p.orderId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.user?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    p.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.vendorNames?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.riderName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.note?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredRefunds = refunds.filter(r => 
     r.orderId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
+    r.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.reason?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalNetRevenue = payouts
-    .filter(p => p.status === 'completed')
     .reduce((acc, p) => acc + (Number(p.platformGain) || 0), 0);
 
   const pendingPayoutTotal = payouts
@@ -71,7 +74,7 @@ export const AdminTransactions: React.FC = () => {
     try {
       const res = await adminService.processPayouts();
       if (res.success) {
-        alert("All pending payouts have been processed and marked as completed.");
+        setPayouts(prev => prev.map(p => ({ ...p, status: 'completed' })));
         fetchTransactions();
       } else {
         alert(res.message || "Failed to process payouts");
@@ -89,6 +92,7 @@ export const AdminTransactions: React.FC = () => {
     try {
       const res = await adminService.processPayouts(txId);
       if (res.success) {
+        setPayouts(prev => prev.map(p => p.id === txId ? { ...p, status: 'completed' } : p));
         fetchTransactions();
       } else {
         alert(res.message || "Failed to settle payout");
@@ -300,8 +304,12 @@ export const AdminTransactions: React.FC = () => {
                         <div className="text-[11px] text-slate-400 mt-0.5">{tx.date}</div>
                         {tx.user?.name ? (
                           <div className="text-[11px] text-slate-600 mt-0.5">{tx.user.name} ({tx.user.role})</div>
+                        ) : tx.vendorNames ? (
+                          <div className="text-[11px] text-slate-600 mt-0.5 font-medium">{tx.vendorNames}</div>
+                        ) : tx.riderName ? (
+                          <div className="text-[11px] text-slate-600 mt-0.5 font-medium">Rider: {tx.riderName}</div>
                         ) : (
-                          <div className="text-[11px] font-medium text-slate-500 mt-0.5">Platform Direct Ledger</div>
+                          <div className="text-[11px] font-medium text-slate-500 mt-0.5">{tx.note || 'Platform Direct Ledger'}</div>
                         )}
                       </td>
                       <td className="px-5 py-3.5 font-bold font-mono text-slate-900">

@@ -148,14 +148,28 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
       .sort({ delivered_at: -1, createdAt: -1 })
       .limit(10);
 
-    const codTransactions = allCodOrders.map((o) => ({
-      id: `TX-${o._id.toString().slice(-6).toUpperCase()}`,
-      type: "collection" as const,
-      amount: `₹${getOrderNetCodDebt(o)}`,
-      order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
-      time: o.delivered_at ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
-      status: o.cod_deposit_status === "PENDING_DEPOSIT" ? "pending" : "completed",
-    }));
+    const codTransactions: any[] = [];
+    allCodOrders.forEach((o) => {
+      codTransactions.push({
+        id: `TX-${o._id.toString().slice(-6).toUpperCase()}`,
+        type: "collection" as const,
+        amount: `₹${getOrderNetCodDebt(o)}`,
+        order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
+        time: o.delivered_at ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
+        status: o.cod_deposit_status === "PENDING_DEPOSIT" ? "pending" : "completed",
+      });
+
+      if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
+        codTransactions.push({
+          id: `STL-${o._id.toString().slice(-6).toUpperCase()}`,
+          type: "settlement" as const,
+          amount: `₹${getOrderNetCodDebt(o)}`,
+          order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
+          time: o.updatedAt ? new Date(o.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Settled",
+          status: "completed",
+        });
+      }
+    });
 
     // 3. Weekly earnings chart (Mon - Sun of current week)
     const now = new Date();

@@ -104,14 +104,17 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       }
     });
 
+    let ordersGrossRevenue = 0;
+    let ordersPlatformFee = 0;
+    let ordersDeliveryFees = 0;
     orders.forEach((o: any) => {
       const amt = Number(o.total_amount) || 0;
-      const platFee = Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.15);
+      const platFee = Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.05);
       const delFee = Number(o.delivery_fee) || 0;
 
-      totalGrossRevenue += amt;
-      totalPlatformFee += platFee;
-      totalDeliveryFees += delFee;
+      ordersGrossRevenue += amt;
+      ordersPlatformFee += platFee;
+      ordersDeliveryFees += delFee;
 
       if (o.createdAt && new Date(o.createdAt) >= todayStart) {
         todayGrossRevenue += amt;
@@ -120,12 +123,9 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       }
     });
 
-    if (txGrossTotal > totalGrossRevenue) {
-      totalGrossRevenue = txGrossTotal;
-    }
-    if (txPlatformGain > totalPlatformFee) {
-      totalPlatformFee = txPlatformGain;
-    }
+    totalGrossRevenue = Math.max(ordersGrossRevenue, txGrossTotal);
+    totalPlatformFee = Math.max(ordersPlatformFee, txPlatformGain);
+    totalDeliveryFees = ordersDeliveryFees;
 
     // 3. Last 7 Days Daily Revenue Trend Breakdown (Platform Fee Earnings)
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -238,6 +238,76 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
 // @access  Admin
 export const getAdminTransactions = async (_req: Request, res: Response): Promise<void> => {
   try {
+    // 1. Auto-synchronize: Ensure all orders have a corresponding Transaction record
+    try {
+      const existingTxOrderIds = await Transaction.distinct("order_id");
+      const existingIdSet = new Set((existingTxOrderIds || []).map((id: any) => id?.toString()));
+
+      const unrecordedOrders = await Order.find({
+        _id: { $nin: Array.from(existingIdSet) },
+      }).limit(50).lean();
+
+      if (unrecordedOrders.length > 0) {
+        for (const o of unrecordedOrders) {
+          const foodTotal = Number(o.food_items_total) || Math.max(0, (Number(o.total_amount) || 0) - (Number(o.delivery_fee) || 0));
+          const deliveryFee = Number(o.delivery_fee) || 0;
+          const platFee = Number(o.platform_fee_earned) || Math.round(foodTotal * 0.05);
+          const vendorAmount = Math.max(0, foodTotal - platFee);
+
+          // Find stalls for this order if suborders exist
+          const subOrders = await SubOrder.find({ order_id: o._id }).populate("stall_id", "name vendor_id").lean();
+          let vendorPayoutsList: any[] = [];
+          if (subOrders.length > 0) {
+            vendorPayoutsList = subOrders.map((so: any) => ({
+              stall_id: so.stall_id?._id || so.stall_id,
+              vendor_id: so.stall_id?.vendor_id || null,
+              stall_name: so.stall_id?.name || "Khau Galli Stall",
+              amount: Number(so.vendor_earned_amount) || Math.round(vendorAmount / subOrders.length),
+              status: o.status === "DELIVERED" ? "COMPLETED" : "PENDING",
+            }));
+          } else {
+            vendorPayoutsList = [{
+              stall_id: new mongoose.Types.ObjectId(),
+              vendor_id: null,
+              stall_name: "Participating Food Stall",
+              amount: vendorAmount,
+              status: o.status === "DELIVERED" ? "COMPLETED" : "PENDING",
+            }];
+          }
+
+          const isDelivered = o.status === "DELIVERED";
+          await Transaction.create({
+            order_id: o._id,
+            order_number: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
+            customer_id: o.customer_id,
+            payment_method: o.payment_method || "ONLINE",
+            payment_status: o.payment_status || (o.payment_method === "COD" ? "PENDING" : "PAID"),
+            total_order_amount: Number(o.total_amount) || (foodTotal + deliveryFee),
+            vendor_payouts: vendorPayoutsList,
+            rider_payout: {
+              rider_id: o.rider_id || null,
+              amount: deliveryFee,
+              status: isDelivered ? "COMPLETED" : "PENDING",
+              cod_cash_collected: o.payment_method === "COD" && isDelivered ? Number(o.total_amount) : 0,
+              cod_cash_debt: o.payment_method === "COD" && isDelivered && o.cod_deposit_status === "PENDING_DEPOSIT" ? Math.max(0, Number(o.total_amount) - deliveryFee) : 0,
+            },
+            platform_revenue: {
+              vendor_commission_amount: platFee,
+              customer_markup_amount: 0,
+              total_platform_fee: platFee,
+              tax_amount: Number(o.tax_amount) || 0,
+              status: isDelivered ? "COMPLETED" : "PENDING",
+            },
+            settlement_status: isDelivered ? "COMPLETED" : (o.status === "CANCELLED" ? "CANCELLED" : "PENDING"),
+            note: `Synchronized order settlement for MO-${o._id.toString().slice(-5).toUpperCase()}`,
+          });
+        }
+      }
+    } catch (syncErr) {
+      console.warn("Background order transaction sync notice:", syncErr);
+    }
+
+    // 2. Fetch all transactions
     const transactions = await Transaction.find()
       .populate("customer_id", "name email phone_number")
       .populate("rider_payout.rider_id", "name phone_number")
@@ -248,19 +318,25 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
 
     const formattedTransactions = transactions.map((t: any) => {
       const vendorTotal = Array.isArray(t.vendor_payouts)
-        ? t.vendor_payouts.reduce((sum: number, vp: any) => sum + (vp.amount || 0), 0)
+        ? t.vendor_payouts.reduce((sum: number, vp: any) => sum + (Number(vp.amount) || 0), 0)
         : 0;
+
+      const stallNames = Array.isArray(t.vendor_payouts)
+        ? t.vendor_payouts.map((vp: any) => vp.stall_name || vp.stall_id?.name || vp.vendor_id?.name).filter(Boolean).join(", ")
+        : "";
+
+      const riderName = t.rider_payout?.rider_id?.name || "";
 
       return {
         id: t._id.toString(),
         orderId: t.order_number || `ORD-${t.order_id?.toString().slice(-6).toUpperCase()}`,
         type: t.payment_method === "ONLINE" ? "ONLINE_ORDER" : "COD_ORDER",
-        amount: t.total_order_amount || 0,
+        amount: Number(t.total_order_amount) || 0,
         vendorGain: Math.round(vendorTotal * 100) / 100,
-        riderGain: Math.round((t.rider_payout?.amount || 0) * 100) / 100,
-        platformGain: Math.round((t.platform_revenue?.total_platform_fee || 0) * 100) / 100,
-        total: t.total_order_amount || 0,
-        status: t.settlement_status?.toLowerCase() || "pending",
+        riderGain: Math.round((Number(t.rider_payout?.amount) || 0) * 100) / 100,
+        platformGain: Math.round((Number(t.platform_revenue?.total_platform_fee) || 0) * 100) / 100,
+        total: Number(t.total_order_amount) || 0,
+        status: (t.settlement_status || "PENDING").toLowerCase(),
         user: t.customer_id
           ? {
             id: t.customer_id._id,
@@ -270,6 +346,9 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
             phone: t.customer_id.phone_number,
           }
           : null,
+        vendorNames: stallNames || (t.note?.includes("Vendor Payout") ? "Vendor Payout" : ""),
+        riderName,
+        note: t.note || "",
         vendorPayouts: t.vendor_payouts || [],
         riderPayout: t.rider_payout || {},
         platformRevenue: t.platform_revenue || {},
@@ -281,21 +360,50 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
             hour: "2-digit",
             minute: "2-digit",
           })
-          : "N/A",
+          : "Recently",
       };
     });
 
     const payouts = formattedTransactions;
-    const refunds: any[] = [];
 
-    // Calculate floating COD cash held by riders in field
+    // 3. Query all customer refunds
+    const refundedOrders = await Order.find({
+      $or: [
+        { status: "CANCELLED" },
+        { payment_status: "REFUNDED" },
+        { refunded_amount: { $gt: 0 } },
+      ],
+    })
+      .populate("customer_id", "name email phone_number")
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    const refunds = refundedOrders.map((ro: any) => ({
+      id: `REF-${ro._id.toString().slice(-6).toUpperCase()}`,
+      orderId: `MO-${ro._id.toString().slice(-5).toUpperCase()}`,
+      customerName: ro.customer_id?.name || "Customer",
+      reason: ro.rejection_note || "Order cancelled & refunded to wallet",
+      amount: Number(ro.refunded_amount || ro.total_amount || 0),
+      status: "Refunded",
+      date: ro.updatedAt || ro.createdAt
+        ? new Date(ro.updatedAt || ro.createdAt).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Recently",
+    }));
+
+    // 4. Calculate floating COD cash held by riders in field
     const pendingCodOrders = await Order.find({
       payment_method: "COD",
       cod_deposit_status: "PENDING_DEPOSIT",
       status: "DELIVERED",
     });
     const floatingCodCash = pendingCodOrders.reduce(
-      (sum, o) => sum + (o.cod_amount_held || o.total_amount || 0),
+      (sum, o) => sum + (Number(o.cod_amount_held || o.total_amount) || 0),
       0
     );
 
@@ -317,25 +425,46 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
   }
 };
 
-// @desc    Process pending payouts
+// @desc    Process pending payouts & settle transactions
 // @route   POST /api/admin/transactions/process-payouts
 // @access  Admin
 export const processPendingPayouts = async (req: Request, res: Response): Promise<void> => {
   try {
     const { transactionId } = req.body;
 
+    const now = new Date();
     if (transactionId) {
-      await Transaction.findByIdAndUpdate(transactionId, { status: "COMPLETED" });
+      await Transaction.findByIdAndUpdate(transactionId, {
+        $set: {
+          settlement_status: "COMPLETED",
+          "vendor_payouts.$[].status": "COMPLETED",
+          "vendor_payouts.$[].payout_at": now,
+          "rider_payout.status": "COMPLETED",
+          "rider_payout.payout_at": now,
+          "platform_revenue.status": "COMPLETED",
+          "platform_revenue.realized_at": now,
+        },
+      });
     } else {
       await Transaction.updateMany(
-        { status: { $in: ["PENDING", "PROCESSING"] } },
-        { status: "COMPLETED" }
+        { settlement_status: { $in: ["PENDING", "PARTIALLY_SETTLED"] } },
+        {
+          $set: {
+            settlement_status: "COMPLETED",
+            "vendor_payouts.$[].status": "COMPLETED",
+            "vendor_payouts.$[].payout_at": now,
+            "rider_payout.status": "COMPLETED",
+            "rider_payout.payout_at": now,
+            "platform_revenue.status": "COMPLETED",
+            "platform_revenue.realized_at": now,
+          },
+        }
       );
     }
 
     res.status(200).json({
       success: true,
-      message: "Payouts processed successfully",
+      message: "Payout settlements processed and marked as completed successfully.",
     });
   } catch (error: any) {
     console.error("Error processing payouts:", error);

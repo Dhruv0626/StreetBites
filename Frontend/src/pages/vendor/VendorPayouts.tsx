@@ -29,17 +29,35 @@ export const VendorPayoutsPage: React.FC = () => {
     let isMounted = true;
     const fetchDetails = async () => {
       try {
-        const [detailsRes, ordersRes] = await Promise.allSettled([
+        const [detailsRes, ordersRes, payoutsRes] = await Promise.allSettled([
           onboardingService.getVendorDetails(),
           vendorOrderService.getOrders(),
+          vendorOrderService.getPayoutHistory(),
         ]);
 
         if (isMounted && detailsRes.status === 'fulfilled' && detailsRes.value?.success && detailsRes.value.data) {
           setVendorData(detailsRes.value.data);
         }
 
-        if (isMounted && ordersRes.status === 'fulfilled' && ordersRes.value?.success && ordersRes.value.data) {
-          const orders = ordersRes.value.data.orders || [];
+        // If official payout history returned updated wallet balance, synchronize it
+        if (isMounted && payoutsRes.status === 'fulfilled' && payoutsRes.value?.success && payoutsRes.value.data) {
+          const pData = payoutsRes.value.data;
+          if (typeof pData.walletBalance === 'number') {
+            setVendorData((prev: any) => ({
+              ...prev,
+              user: {
+                ...(prev?.user || user),
+                wallet_balance: pData.walletBalance,
+              },
+            }));
+          }
+        }
+
+        if (isMounted) {
+          const orders = ordersRes.status === 'fulfilled' && ordersRes.value?.success && ordersRes.value.data
+            ? ordersRes.value.data.orders || []
+            : [];
+
           let pendingTotal = 0;
           const orderTxns: PayoutTransaction[] = orders.map((o: any) => {
             const isCompleted = o.status === 'Completed';
@@ -55,7 +73,28 @@ export const VendorPayoutsPage: React.FC = () => {
             };
           });
 
-          setTransactions(orderTxns);
+          // Official ledger transactions (withdrawals and settlements from DB)
+          const ledgerTxns: PayoutTransaction[] = payoutsRes.status === 'fulfilled' && payoutsRes.value?.success && payoutsRes.value.data
+            ? (payoutsRes.value.data.transactions || []).map((t: any) => ({
+                id: t.id,
+                date: t.date,
+                amount: t.amount,
+                status: t.status,
+                type: t.type,
+              }))
+            : [];
+
+          // Merge without duplicate IDs (ledger transactions first for withdrawals)
+          const seenIds = new Set<string>();
+          const merged: PayoutTransaction[] = [];
+          for (const tx of [...ledgerTxns, ...orderTxns]) {
+            if (!seenIds.has(tx.id)) {
+              seenIds.add(tx.id);
+              merged.push(tx);
+            }
+          }
+
+          setTransactions(merged);
           setPendingSettlement(Math.round(pendingTotal * 100) / 100);
         }
       } catch (err) {

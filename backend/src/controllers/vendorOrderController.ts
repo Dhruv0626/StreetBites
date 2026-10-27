@@ -1013,4 +1013,80 @@ export const requestVendorWithdrawal = async (req: AuthRequest, res: Response): 
   }
 };
 
+// @desc    Get vendor payout & settlement transaction history
+// @route   GET /api/vendor/orders/payouts
+// @access  Vendor
+export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = await resolveUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized. Vendor identification required." });
+      return;
+    }
+
+    const vendorUser = await User.findById(userId).lean();
+    if (!vendorUser) {
+      res.status(404).json({ success: false, message: "Vendor profile not found." });
+      return;
+    }
+
+    // Find all stalls owned by this vendor
+    const vendorStalls = await Stall.find({ vendor_id: vendorUser._id }).select("_id name").lean();
+    const stallIds = vendorStalls.map((s) => s._id);
+
+    // Find transactions involving this vendor or vendor's stalls
+    const transactions = await Transaction.find({
+      $or: [
+        { "vendor_payouts.vendor_id": vendorUser._id },
+        { "vendor_payouts.stall_id": { $in: stallIds } },
+        { note: { $regex: new RegExp(vendorUser._id.toString(), "i") } },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedHistory = transactions.map((t: any) => {
+      const isWithdrawal = t.note?.includes("Vendor Payout Settlement") || !t.customer_id;
+      const myPayout = Array.isArray(t.vendor_payouts)
+        ? t.vendor_payouts.find((vp: any) =>
+            vp.vendor_id?.toString() === vendorUser._id.toString() ||
+            stallIds.some((sid) => sid.toString() === vp.stall_id?.toString())
+          )
+        : null;
+
+      const amountVal = isWithdrawal ? t.total_order_amount : (myPayout?.amount || t.total_order_amount);
+      const isSettled = t.settlement_status === "COMPLETED" || myPayout?.status === "COMPLETED";
+
+      return {
+        id: t.order_number || `TX-${t._id.toString().slice(-6).toUpperCase()}`,
+        date: t.createdAt
+          ? new Date(t.createdAt).toLocaleDateString("en-IN", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Recently",
+        amount: isWithdrawal ? `-₹${amountVal}` : `+₹${amountVal}`,
+        status: isSettled ? "completed" : "pending",
+        type: isWithdrawal ? "Bank Transfer Settlement" : `Order Settlement (${t.order_number || "Order"})`,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        walletBalance: vendorUser.wallet_balance || 0,
+        transactions: formattedHistory,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching vendor payout history:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to fetch vendor payout history",
+    });
+  }
+};
+
 
