@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ArrowLeft,
   FileText,
   ChevronDown,
   MapPin,
@@ -9,13 +8,9 @@ import {
   Bike,
   ChefHat,
   ShoppingBag,
-  Home,
   Phone,
-  ShieldCheck,
   Star,
-  XCircle,
   HelpCircle,
-  AlertTriangle,
   X,
   Loader2,
 } from 'lucide-react';

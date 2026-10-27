@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Sparkles, Award, ShieldCheck, Thermometer, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Sparkles, Award, ShieldCheck, Thermometer } from 'lucide-react';
 
 export const FoodHygieneStandards: React.FC = () => {
   const navigate = useNavigate();

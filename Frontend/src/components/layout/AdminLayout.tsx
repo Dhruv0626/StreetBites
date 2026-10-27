@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import logoImg from '../../assets/Logo/Logo.png';
 // @ts-ignore
-import { Joyride as OriginalJoyride, STATUS } from 'react-joyride';
+import { Joyride as OriginalJoyride } from 'react-joyride';
 const Joyride = OriginalJoyride as any;
 import { PageTransitionLoader } from '../PageTransitionLoader';
 import { adminService } from '../../services/adminService';
@@ -183,7 +183,7 @@ export const AdminLayout: React.FC = () => {
 
   const handleJoyrideCallback = (data: any) => {
     const { status } = data;
-    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+    const finishedStatuses: string[] = ['finished', 'skipped'];
     if (finishedStatuses.includes(status)) {
       setRunTour(false);
     }
