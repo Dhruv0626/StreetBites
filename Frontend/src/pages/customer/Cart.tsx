@@ -15,7 +15,7 @@ import type { CartItem } from '../../types';
 
 export const Cart: React.FC = () => {
   const navigate = useNavigate();
-  const { cartItems, addToCart, removeFromCart, activeKhauGalli } = useCart();
+  const { cartItems, addToCart, removeFromCart, clearCart, activeKhauGalli } = useCart();
   const [stallImages, setStallImages] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -80,8 +80,18 @@ export const Cart: React.FC = () => {
             <span className="text-[#1C1917] font-semibold">Consolidated cart</span>
           </div>
 
-          <div className="text-label text-[10px] text-[#8E8B85] bg-white border border-[#EAE4DA] px-3.5 py-1 rounded-full font-bold tracking-wider uppercase">
-            <b>{totalItemsCount}</b> ITEMS · <b>{vendorIds.length}</b> STALLS · 1 DELIVERY
+          <div className="flex items-center gap-3">
+            {cartItems.length > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 rounded-full transition-colors cursor-pointer"
+              >
+                Clear Cart
+              </button>
+            )}
+            <div className="text-label text-[10px] text-[#8E8B85] bg-white border border-[#EAE4DA] px-3.5 py-1 rounded-full font-bold tracking-wider uppercase">
+              <b>{totalItemsCount}</b> ITEMS · <b>{vendorIds.length}</b> STALLS · 1 DELIVERY
+            </div>
           </div>
         </div>
 
@@ -317,11 +327,21 @@ export const Cart: React.FC = () => {
         ) : (
           <div className="p-4 space-y-4">
             {/* Header Title */}
-            <div>
-              <h1 className="text-2xl font-semibold text-[#1C1917] tracking-tight">Your cart</h1>
-              <p className="text-xs text-[#8E8B85] font-semibold mt-0.5">
-                {totalItemsCount} items · {vendorIds.length} stalls · 1 delivery
-              </p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-semibold text-[#1C1917] tracking-tight">Your cart</h1>
+                <p className="text-xs text-[#8E8B85] font-semibold mt-0.5">
+                  {totalItemsCount} items · {vendorIds.length} stalls · 1 delivery
+                </p>
+              </div>
+              {cartItems.length > 0 && (
+                <button
+                  onClick={clearCart}
+                  className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1 rounded-full transition-colors cursor-pointer"
+                >
+                  Clear Cart
+                </button>
+              )}
             </div>
 
             {/* List of Suborders */}

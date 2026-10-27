@@ -626,6 +626,26 @@ export const Checkout: React.FC<CheckoutProps> = ({
     </div>
   );
 
+  if (cartItems.length === 0) {
+    return (
+      <div className="w-full max-w-xl mx-auto px-4 py-20 text-center animate-fadeIn">
+        <div className="w-16 h-16 rounded-full bg-[#FAF0ED] text-[#D94A38] flex items-center justify-center mx-auto mb-4 border border-[#FCE8E6]">
+          <Store className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-black text-[#1C1917] mb-2 tracking-tight">Your cart is empty</h2>
+        <p className="text-sm text-stone-500 mb-6 max-w-sm mx-auto leading-relaxed">
+          Add fresh street food items from your favorite Khau Galli stalls to proceed with checkout.
+        </p>
+        <button
+          onClick={() => navigate('/home')}
+          className="bg-[#D94A38] hover:bg-[#C43D2E] text-white font-bold text-xs px-6 py-3 rounded-xl shadow-xs transition-colors cursor-pointer border-0"
+        >
+          Explore Stalls & Dishes
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 mb-16">
       {/* ─── DESKTOP VIEW ─── */}

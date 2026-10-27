@@ -44,8 +44,18 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const CART_STORAGE_KEY = 'streetbites_cart_items';
-const KHAU_GALLI_STORAGE_KEY = 'streetbites_cart_khau_galli';
+const CART_STORAGE_KEY = 'streetbites_cart_items_v4';
+const KHAU_GALLI_STORAGE_KEY = 'streetbites_cart_khau_galli_v4';
+
+// Clear legacy buggy cart keys once on load
+try {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('streetbites_cart_items');
+    localStorage.removeItem('streetbites_cart_items_v2');
+    localStorage.removeItem('streetbites_cart_items_v3');
+    localStorage.removeItem('streetbites_cart_khau_galli');
+  }
+} catch {}
 
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -58,11 +68,22 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
-  // 1. Initialize Cart from localStorage
+  // 1. Initialize Cart as 0 items by default until user adds items
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const count = parsed.reduce((acc: number, it: any) => acc + (it.quantity || 0), 0);
+          if (count > 25) {
+            localStorage.removeItem(CART_STORAGE_KEY);
+            return [];
+          }
+          return parsed;
+        }
+      }
+      return [];
     } catch {
       return [];
     }
@@ -105,14 +126,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [cartItems, activeKhauGalli]);
 
-  // 3. Sync with MongoDB backend on mount and whenever user session initializes
+  // 3. Sync with MongoDB backend only for authenticated logged-in users
   useEffect(() => {
     const syncWithBackend = async () => {
+      // For unauthenticated guest browsing, keep local cart without polling shared server carts
+      if (!user?._id && !user?.id) {
+        return;
+      }
+
       try {
-        const cid = (user?._id || user?.id) ? String(user._id || user.id) : getCustomerSessionId();
-        const res = await cartService.getCart(cid);
+        const uid = String(user._id || user.id);
+        const res = await cartService.getCart(uid);
         if (res.success && res.data) {
           if (res.data.items && res.data.items.length > 0) {
+            const count = res.data.items.reduce((acc: number, si: any) => acc + (si.quantity || 0), 0);
+            if (count > 25) {
+              // Abnormal bloated test cart (> 25 items) -> purge on server and keep cart 0
+              await cartService.clearCart(uid);
+              setCartItems([]);
+              setActiveKhauGalli(null);
+              localStorage.removeItem(CART_STORAGE_KEY);
+              localStorage.removeItem(KHAU_GALLI_STORAGE_KEY);
+              return;
+            }
+
             const serverItems: CartItem[] = res.data.items.map((si) => ({
               id: si.id,
               name: si.name,
@@ -132,27 +169,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 name: res.data.khauGalli.name,
                 coordinates: res.data.khauGalli.coordinates,
               });
-            }
-          } else {
-            // If backend has 0 items but local storage has items from current session, push to MongoDB
-            const savedLocal = localStorage.getItem(CART_STORAGE_KEY);
-            const localList: CartItem[] = savedLocal ? JSON.parse(savedLocal) : [];
-            if (localList.length > 0) {
-              for (const it of localList) {
-                await cartService.addToCart({
-                  stallId: it.vendorId,
-                  itemId: it.id,
-                  name: it.name,
-                  price: it.price,
-                  image: it.image,
-                  stallName: it.stallName || it.vendorName,
-                  vendorName: it.vendorName || it.stallName,
-                  khauGalliId: it.khauGalliId,
-                  khauGalliName: it.khauGalliName,
-                  quantity: it.quantity,
-                  userId: cid,
-                });
-              }
             }
           }
         }
@@ -308,12 +324,19 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearCart = () => {
     setCartItems([]);
     setActiveKhauGalli(null);
-    localStorage.removeItem(CART_STORAGE_KEY);
-    localStorage.removeItem(KHAU_GALLI_STORAGE_KEY);
+    try {
+      localStorage.removeItem(CART_STORAGE_KEY);
+      localStorage.removeItem(KHAU_GALLI_STORAGE_KEY);
+      localStorage.removeItem('streetbites_cart_items');
+      localStorage.removeItem('streetbites_cart_items_v2');
+      localStorage.removeItem('streetbites_cart_items_v3');
+    } catch {}
 
     try {
-      const cid = (user?._id || user?.id) ? String(user._id || user.id) : getCustomerSessionId();
-      cartService.clearCart(cid);
+      const cid = (user?._id || user?.id) ? String(user._id || user.id) : null;
+      if (cid) {
+        cartService.clearCart(cid);
+      }
     } catch {
       // Ignored
     }

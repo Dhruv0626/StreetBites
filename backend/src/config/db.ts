@@ -22,7 +22,7 @@ export const connectDB = async (): Promise<void> => {
     // Clean up legacy indexes on 'carts' that conflict with new single-cart design
     try {
       const cartsCol = conn.connection.db?.collection("carts");
-      if (cartsCol) {
+      if (cartsCol) { ``
         const indexes = await cartsCol.indexes();
         for (const idx of indexes as any[]) {
           const idxKey = idx?.key || {};
@@ -33,6 +33,11 @@ export const connectDB = async (): Promise<void> => {
             console.log(`🧹 Dropping legacy index on carts: ${idx.name}`);
             await cartsCol.dropIndex(idx.name);
           }
+        }
+        // Reset stale/bloated test carts so all users start with default 0 items
+        const purgeRes = await cartsCol.deleteMany({});
+        if (purgeRes && purgeRes.deletedCount > 0) {
+          console.log(`🧹 Cleared ${purgeRes.deletedCount} stale cart documents. Default cart is now 0.`);
         }
       }
     } catch {

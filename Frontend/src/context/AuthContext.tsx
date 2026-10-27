@@ -229,6 +229,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authService.logout();
     } catch { }
+    try {
+      localStorage.removeItem('streetbites_cart_items_v4');
+      localStorage.removeItem('streetbites_cart_khau_galli_v4');
+      localStorage.removeItem('streetbites_cart_items_v2');
+      localStorage.removeItem('streetbites_cart_items');
+      localStorage.removeItem('streetbites_cart_khau_galli');
+      localStorage.removeItem('streetbites_customer_id');
+    } catch { }
     updateCachedUser(null);
     setIsLoading(false);
   };

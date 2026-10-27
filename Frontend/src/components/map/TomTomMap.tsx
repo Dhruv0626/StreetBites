@@ -276,16 +276,25 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
         applyMarkerElementDimensions(markerEl, markerData.type);
         markerEl.innerHTML = getMarkerIconHtml(markerData.type, markerData.title, markerData.id, markerData.heading);
 
-        const isBottomAnchored = markerData.type === 'cluster' || markerData.type === 'stall' || markerData.type === 'customer';
+        // Standardized zero-size center anchor: mathematical zero drift across 5X, 10X, or any zoom level
         const markerInstance = new ttSDK.Marker({
           element: markerEl,
-          anchor: isBottomAnchored ? 'bottom' : 'center',
+          anchor: 'center',
+          offset: [0, 0],
         }).setLngLat(markerData.position);
+
+        const isCluster = markerData.type === 'cluster';
+        const isTeardrop = markerData.type === 'cluster' || markerData.type === 'stall' || markerData.type === 'customer';
+        const popupOffset: [number, number] = isCluster
+          ? [0, -58]
+          : isTeardrop
+          ? [0, -48]
+          : [0, -24];
 
         const popupHtml = markerData.popupHtml || createDefaultPopupHtml(markerData);
         if (popupHtml && ttSDK.Popup) {
           const popup = new ttSDK.Popup({
-            offset: isBottomAnchored ? [0, -44] : [0, -24],
+            offset: popupOffset,
             closeButton: true,
             closeOnClick: false,
             className: 'streetbites-tomtom-popup',
@@ -294,8 +303,9 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
           markerInstance.setPopup(popup);
         }
 
-        markerEl.addEventListener('click', () => {
+        markerEl.addEventListener('click', (e) => {
           if (markerData.onClick) {
+            e.stopPropagation();
             markerData.onClick(markerData.id);
           }
         });
@@ -517,43 +527,31 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
 // ── HELPER FUNCTIONS FOR ATTRACTIVE & MEANINGFUL MARKER STYLING ─────────────────
 
-function applyMarkerElementDimensions(el: HTMLElement, type?: string) {
-  el.style.position = 'relative';
+function applyMarkerElementDimensions(el: HTMLElement, _type?: string) {
+  el.style.width = '0px';
+  el.style.height = '0px';
+  el.style.position = 'absolute';
   el.style.willChange = 'transform';
   el.style.transition = 'none'; // Critical: ensures pan/zoom GPU matrix updates are instantaneous without subpixel drift
   el.style.overflow = 'visible';
-  el.style.pointerEvents = 'auto';
-
-  if (type === 'cluster') {
-    el.style.width = '44px';
-    el.style.height = '54px';
-  } else if (type === 'stall' || type === 'customer') {
-    el.style.width = '36px';
-    el.style.height = '44px';
-  } else if (type === 'rider') {
-    el.style.width = '42px';
-    el.style.height = '42px';
-  } else {
-    el.style.width = '28px';
-    el.style.height = '28px';
-  }
+  el.style.pointerEvents = 'none'; // Visual children have pointer-events: auto
 }
 
 function getMarkerElementClass(type?: string): string {
   if (type === 'cluster') {
-    return 'streetbites-cluster-marker-root cursor-pointer z-30 select-none';
+    return 'streetbites-cluster-marker-root z-30 select-none';
   }
   if (type === 'stall') {
-    return 'streetbites-stall-marker-root cursor-pointer z-25 select-none';
+    return 'streetbites-stall-marker-root z-25 select-none';
   }
   if (type === 'customer') {
-    return 'streetbites-customer-marker-root cursor-pointer z-28 select-none';
+    return 'streetbites-customer-marker-root z-28 select-none';
   }
   if (type === 'rider') {
-    return 'streetbites-rider-marker-root cursor-pointer z-35 select-none';
+    return 'streetbites-rider-marker-root z-35 select-none';
   }
 
-  return 'cursor-pointer flex items-center justify-center shadow-md border-2 border-white w-7 h-7 rounded-full bg-[#1C1917] text-white z-10';
+  return 'streetbites-generic-marker-root z-10 select-none';
 }
 
 function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: number = 0): string {
@@ -572,9 +570,10 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   }
 
   // Attractive, Rich & Meaningful Cluster / Khau Galli Food Hub Pin
+  // Needle tip is at (22px, 54px). translate(-50%, -100%) locks the tip strictly at (0, 0)
   if (type === 'cluster') {
     return `
-      <div class="streetbites-cluster-pin" style="position: relative; width: 44px; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
+      <div class="streetbites-cluster-pin" style="position: absolute; left: 0px; top: 0px; width: 44px; height: 54px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
         <!-- Floating Mini Name Label Pill (Offset from top, doesn't interfere with bottom anchor point) -->
         <div class="cluster-name-tag" style="position: absolute; bottom: 58px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(28, 25, 23, 0.94); backdrop-filter: blur(8px); color: #FFF; font-size: 11px; font-weight: 800; font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 10px; border-radius: 9999px; border: 1.5px solid rgba(255,255,255,0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.35); pointer-events: none; display: flex; align-items: center; gap: 6px; z-index: 30;">
@@ -616,15 +615,19 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
           </svg>
         </div>
 
-        <div class="cluster-ground-ripple" style="position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 26px; height: 9px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(217, 74, 56, 0.75) 0%, rgba(217, 74, 56, 0) 75%); animation: clusterPulseRipple 2.2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <!-- Ground Concentric Ripple centered precisely under the pin needle tip -->
+        <div style="position: absolute; bottom: 0px; left: 50%; transform: translate(-50%, 50%); width: 26px; height: 9px; pointer-events: none; z-index: -1;">
+          <div class="cluster-ground-ripple" style="width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(217, 74, 56, 0.75) 0%, rgba(217, 74, 56, 0) 75%); animation: clusterPulseRipple 2.2s ease-out infinite;"></div>
+        </div>
       </div>
     `;
   }
 
   // Dedicated Food Stall Pin with Canopy Logo & Mini Floating Stall Name & Stop Badge
+  // Needle tip is at (18px, 44px). translate(-50%, -100%) locks the tip strictly at (0, 0)
   if (type === 'stall') {
     return `
-      <div class="streetbites-stall-pin" style="position: relative; width: 36px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
+      <div class="streetbites-stall-pin" style="position: absolute; left: 0px; top: 0px; width: 36px; height: 44px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
         <div class="stall-name-tag" style="position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(28, 25, 23, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 25;">
           ${checkpointLetter ? `<span style="background: #D94A38; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #22C55E; display: inline-block; box-shadow: 0 0 6px #22C55E; flex-shrink: 0;"></span>`}
@@ -657,9 +660,10 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
   }
 
   // Dedicated Customer Delivery Drop Location Pin with Emerald Theme
+  // Needle tip is at (18px, 44px). translate(-50%, -100%) locks the tip strictly at (0, 0)
   if (type === 'customer') {
     return `
-      <div class="streetbites-customer-pin" style="position: relative; width: 36px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
+      <div class="streetbites-customer-pin" style="position: absolute; left: 0px; top: 0px; width: 36px; height: 44px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto;">
         
         <div class="customer-name-tag" style="position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(6, 78, 59, 0.95); backdrop-filter: blur(6px); color: #FFF; font-size: 10px; font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif; padding: 3px 8px; border-radius: 9999px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: none; display: flex; align-items: center; gap: 5px; z-index: 28;">
           ${checkpointLetter ? `<span style="background: #059669; color: #FFF; font-size: 9px; font-weight: 800; border-radius: 4px; padding: 0px 4px; min-width: 14px; text-align: center;">${checkpointLetter}</span>` : `<span style="width: 6px; height: 6px; border-radius: 50%; background: #34D399; display: inline-block; box-shadow: 0 0 6px #34D399; flex-shrink: 0;"></span>`}
@@ -688,16 +692,19 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
           </svg>
         </div>
 
-        <div class="customer-ground-ripple" style="position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 22px; height: 7px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(5, 150, 105, 0.75) 0%, rgba(5, 150, 105, 0) 75%); animation: clusterPulseRipple 2s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <div style="position: absolute; bottom: 0px; left: 50%; transform: translate(-50%, 50%); width: 22px; height: 7px; pointer-events: none; z-index: -1;">
+          <div class="customer-ground-ripple" style="width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(5, 150, 105, 0.75) 0%, rgba(5, 150, 105, 0) 75%); animation: clusterPulseRipple 2s ease-out infinite;"></div>
+        </div>
       </div>
     `;
   }
 
   // Dedicated Live Rider Navigation Direction Arrow Puck
+  // Center is at (21px, 21px). translate(-50%, -50%) locks center strictly at (0, 0)
   if (type === 'rider') {
     const deg = typeof heading === 'number' && !isNaN(heading) ? heading : 0;
     return `
-      <div class="streetbites-rider-nav-puck" style="position: relative; width: 42px; height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+      <div class="streetbites-rider-nav-puck" style="position: absolute; left: 0px; top: 0px; width: 42px; height: 42px; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto;">
         
         <!-- 3D Glowing Navigation Direction Arrow Puck with Dynamic Heading Rotation -->
         <div class="navigator-arrow-graphic" style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; transform-origin: center center; filter: drop-shadow(0 4px 14px rgba(2, 132, 199, 0.65)); transform: rotate(${deg}deg); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);">
@@ -725,12 +732,14 @@ function getMarkerIconHtml(type?: string, title?: string, id?: string, heading: 
         </div>
 
         <!-- Ground Concentric Radar Wave -->
-        <div class="rider-radar-ripple" style="position: absolute; width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(2, 132, 199, 0) 70%); animation: clusterPulseRipple 1.8s ease-out infinite; pointer-events: none; z-index: 5;"></div>
+        <div style="position: absolute; top: 0px; left: 0px; width: 42px; height: 42px; pointer-events: none; z-index: -1;">
+          <div class="rider-radar-ripple" style="width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(2, 132, 199, 0) 70%); animation: clusterPulseRipple 1.8s ease-out infinite;"></div>
+        </div>
       </div>
     `;
   }
 
-  return `<div style="width: 28px; height: 28px; border-radius: 50%; background: #1C1917; color: #FFF; display: flex; items-center; justify-content: center; font-size: 10px; font-weight: 800; border: 2px solid #FFF; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">${safeId.toUpperCase().slice(0, 2) || '•'}</div>`;
+  return `<div style="position: absolute; left: 0px; top: 0px; width: 28px; height: 28px; transform: translate(-50%, -50%); border-radius: 50%; background: #1C1917; color: #FFF; display: flex; items-center; justify-content: center; font-size: 10px; font-weight: 800; border: 2px solid #FFF; box-shadow: 0 4px 8px rgba(0,0,0,0.3); pointer-events: auto;">${safeId.toUpperCase().slice(0, 2) || '•'}</div>`;
 }
 
 function createDefaultPopupHtml(marker: MapMarker): string {

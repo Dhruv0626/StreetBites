@@ -15,10 +15,9 @@ export const AllClusters: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Map state for dynamic Level of Detail (LOD)
+  // Map view positioning state
   const [mapCenter, setMapCenter] = useState<LngLatTuple>([72.5650, 23.0300]);
   const [mapZoom, setMapZoom] = useState<number>(12);
-  const [currentZoom, setCurrentZoom] = useState<number>(12);
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
 
   const handleBack = () => {
@@ -32,7 +31,6 @@ export const AllClusters: React.FC = () => {
   const handleResetMap = () => {
     setMapCenter([72.5650, 23.0300]);
     setMapZoom(12);
-    setCurrentZoom(12);
     setSelectedClusterId(null);
   };
 
@@ -41,7 +39,6 @@ export const AllClusters: React.FC = () => {
     const cLat = c.coordinates?.coordinates?.[1] ?? 23.0225;
     setMapCenter([cLng, cLat]);
     setMapZoom(16.5);
-    setCurrentZoom(16.5);
     setSelectedClusterId(c.id);
   };
 
@@ -120,37 +117,7 @@ export const AllClusters: React.FC = () => {
     return { filteredClusters: filtered, matchingStalls: matchedStallsList };
   }, [clusters, rawClusters, searchQuery]);
 
-  // Fallback signature stalls for clusters that don't have registered stalls in DB yet
-  const DEFAULT_CORRIDOR_STALLS = [
-    {
-      name: "Midnight Magic Pav Bhaji & Dosa",
-      category: "Fast Food & Dosa",
-      description: "Butter-loaded Pav Bhaji and crispy cheese dosas",
-      imageUrl: "https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=400&auto=format&fit=crop&q=80",
-    },
-    {
-      name: "Mahalaxmi Gwalior Dosa Center",
-      category: "South Indian Special",
-      description: "Special Gwalior butter dosa and cheese roll dosas",
-      imageUrl: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=400&auto=format&fit=crop&q=80",
-    },
-    {
-      name: "Classic Cheese Grilled Sandwich",
-      category: "Street Sandwich & Toast",
-      description: "Loaded vegetable cheese grilled jumbo sandwiches",
-      imageUrl: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&auto=format&fit=crop&q=80",
-    },
-    {
-      name: "Asharfi Kulfi & Rabdi Falooda",
-      category: "Desserts & Shakes",
-      description: "Authentic Malai Kulfi and chilled Rabdi Falooda",
-      imageUrl: "https://images.unsplash.com/photo-1579954115545-a95591f28bfc?w=400&auto=format&fit=crop&q=80",
-    },
-  ];
-
-  // Dynamic Level of Detail (LOD) Markers based on Map Zoom Level
-  const isDeepZoom = currentZoom >= 14.5;
-
+  // Pin Markers: Strictly locked to their exact geographic coordinates across all zoom levels (5X, 10X, etc.)
   const mapMarkers: MapMarker[] = useMemo(() => {
     const activeClusters = rawClusters.filter(c => filteredClusters.some(fc => fc.id === c.id));
     const markers: MapMarker[] = [];
@@ -159,62 +126,21 @@ export const AllClusters: React.FC = () => {
       const cLng = c.coordinates?.coordinates?.[0] ?? 72.5714;
       const cLat = c.coordinates?.coordinates?.[1] ?? 23.0225;
 
-      // 1. Khau Galli Hub Pin (Visible on City Overview zoom < 15)
-      if (!isDeepZoom) {
-        markers.push({
-          id: `cluster_${c.id}`,
-          position: [cLng, cLat],
-          title: c.name,
-          description: `${c.city || 'Ahmedabad'} • ${c.stalls?.length || 4} Stalls (${c.stalls?.filter(s => s.status !== 'CLOSED' && s.is_accepting_orders).length || 4} Open Now) • Click to zoom`,
-          type: 'cluster',
-          onClick: () => {
-            handleFocusCluster(c);
-          },
-        });
-      }
-
-      // 2. Individual Stalls revealed dynamically when zoomed in (Zoom >= 15)
-      if (isDeepZoom) {
-        const stallList = (c.stalls && Array.isArray(c.stalls) && c.stalls.length > 0)
-          ? c.stalls
-          : DEFAULT_CORRIDOR_STALLS;
-
-        stallList.forEach((s: any, idx: number) => {
-          // Natural street corridor spread (~35m - 75m around Khau Galli center)
-          const angle = (idx * 2 * Math.PI) / Math.max(stallList.length, 1);
-          const radius = 0.00035 + (idx % 3) * 0.0002;
-          const sLng = s.coordinates?.coordinates?.[0] || (cLng + Math.cos(angle) * radius * 1.15);
-          const sLat = s.coordinates?.coordinates?.[1] || (cLat + Math.sin(angle) * radius * 0.85);
-
-          const stallId = s.id || s._id || `stall_${c.id}_${idx}`;
-          const isStallLive = s.status !== 'CLOSED' && s.is_accepting_orders !== false;
-
-          markers.push({
-            id: `stall_${stallId}`,
-            stallId: s.id || s._id || '',
-            position: [sLng, sLat],
-            title: s.name,
-            description: s.description || `${s.stall_category || s.category || 'Street Food'} • Live Ordering Available`,
-            imageUrl: s.image_url || s.imageUrl || s.banner_url || s.logo_url || '',
-            category: s.stall_category || s.category || 'Food Stall',
-            rating: s.rating || 4.7,
-            isLive: isStallLive,
-            clusterName: c.name,
-            type: 'stall',
-            onClick: () => {
-              if (s.id || s._id) {
-                navigate(`/stall/${s.id || s._id}`);
-              } else {
-                navigate(`/stalls?khauGalliId=${c.id}`);
-              }
-            },
-          });
-        });
-      }
+      // Khau Galli Hub Pin - Position remains strictly identical regardless of 5X, 10X, or any zoom level
+      markers.push({
+        id: `cluster_${c.id}`,
+        position: [cLng, cLat],
+        title: c.name,
+        description: `${c.city || 'Ahmedabad'} • ${c.stalls?.length || 4} Stalls (${c.stalls?.filter(s => s.status !== 'CLOSED' && s.is_accepting_orders).length || 4} Open Now) • Click to view`,
+        type: 'cluster',
+        onClick: () => {
+          handleFocusCluster(c);
+        },
+      });
     });
 
     return markers;
-  }, [rawClusters, filteredClusters, isDeepZoom, navigate]);
+  }, [rawClusters, filteredClusters]);
 
   return (
     <div className="w-full max-w-7xl mx-auto md:mt-4 pb-20 no-scrollbar">
@@ -411,7 +337,6 @@ export const AllClusters: React.FC = () => {
               <TomTomMap
                 center={mapCenter}
                 zoom={mapZoom}
-                onZoomChange={(newZoom) => setCurrentZoom(newZoom)}
                 className="w-full h-full rounded-3xl overflow-hidden"
                 markers={mapMarkers}
               />
@@ -419,22 +344,24 @@ export const AllClusters: React.FC = () => {
               {/* Dynamic Map HUD Status Overlay */}
               <div className="absolute top-4 left-4 right-4 sm:right-auto sm:max-w-md bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-lg border border-stone-200/80 z-20 flex items-center justify-between gap-3 pointer-events-auto">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDeepZoom ? 'bg-emerald-100 text-emerald-700' : 'bg-[#FCE8E6] text-[#D94A38]'}`}>
-                    {isDeepZoom ? <Store className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${selectedClusterId ? 'bg-[#D94A38] text-white shadow-2xs' : 'bg-[#FCE8E6] text-[#D94A38]'}`}>
+                    {selectedClusterId ? <Store className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-extrabold text-stone-900 truncate">
-                      {isDeepZoom ? '🏪 Deep Street View' : '🗺️ City Overview'}
+                      {selectedClusterId
+                        ? rawClusters.find(c => c.id === selectedClusterId)?.name || 'Khau Galli Hub'
+                        : '🗺️ Iconic Khau Gallis'}
                     </div>
                     <div className="text-[11px] text-stone-500 truncate">
-                      {isDeepZoom
-                        ? 'Showing individual food stalls in corridor'
-                        : 'Zoom in or click a Khau Galli to reveal food stalls'}
+                      {selectedClusterId
+                        ? 'Pin strictly locked to coordinates across all zoom levels'
+                        : `${filteredClusters.length} street food hubs across Ahmedabad`}
                     </div>
                   </div>
                 </div>
 
-                {isDeepZoom && (
+                {selectedClusterId && (
                   <button
                     onClick={handleResetMap}
                     className="shrink-0 text-xs font-bold bg-[#1C1917] hover:bg-stone-800 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
@@ -449,9 +376,7 @@ export const AllClusters: React.FC = () => {
               <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-lg border border-stone-200/80 pointer-events-none flex items-center gap-2.5 z-20">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#D94A38] animate-ping" />
                 <span className="text-xs font-bold text-stone-800">
-                  {isDeepZoom
-                    ? 'Click any food stall pin to view its live menu & order'
-                    : 'Click any Khau Galli hub to fly in and see all stalls'}
+                  Pins remain locked at exact location across all zoom levels
                 </span>
               </div>
             </div>

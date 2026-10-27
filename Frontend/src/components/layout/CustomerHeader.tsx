@@ -287,9 +287,11 @@ export const CustomerHeader: React.FC = () => {
             >
               <div className="relative">
                 <ShoppingBag className="w-5 h-5 stroke-[2]" />
-                <span className="absolute -top-1.5 -right-1.5 bg-[#D94A38] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white">
-                  {cartCount}
-                </span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-[#D94A38] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
               </div>
               Cart
             </button>
