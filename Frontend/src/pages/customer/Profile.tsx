@@ -231,7 +231,7 @@ export const Profile: React.FC = () => {
       localStorage.removeItem('streetbites_location_banner_dismissed');
       setAddressWarning(null);
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(() => {}, () => {});
+        navigator.geolocation.getCurrentPosition(() => { }, () => { });
       }
     }
   };
@@ -536,9 +536,8 @@ export const Profile: React.FC = () => {
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">{displayName}</h1>
                 <span
-                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                    isAuthenticated ? 'bg-white/20 text-white' : 'bg-amber-400 text-stone-900'
-                  }`}
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${isAuthenticated ? 'bg-white/20 text-white' : 'bg-amber-400 text-stone-900'
+                    }`}
                 >
                   {displayRole}
                 </span>
@@ -658,9 +657,8 @@ export const Profile: React.FC = () => {
             <div>
               <button
                 onClick={() => toggleSection('personal')}
-                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors border-b border-[#F5F0E8] cursor-pointer ${
-                  openSection === 'personal' ? 'bg-[#FAF7F2]' : ''
-                }`}
+                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors border-b border-[#F5F0E8] cursor-pointer ${openSection === 'personal' ? 'bg-[#FAF7F2]' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-[#FAF7F2] text-[#D94A38] flex items-center justify-center">
@@ -782,9 +780,8 @@ export const Profile: React.FC = () => {
             <div>
               <button
                 onClick={() => toggleSection('addresses')}
-                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors border-b border-[#F5F0E8] cursor-pointer ${
-                  openSection === 'addresses' ? 'bg-[#FAF7F2]' : ''
-                }`}
+                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors border-b border-[#F5F0E8] cursor-pointer ${openSection === 'addresses' ? 'bg-[#FAF7F2]' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-[#FAF7F2] text-[#D94A38] flex items-center justify-center">
@@ -837,7 +834,7 @@ export const Profile: React.FC = () => {
                                 )}
                               </div>
                               <p className="text-[11px] text-[#8E8B85] leading-relaxed">{addr.detail}</p>
-                             
+
                               <div className="flex gap-3 mt-2">
                                 {!addr.is_primary && (
                                   <button
@@ -1132,9 +1129,8 @@ export const Profile: React.FC = () => {
             <div>
               <button
                 onClick={() => toggleSection('app')}
-                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors cursor-pointer ${
-                  openSection === 'app' ? 'bg-[#FAF7F2]' : ''
-                }`}
+                className={`w-full flex items-center justify-between p-5 hover:bg-[#FAF7F2] transition-colors cursor-pointer ${openSection === 'app' ? 'bg-[#FAF7F2]' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-[#FAF7F2] text-[#D94A38] flex items-center justify-center">
@@ -1168,14 +1164,12 @@ export const Profile: React.FC = () => {
                         role="switch"
                         aria-checked={locationEnabled}
                         onClick={handleToggleLocation}
-                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
-                          locationEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                        }`}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${locationEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
+                          }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
-                            locationEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                          }`}
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${locationEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                            }`}
                         />
                       </button>
                     </div>
@@ -1196,14 +1190,12 @@ export const Profile: React.FC = () => {
                         role="switch"
                         aria-checked={pushEnabled}
                         onClick={handleTogglePush}
-                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
-                          pushEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                        }`}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${pushEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
+                          }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
-                            pushEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                          }`}
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${pushEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                            }`}
                         />
                       </button>
                     </div>
@@ -1224,14 +1216,12 @@ export const Profile: React.FC = () => {
                         role="switch"
                         aria-checked={emailEnabled}
                         onClick={handleToggleEmail}
-                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${
-                          emailEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
-                        }`}
+                        className={`w-12 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 border-0 flex items-center ${emailEnabled ? 'bg-[#D94A38]' : 'bg-[#DCD6CC]'
+                          }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
-                            emailEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                          }`}
+                          className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${emailEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                            }`}
                         />
                       </button>
                     </div>
