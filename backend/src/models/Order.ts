@@ -24,6 +24,7 @@ export interface IOrder extends Document {
   total_amount: number;
   payment_method: PaymentMethod;
   payment_status?: PaymentStatus;
+  order_number?: string;
   razorpay_order_id?: string | null;
   razorpay_payment_id?: string | null;
   razorpay_signature?: string | null;
@@ -44,8 +45,11 @@ export interface IOrder extends Document {
   cod_amount_held?: number;
   cod_deposit_status?: CodDepositStatus | null;
   refunded_amount?: number;
+  refund_status?: "NOT_APPLICABLE" | "PENDING" | "COMPLETED";
+  refunded_at?: Date | null;
   rejection_note?: string;
   collected_checkpoints?: number[];
+  distance_km?: number;
   rider_at_door?: boolean;
   delivered_at?: Date | null;
   createdAt: Date;
@@ -182,6 +186,15 @@ const OrderSchema = new mongoose.Schema<IOrder>(
       type: Number,
       default: 0,
     },
+    refund_status: {
+      type: String,
+      enum: ["NOT_APPLICABLE", "PENDING", "COMPLETED"],
+      default: "NOT_APPLICABLE",
+    },
+    refunded_at: {
+      type: Date,
+      default: null,
+    },
     rejection_note: {
       type: String,
       default: null,
@@ -193,6 +206,10 @@ const OrderSchema = new mongoose.Schema<IOrder>(
     delivered_at: {
       type: Date,
       default: null,
+    },
+    distance_km: {
+      type: Number,
+      default: 0,
     },
   },
   {

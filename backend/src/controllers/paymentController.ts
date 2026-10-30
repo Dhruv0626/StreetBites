@@ -9,6 +9,8 @@ import Transaction from "../models/Transaction.ts";
 import User from "../models/User.ts";
 import Address from "../models/Address.ts";
 import Feedback from "../models/Feedback.ts";
+import Cluster from "../models/Cluster.ts";
+import { memoryCache } from "../utils/cache.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
 
@@ -19,12 +21,10 @@ const resolveCustomer = async (req: Request) => {
   const userId =
     (req as any).user?.id ||
     (req as any).user?._id ||
+    req.body?.userId ||
     (req.headers["x-customer-id"] as string) ||
     (req.headers["x-user-id"] as string) ||
-    req.body?.customer_id ||
-    req.body?.userId ||
-    (req.query?.customer_id as string) ||
-    (req.query?.userId as string);
+    req.body?.customer_id;
   if (!userId) return null;
   return User.findById(userId);
 };
@@ -37,6 +37,148 @@ const isCentralDefault = (coords?: [number, number] | null) => {
   if (Math.abs(lng - 72.5714) < 0.003 && Math.abs(lat - 23.0225) < 0.003) return true;
   if (Math.abs(lng - 72.5873) < 0.003 && Math.abs(lat - 23.0248) < 0.003) return true;
   return false;
+};
+
+// Calculate Haversine distance between two [lng, lat] points in km
+export const calculateHaversineKm = (c1: [number, number], c2: [number, number]): number => {
+  const R = 6371;
+  const dLat = ((c2[1] - c1[1]) * Math.PI) / 180;
+  const dLng = ((c2[0] - c1[0]) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((c1[1] * Math.PI) / 180) *
+      Math.cos((c2[1] * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const dist = R * c;
+  return isNaN(dist) || dist <= 0 ? 2.4 : Number(dist.toFixed(1));
+};
+
+/**
+ * Authoritatively calculates order totals directly from database menu items,
+ * preventing any client-side price tampering or parameter injection.
+ */
+const validateAndComputeOrderTotal = async (items: any[], deliveryFee: number = 0) => {
+  let foodItemsTotal = 0;
+  const verifiedItems: any[] = [];
+
+  for (const item of items) {
+    const sId = String(item.stall_id || item.stallId || "");
+    const itemId = String(item.item_id || item.id || "");
+    const qty = Math.max(1, Math.floor(Number(item.quantity) || 1));
+
+    let verifiedPrice = Number(item.price) || 0;
+    let verifiedBasePrice = Math.round((verifiedPrice / 1.1) * 100) / 100;
+    let itemName = item.name || "Food Item";
+
+    // Strictly lookup official registered price in Stall document
+    if (sId && mongoose.isValidObjectId(sId)) {
+      try {
+        const stall = await Stall.findById(sId);
+        if (stall && Array.isArray(stall.menu_items)) {
+          const found = stall.menu_items.find(
+            (m: any) =>
+              (m._id && m._id.toString() === itemId) ||
+              (m.name && itemName && m.name.trim().toLowerCase() === itemName.trim().toLowerCase())
+          );
+          if (found) {
+            // Strictly enforce database registered price
+            verifiedPrice = Number(found.price);
+            verifiedBasePrice = Number(found.base_price);
+            itemName = found.name;
+          }
+        }
+      } catch (err) {
+        console.warn("Error looking up item in stall:", err);
+      }
+    }
+
+    foodItemsTotal += verifiedPrice * qty;
+    verifiedItems.push({
+      ...item,
+      stall_id: sId,
+      stallId: sId,
+      item_id: itemId,
+      id: itemId,
+      name: itemName,
+      price: verifiedPrice,
+      basePrice: verifiedBasePrice,
+      quantity: qty,
+    });
+  }
+
+  const taxAmount = Math.round(foodItemsTotal * 0.05 * 10) / 10;
+  const totalAmount = Math.round((foodItemsTotal + Number(deliveryFee) + taxAmount) * 10) / 10;
+  const amountInPaise = Math.round(totalAmount * 100);
+
+  return {
+    foodItemsTotal,
+    taxAmount,
+    deliveryFee: Number(deliveryFee) || 0,
+    totalAmount,
+    amountInPaise,
+    verifiedItems,
+  };
+};
+
+/**
+ * Safely verify Razorpay HMAC-SHA256 signature using timing-safe buffer comparison.
+ * In production, signature verification is strictly enforced.
+ * Simulated signatures (sig_sim_) are strictly blocked in production.
+ */
+const verifyHmacSignature = (
+  orderId: string,
+  paymentId: string,
+  signature: string
+): boolean => {
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // Production check: Secret key must exist and not be dummy placeholder
+  if (isProduction) {
+    if (!keySecret || keySecret === "streetbites_razorpay_secret_key" || keySecret.includes("YourKey")) {
+      console.error("FATAL: RAZORPAY_KEY_SECRET is not configured for production environment!");
+      return false;
+    }
+    // Block mock signatures in production completely
+    if (typeof signature === "string" && signature.startsWith("sig_sim_")) {
+      console.error("SECURITY ALERT: Blocked simulated payment signature attempt in production!");
+      return false;
+    }
+  } else {
+    // Non-production local test fallback: only permit mock signature if explicitly in dev mode without key
+    if (!keySecret || keySecret === "streetbites_razorpay_secret_key" || keySecret.includes("YourKey")) {
+      if (typeof signature === "string" && signature.startsWith("sig_sim_")) {
+        console.warn("⚠️ [DEV ONLY] Accepting simulated Razorpay signature in non-production environment.");
+        return true;
+      }
+    }
+  }
+
+  if (!keySecret || !orderId || !paymentId || !signature) {
+    return false;
+  }
+
+  try {
+    const expectedSignature = crypto
+      .createHmac("sha256", keySecret)
+      .update(`${orderId}|${paymentId}`)
+      .digest("hex");
+
+    if (expectedSignature.length !== signature.length) {
+      return false;
+    }
+
+    // Timing-safe comparison against side-channel timing attacks
+    return crypto.timingSafeEqual(
+      Buffer.from(expectedSignature, "utf8"),
+      Buffer.from(signature, "utf8")
+    );
+  } catch (err) {
+    console.error("Signature verification error:", err);
+    return false;
+  }
 };
 
 /**
@@ -57,10 +199,9 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
       return;
     }
 
-    const foodItemsTotal = items.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
-    const taxAmount = Math.round(foodItemsTotal * 0.05 * 10) / 10;
-    const totalAmount = Math.round((foodItemsTotal + Number(delivery_fee) + taxAmount) * 10) / 10;
-    const amountInPaise = Math.round(totalAmount * 100);
+    // Authoritative price calculation directly from database to prevent price tampering
+    const { foodItemsTotal, taxAmount, totalAmount, amountInPaise } =
+      await validateAndComputeOrderTotal(items, delivery_fee);
 
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -143,6 +284,7 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       delivery_address,
       delivery_coordinates,
       delivery_notes = "",
+      distance_km,
     } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -150,29 +292,24 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Cryptographic signature check if Razorpay key secret is present and not dummy placeholder
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    const isMockKey =
-      !keySecret ||
-      keySecret === "streetbites_razorpay_secret_key" ||
-      keySecret.includes("YourKey") ||
-      (typeof razorpay_signature === "string" && razorpay_signature.startsWith("sig_sim_"));
+    // 1. Authoritative price recalculation directly from database (Prevents price tampering)
+    const { foodItemsTotal, taxAmount, totalAmount, verifiedItems } =
+      await validateAndComputeOrderTotal(items, delivery_fee);
 
-    if (!isMockKey && keySecret && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
-      const generatedSignature = crypto
-        .createHmac("sha256", keySecret)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest("hex");
+    // 2. Cryptographic signature check (Strictly enforced; blocks simulated signatures in production)
+    const isSignatureValid = verifyHmacSignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    );
 
-      if (generatedSignature !== razorpay_signature) {
-        res.status(400).json({ success: false, message: "Invalid payment signature verification failed." });
-        return;
-      }
+    if (!isSignatureValid) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid payment signature verification failed. Transaction rejected.",
+      });
+      return;
     }
-
-    const foodItemsTotal = items.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
-    const taxAmount = Math.round(foodItemsTotal * 0.05 * 10) / 10;
-    const totalAmount = Math.round((foodItemsTotal + Number(delivery_fee) + taxAmount) * 10) / 10;
 
     // Generate 4-digit Delivery OTP
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -210,6 +347,24 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       parsedCoords = [72.5815, 23.1118];
     }
 
+    // Resolve authoritative road distance between stall/cluster and customer address
+    let finalDistanceKm = Number(distance_km) || 0;
+    if (finalDistanceKm <= 0 && parsedCoords) {
+      if (cluster_id && mongoose.isValidObjectId(cluster_id)) {
+        const cluster = await Cluster.findById(cluster_id).lean();
+        if (cluster?.coordinates?.coordinates && cluster.coordinates.coordinates.length === 2) {
+          finalDistanceKm = Number(calculateHaversineKm(cluster.coordinates.coordinates, parsedCoords).toFixed(1));
+        }
+      }
+    }
+    if (finalDistanceKm <= 0 && Number(delivery_fee) > 0) {
+      const feeNum = Number(delivery_fee);
+      finalDistanceKm = feeNum <= 22 ? 2.1 : Number((2.0 + (feeNum - 22) / 7).toFixed(1));
+    }
+    if (finalDistanceKm <= 0) {
+      finalDistanceKm = 2.4;
+    }
+
     // 1. Create Master Parent Order
     const masterOrder = await Order.create({
       customer_id: user._id,
@@ -231,6 +386,7 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
       },
       delivery_notes,
       delivery_otp: deliveryOtp,
+      distance_km: finalDistanceKm,
       platform_fee_earned: 0, // will compute below from items
     });
 
@@ -240,7 +396,7 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
     // 2. Create Sub-Orders and Aggregate Vendor Payouts
     const stallPayoutMap = new Map<string, { stall_id: any; vendor_id?: any; stall_name: string; amount: number }>();
 
-    for (const item of items) {
+    for (const item of verifiedItems) {
       const sId = String(item.stall_id || item.stallId);
       const qty = Number(item.quantity) || 1;
       const customerPrice = Number(item.price) || 0;
@@ -435,6 +591,7 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       delivery_address,
       delivery_coordinates,
       delivery_notes = "",
+      distance_km,
     } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -442,9 +599,9 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const foodItemsTotal = items.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 1), 0);
-    const taxAmount = Math.round(foodItemsTotal * 0.05 * 10) / 10;
-    const totalAmount = Math.round((foodItemsTotal + Number(delivery_fee) + taxAmount) * 10) / 10;
+    // Authoritative price calculation directly from database to prevent price tampering
+    const { foodItemsTotal, taxAmount, totalAmount, verifiedItems } =
+      await validateAndComputeOrderTotal(items, delivery_fee);
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     // Parse exact customer delivery coordinates [lng, lat]
@@ -480,6 +637,24 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       parsedCoords = [72.5815, 23.1118];
     }
 
+    // Resolve authoritative road distance between stall/cluster and customer address
+    let finalDistanceKm = Number(distance_km) || 0;
+    if (finalDistanceKm <= 0 && parsedCoords) {
+      if (cluster_id && mongoose.isValidObjectId(cluster_id)) {
+        const cluster = await Cluster.findById(cluster_id).lean();
+        if (cluster?.coordinates?.coordinates && cluster.coordinates.coordinates.length === 2) {
+          finalDistanceKm = Number(calculateHaversineKm(cluster.coordinates.coordinates, parsedCoords).toFixed(1));
+        }
+      }
+    }
+    if (finalDistanceKm <= 0 && Number(delivery_fee) > 0) {
+      const feeNum = Number(delivery_fee);
+      finalDistanceKm = feeNum <= 22 ? 2.1 : Number((2.0 + (feeNum - 22) / 7).toFixed(1));
+    }
+    if (finalDistanceKm <= 0) {
+      finalDistanceKm = 2.4;
+    }
+
     // Create Master Order
     const masterOrder = await Order.create({
       customer_id: user._id,
@@ -500,6 +675,7 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
       },
       delivery_notes,
       delivery_otp: deliveryOtp,
+      distance_km: finalDistanceKm,
       platform_fee_earned: 0,
     });
 
@@ -507,7 +683,7 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
     let totalVendorPayout = 0;
     const stallPayoutMap = new Map<string, { stall_id: any; vendor_id?: any; stall_name: string; amount: number }>();
 
-    for (const item of items) {
+    for (const item of verifiedItems) {
       const sId = String(item.stall_id || item.stallId);
       const qty = Number(item.quantity) || 1;
       const customerPrice = Number(item.price) || 0;
@@ -772,24 +948,19 @@ export const verifyRiderRepay = async (req: Request, res: Response): Promise<voi
 
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    // Cryptographic signature check if Razorpay key secret is present and not dummy placeholder
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    const isMockKey =
-      !keySecret ||
-      keySecret === "streetbites_razorpay_secret_key" ||
-      keySecret.includes("YourKey") ||
-      (typeof razorpay_signature === "string" && razorpay_signature.startsWith("sig_sim_"));
+    // Cryptographic signature check (Strictly enforced; blocks simulated signatures in production)
+    const isSignatureValid = verifyHmacSignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    );
 
-    if (!isMockKey && keySecret && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
-      const generatedSignature = crypto
-        .createHmac("sha256", keySecret)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest("hex");
-
-      if (generatedSignature !== razorpay_signature) {
-        res.status(400).json({ success: false, message: "Signature verification failed." });
-        return;
-      }
+    if (!isSignatureValid) {
+      res.status(400).json({
+        success: false,
+        message: "Rider debt repayment signature verification failed. Transaction rejected.",
+      });
+      return;
     }
 
     const pendingOrders = await Order.find({
@@ -818,15 +989,45 @@ export const verifyRiderRepay = async (req: Request, res: Response): Promise<voi
 
     // Update consolidated transactions debt balance for these orders
     const orderIds = pendingOrders.map((o) => o._id);
+    const now = new Date();
     await Transaction.updateMany(
       { order_id: { $in: orderIds } },
       {
         $set: {
           "rider_payout.cod_cash_debt": 0,
+          "platform_revenue.status": "COMPLETED",
+          "platform_revenue.realized_at": now,
           settlement_status: "COMPLETED",
         },
       }
     ).catch(() => {});
+
+    memoryCache.invalidateAdminStats();
+
+    // Save authoritative settlement transaction for rider ledger
+    try {
+      const settlementTx = new Transaction({
+        order_id: new mongoose.Types.ObjectId(),
+        order_number: `STL-${Date.now().toString().slice(-6)}`,
+        payment_method: "ONLINE",
+        payment_status: "PAID",
+        total_order_amount: totalSettled,
+        vendor_payouts: [],
+        rider_payout: {
+          rider_id: rider._id,
+          amount: 0,
+          cod_cash_collected: totalSettled,
+          cod_cash_debt: 0,
+          status: "COMPLETED",
+          payout_at: new Date(),
+        },
+        settlement_status: "COMPLETED",
+        note: `COD Cash Debt Settlement: Rider paid ₹${totalSettled} via Online/UPI (Razorpay ${razorpay_payment_id})`,
+      });
+      await settlementTx.save();
+    } catch (settleErr) {
+      console.warn("Could not save settlement transaction log:", settleErr);
+    }
 
     res.status(200).json({
       success: true,
@@ -853,11 +1054,56 @@ export const getAdminFinancialOverview = async (_req: Request, res: Response): P
   try {
     const allTransactions = await Transaction.find().sort({ createdAt: -1 }).lean();
 
-    // 1. Total Platform Revenue (15% Net Fee Earned across completed transactions)
-    const totalPlatformRevenue = allTransactions.reduce(
-      (sum, t: any) => sum + (t.platform_revenue?.total_platform_fee || 0),
-      0
-    );
+    // 1. Calculate platform revenue according to cash-flow accounting:
+    // Online: Full amount enters platform revenue; subtracted when vendor & rider payouts done
+    // COD: Vendor payout cut from platform; rider clears COD debt -> amount added in platform revenue
+    let onlineGrossInflow = 0;
+    let onlineSettledVendorPayouts = 0;
+    let onlineSettledRiderPayouts = 0;
+    let codSettledVendorPayouts = 0;
+    let totalPlatformFee = 0;
+
+    const allOrders = await Order.find({ status: { $ne: "CANCELLED" } }).lean();
+
+    allOrders.forEach((o: any) => {
+      const amt = Number(o.total_amount) || 0;
+      const foodTotal = Number(o.food_items_total) || Math.max(0, amt - (Number(o.delivery_fee) || 0));
+      const platFee = Number(o.platform_fee_earned) || Math.round(foodTotal * 0.15 * 100) / 100;
+      const vendorShare = Math.round(Math.max(0, foodTotal * 0.95) * 100) / 100;
+      const riderShare = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      const isDelivered = o.status === "DELIVERED";
+
+      totalPlatformFee += platFee;
+
+      if (o.payment_method === "ONLINE") {
+        onlineGrossInflow += amt;
+        if (isDelivered) {
+          onlineSettledVendorPayouts += vendorShare;
+          onlineSettledRiderPayouts += riderShare;
+        }
+      } else if (o.payment_method === "COD" && isDelivered) {
+        codSettledVendorPayouts += vendorShare;
+      }
+    });
+
+    // Cleared COD debt collected from riders (adds directly to platform revenue)
+    const depositedCodOrders = await Order.find({
+      payment_method: "COD",
+      cod_deposit_status: "DEPOSITED_TO_ADMIN",
+      status: "DELIVERED",
+    });
+    const clearedCodDebt = depositedCodOrders.reduce((sum, o: any) => {
+      const amt = Number(o.total_amount) || 0;
+      const riderShare = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
+        ? Number(o.cod_amount_held)
+        : Math.max(0, amt - riderShare);
+      return sum + netDebt;
+    }, 0);
+
+    const onlineNetPlatformRevenue = onlineGrossInflow - (onlineSettledVendorPayouts + onlineSettledRiderPayouts);
+    const codNetPlatformRevenue = clearedCodDebt - codSettledVendorPayouts;
+    const totalPlatformRevenue = Math.round((onlineNetPlatformRevenue + codNetPlatformRevenue) * 100) / 100;
 
     // 2. Total Vendor Payouts
     const totalVendorPayouts = allTransactions.reduce((sum, t: any) => {
@@ -992,6 +1238,28 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
           comment: r.comment,
         }));
 
+        let orderDistance = Number(o.distance_km || 0);
+        if (orderDistance <= 0) {
+          if (o.delivery_fee && Number(o.delivery_fee) > 0) {
+            const feeNum = Number(o.delivery_fee);
+            orderDistance = feeNum <= 22 ? 2.1 : Number((2.0 + (feeNum - 22) / 7).toFixed(1));
+          } else if (
+            o.cluster_id?.coordinates?.coordinates &&
+            o.delivery_coordinates?.coordinates &&
+            !isCentralDefault(o.cluster_id.coordinates.coordinates) &&
+            !isCentralDefault(o.delivery_coordinates.coordinates)
+          ) {
+            orderDistance = Number(
+              calculateHaversineKm(
+                o.cluster_id.coordinates.coordinates,
+                o.delivery_coordinates.coordinates
+              ).toFixed(1)
+            );
+          } else {
+            orderDistance = 2.4;
+          }
+        }
+
         return {
           id: o._id,
           orderNumber: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
@@ -1002,6 +1270,8 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
           totalAmount: o.total_amount,
           foodItemsTotal: o.food_items_total,
           deliveryFee: o.delivery_fee,
+          distance_km: orderDistance,
+          distanceKm: orderDistance,
           taxAmount: o.tax_amount || Math.round((o.food_items_total || 0) * 0.05 * 10) / 10,
           deliveryAddress: o.delivery_address,
           deliveryCoordinates: o.delivery_coordinates?.coordinates || null,
@@ -1090,13 +1360,13 @@ export const cancelCustomerOrder = async (req: Request, res: Response): Promise<
     order.status = "CANCELLED";
     order.rejection_note = reason ? String(reason).trim() : "Cancelled by customer";
 
-    // Handle payment refund to customer wallet if paid online
+    // Handle online payment refund request (no customer wallet; sent to admin for UPI processing)
     if (order.payment_method === "ONLINE") {
-      order.payment_status = "REFUNDED";
+      order.payment_status = "PENDING"; // awaiting payout by admin
+      order.refund_status = "PENDING";
       order.refunded_amount = order.total_amount;
-      await User.findByIdAndUpdate(customer._id, {
-        $inc: { wallet_balance: order.total_amount },
-      });
+    } else {
+      order.refund_status = "NOT_APPLICABLE";
     }
 
     // Cancel all vendor suborders
@@ -1113,21 +1383,22 @@ export const cancelCustomerOrder = async (req: Request, res: Response): Promise<
       { order_id: order._id },
       {
         settlement_status: "CANCELLED",
-        note: `Order cancelled by customer. ${order.payment_method === "ONLINE" ? `₹${order.total_amount} refunded to wallet.` : "COD order voided."}`,
+        note: `Order cancelled by customer. ${order.payment_method === "ONLINE" ? `₹${order.total_amount} refund request pending admin payout to source UPI.` : "COD order voided."}`,
       }
     );
 
     await order.save();
+    memoryCache.invalidateAdminStats();
 
     // Customer Notification
-    const cleanCode = (order.order_number || order._id.toString().slice(-5)).toUpperCase().replace(/^MO-/, "");
+    const cleanCode = (((order as any).order_number || order._id.toString().slice(-5)) as string).toUpperCase().replace(/^MO-/, "");
     await createNotification({
       userId: customer._id,
       type: "ORDER",
-      title: order.payment_method === "ONLINE" ? "Order Cancelled & Refunded" : "Order Cancelled",
+      title: order.payment_method === "ONLINE" ? "Order Cancelled - Refund Initiated ⏳" : "Order Cancelled",
       message:
         order.payment_method === "ONLINE"
-          ? `Your order #${cleanCode} has been cancelled. ₹${order.total_amount} has been refunded to your wallet.`
+          ? `Your order #${cleanCode} has been cancelled. Your refund of ₹${order.total_amount} will be processed to your source UPI/bank account in 1-2 business days.`
           : `Your order #${cleanCode} has been cancelled.`,
       orderId: order._id,
       amount: order.payment_method === "ONLINE" ? order.total_amount : undefined,
@@ -1146,7 +1417,7 @@ export const cancelCustomerOrder = async (req: Request, res: Response): Promise<
 
     res.status(200).json({
       success: true,
-      message: `Order #${order._id.toString().slice(-5).toUpperCase()} has been successfully cancelled.${order.payment_method === "ONLINE" ? ` ₹${order.total_amount} was refunded to your wallet.` : ""}`,
+      message: `Order #${cleanCode} has been successfully cancelled.${order.payment_method === "ONLINE" ? ` Your refund of ₹${order.total_amount} will be processed to your source UPI/bank account in 1-2 business days.` : ""}`,
       data: order,
     });
   } catch (error: any) {

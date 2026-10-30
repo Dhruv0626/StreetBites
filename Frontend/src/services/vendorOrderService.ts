@@ -18,6 +18,9 @@ export interface VendorOrder {
   rejectionReason?: string;
   customer: string;
   customerPhone?: string;
+  rider?: string | null;
+  riderPhone?: string | null;
+  riderVehicle?: string | null;
   deliveryAddress?: string;
   deliveryNotes?: string;
   time: string;
@@ -76,17 +79,19 @@ export const vendorOrderService = {
     });
   },
 
-  // 2. Update order preparation/ready status with optional manual ETA
+  // 2. Update order preparation/ready status with optional manual ETA or cancellation reason
   updateOrderStatus: async (
     orderId: string,
     status: 'Preparing' | 'Completed' | 'Cancelled',
-    prepTimeMinutes?: number
+    prepTimeMinutes?: number,
+    reason?: string,
+    itemOutStock?: boolean
   ) => {
     return apiRequest<{ message: string; estimated_prep_time_minutes?: number }>(
       `/vendor/orders/${orderId}/status`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ status, prepTimeMinutes }),
+        body: JSON.stringify({ status, prepTimeMinutes, reason, itemOutStock }),
         requiresAuth: true,
       }
     );

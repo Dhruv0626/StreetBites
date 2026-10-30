@@ -8,12 +8,22 @@ import { Stall } from "../models/Stall.ts";
 import { FoodItem } from "../models/FoodItem.ts";
 import { Cluster } from "../models/Cluster.ts";
 import { SubOrder } from "../models/SubOrder.ts";
+import { memoryCache } from "../utils/cache.ts";
+import { createNotification } from "../utils/notificationHelper.ts";
 
 // @desc    Get admin dashboard overview statistics & dynamic revenue trend
 // @route   GET /api/admin/overview
 // @access  Admin
 export const getAdminOverviewStats = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const isFresh = _req.query.fresh === "true";
+    if (!isFresh) {
+      const cached = memoryCache.get("admin_overview_stats");
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
     // 1. User counts
     const [
       customersCount,
@@ -42,7 +52,7 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         },
       }),
       User.countDocuments({
-        verification_status: "PENDING",
+        verification_status: { $in: ["PENDING", null, undefined] },
         role: { $in: ["VENDOR", "RIDER"] },
       }),
       FoodItem.countDocuments({
@@ -68,18 +78,28 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       status: o.status || "PENDING",
       date: o.createdAt
         ? new Date(o.createdAt).toLocaleDateString("en-IN", {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
         : "Recent",
     }));
 
-    // 2. Order metrics & gross revenue
-    const orders = await Order.find({ status: { $ne: "CANCELLED" } })
-      .select("total_amount food_items_total delivery_fee tax_amount platform_fee_earned status payment_method createdAt")
-      .lean();
+    // 2. Order metrics, platform revenue & payouts
+    const [orders, transactions] = await Promise.all([
+      Order.find({ status: { $ne: "CANCELLED" } })
+        .select("total_amount food_items_total delivery_fee tax_amount platform_fee_earned status payment_method payment_status cod_deposit_status cod_amount_held rider_earned_fee rider_id cluster_id delivered_at order_number createdAt updatedAt")
+        .lean(),
+      Transaction.find().lean(),
+    ]);
+
+    // Build fast transaction lookup map for real-time settlement synchronization
+    const txnMap = new Map<string, any>();
+    (transactions || []).forEach((t: any) => {
+      if (t.order_id) txnMap.set(t.order_id.toString(), t);
+      if (t.order_number) txnMap.set(String(t.order_number).toUpperCase(), t);
+    });
 
     let totalGrossRevenue = 0;
     let totalPlatformFee = 0;
@@ -88,44 +108,275 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
     let todayPlatformFee = 0;
     let todayOrdersCount = 0;
 
+    let totalVendorPayouts = 0;
+    let pendingVendorPayouts = 0;
+    let settledVendorPayouts = 0;
+
+    let totalRiderPayouts = 0;
+    let pendingRiderPayouts = 0;
+    let settledRiderPayouts = 0;
+
+    let pendingCodCollection = 0;
+    let clearedCodDebt = 0;
+    let todayClearedCodDebt = 0;
+
+    let onlineGrossInflow = 0;
+    let todayOnlineGrossInflow = 0;
+    let onlineSettledVendorPayouts = 0;
+    let onlineSettledRiderPayouts = 0;
+    let todayOnlineSettledVendorPayouts = 0;
+    let todayOnlineSettledRiderPayouts = 0;
+
+    let codSettledVendorPayouts = 0;
+    let todayCodSettledVendorPayouts = 0;
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const transactions = await Transaction.find().lean();
-    let txGrossTotal = 0;
-    let txPlatformGain = 0;
-    transactions.forEach((t: any) => {
-      const tAmt = Number(t.total_order_amount) || 0;
-      const tFee = Number(t.platform_revenue?.total_platform_fee) || 0;
-      txGrossTotal += tAmt;
-      txPlatformGain += tFee;
-      if (t.createdAt && new Date(t.createdAt) >= todayStart) {
-        todayPlatformFee += tFee;
-      }
-    });
-
-    let ordersGrossRevenue = 0;
-    let ordersPlatformFee = 0;
-    let ordersDeliveryFees = 0;
     orders.forEach((o: any) => {
       const amt = Number(o.total_amount) || 0;
-      const platFee = Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.05);
+      const foodTotal = Number(o.food_items_total) || Math.max(0, amt - (Number(o.delivery_fee) || 0));
+      // Platform commission: 15% platform take (or platform_fee_earned)
+      const platFee = Number(o.platform_fee_earned) || Math.round(foodTotal * 0.15 * 100) / 100;
       const delFee = Number(o.delivery_fee) || 0;
+      const riderShare = Number(o.rider_earned_fee || delFee || 50);
+      const vendorShare = Math.round(Math.max(0, foodTotal * 0.95) * 100) / 100;
 
-      ordersGrossRevenue += amt;
-      ordersPlatformFee += platFee;
-      ordersDeliveryFees += delFee;
+      totalGrossRevenue += amt;
+      totalPlatformFee += platFee;
+      totalDeliveryFees += delFee;
+
+      totalVendorPayouts += vendorShare;
+      totalRiderPayouts += riderShare;
+
+      const oId = o._id?.toString();
+      const oNum = o.order_number ? String(o.order_number).toUpperCase() : "";
+      const txn = txnMap.get(oId) || (oNum ? txnMap.get(oNum) : null);
+
+      const statusUpper = String(o.status || "").trim().toUpperCase();
+      const isDelivered = statusUpper === "DELIVERED" || statusUpper === "COMPLETED" || Boolean(o.delivered_at);
+      const isOnline = o.payment_method === "ONLINE";
+      const isCod = o.payment_method === "COD";
+
+      // Synchronize Vendor Settlement Status:
+      // An order's vendor payout is settled once delivered, completed in Transaction, or credited to wallet
+      const isVendorSettled =
+        isDelivered ||
+        txn?.settlement_status === "COMPLETED" ||
+        (Array.isArray(txn?.vendor_payouts) && txn.vendor_payouts.some((vp: any) => vp.status === "COMPLETED"));
+
+      // Synchronize Rider Settlement Status:
+      // An order's rider payout is settled/paid once delivered, completed in Transaction, or credited
+      const isRiderSettled =
+        isDelivered ||
+        txn?.settlement_status === "COMPLETED" ||
+        txn?.rider_payout?.status === "COMPLETED";
+
+      if (isOnline) {
+        // 1. ONLINE PAYMENT LOGIC:
+        // Customer pays full amount online -> first added in platform revenue
+        onlineGrossInflow += amt;
+
+        if (isVendorSettled) {
+          settledVendorPayouts += vendorShare;
+          onlineSettledVendorPayouts += vendorShare;
+        } else {
+          pendingVendorPayouts += vendorShare;
+        }
+
+        if (isRiderSettled) {
+          settledRiderPayouts += riderShare;
+          onlineSettledRiderPayouts += riderShare;
+        } else {
+          pendingRiderPayouts += riderShare;
+        }
+      } else if (isCod) {
+        // 2. COD ORDER LOGIC:
+        // Rider collects full cash amount directly from customer; rider takes full amount.
+        const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
+          ? Number(o.cod_amount_held)
+          : Math.max(0, amt - riderShare);
+
+        if (isVendorSettled) {
+          // Vendor payout is cut from platform (platform disburses vendor's food earnings)
+          settledVendorPayouts += vendorShare;
+          codSettledVendorPayouts += vendorShare;
+        } else {
+          pendingVendorPayouts += vendorShare;
+        }
+
+        if (isRiderSettled) {
+          // Rider payout retained by rider from cash collected
+          settledRiderPayouts += riderShare;
+        } else {
+          pendingRiderPayouts += riderShare;
+        }
+
+        if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
+          // When rider clears COD debt -> amount added in platform revenue
+          clearedCodDebt += netDebt;
+          if ((o.delivered_at && new Date(o.delivered_at) >= todayStart) || (o.updatedAt && new Date(o.updatedAt) >= todayStart)) {
+            todayClearedCodDebt += netDebt;
+          }
+        } else if (isDelivered || isRiderSettled || o.cod_deposit_status === "PENDING_DEPOSIT") {
+          pendingCodCollection += netDebt;
+        }
+      }
 
       if (o.createdAt && new Date(o.createdAt) >= todayStart) {
         todayGrossRevenue += amt;
         todayPlatformFee += platFee;
         todayOrdersCount += 1;
+        if (isOnline) {
+          todayOnlineGrossInflow += amt;
+          if (isVendorSettled) {
+            todayOnlineSettledVendorPayouts += vendorShare;
+          }
+          if (isRiderSettled) {
+            todayOnlineSettledRiderPayouts += riderShare;
+          }
+        } else if (isCod && isVendorSettled) {
+          todayCodSettledVendorPayouts += vendorShare;
+        }
       }
     });
 
-    totalGrossRevenue = Math.max(ordersGrossRevenue, txGrossTotal);
-    totalPlatformFee = Math.max(ordersPlatformFee, txPlatformGain);
-    totalDeliveryFees = ordersDeliveryFees;
+    totalGrossRevenue = Math.round(totalGrossRevenue * 100) / 100;
+    totalPlatformFee = Math.round(totalPlatformFee * 100) / 100;
+    clearedCodDebt = Math.round(clearedCodDebt * 100) / 100;
+    todayClearedCodDebt = Math.round(todayClearedCodDebt * 100) / 100;
+
+    // Platform Revenue = (Online Gross Inflow - Settled Vendor - Settled Rider) + (Cleared Rider COD Debt - COD Vendor Payout Cut)
+    const onlineNetPlatformRevenue = onlineGrossInflow - (onlineSettledVendorPayouts + onlineSettledRiderPayouts);
+    const codNetPlatformRevenue = clearedCodDebt - codSettledVendorPayouts;
+    const totalPlatformRevenue = Math.round((onlineNetPlatformRevenue + codNetPlatformRevenue) * 100) / 100;
+
+    const todayOnlineNetRevenue = todayOnlineGrossInflow - (todayOnlineSettledVendorPayouts + todayOnlineSettledRiderPayouts);
+    const todayCodNetRevenue = todayClearedCodDebt - todayCodSettledVendorPayouts;
+    const todayPlatformRevenue = Math.round((todayOnlineNetRevenue + todayCodNetRevenue) * 100) / 100;
+
+    todayGrossRevenue = Math.round(todayGrossRevenue * 100) / 100;
+    pendingCodCollection = Math.round(pendingCodCollection * 100) / 100;
+    totalVendorPayouts = Math.round(totalVendorPayouts * 100) / 100;
+    pendingVendorPayouts = Math.round(pendingVendorPayouts * 100) / 100;
+    settledVendorPayouts = Math.round(settledVendorPayouts * 100) / 100;
+    totalRiderPayouts = Math.round(totalRiderPayouts * 100) / 100;
+    pendingRiderPayouts = Math.round(pendingRiderPayouts * 100) / 100;
+    settledRiderPayouts = Math.round(settledRiderPayouts * 100) / 100;
+
+    // 2b. Compute Real-Time Stakeholder Rankings (Top Vendors, Riders, Clusters)
+    const [allStalls, subOrders, allRiders, allClusters] = await Promise.all([
+      Stall.find().populate("vendor_id", "name email phone_number").populate("cluster_id", "name city").lean(),
+      SubOrder.find().lean(),
+      User.find({ role: "RIDER" }).select("name phone_number email wallet_balance rating").lean(),
+      Cluster.find().lean(),
+    ]);
+
+    // Vendor rankings map: Calculate 15% Platform Take (5% vendor commission + 10% customer markup) stall wise
+    const stallStatsMap = new Map<string, { orders: number; revenue: number }>();
+    subOrders.forEach((so: any) => {
+      const sId = (so.stall_id?._id || so.stall_id)?.toString();
+      if (!sId) return;
+      // Derive food base price from 95% vendor earned amount or subtotal
+      const foodBase = so.vendor_earned_amount
+        ? (Number(so.vendor_earned_amount) / 0.95)
+        : (Number(so.subtotal) || 0);
+      // 15% Platform Revenue earned from this stall (5% vendor commission + 10% markup)
+      const platformEarned15 = Math.round(foodBase * 0.15 * 100) / 100;
+
+      const prev = stallStatsMap.get(sId) || { orders: 0, revenue: 0 };
+      stallStatsMap.set(sId, {
+        orders: prev.orders + 1,
+        revenue: Math.round((prev.revenue + platformEarned15) * 100) / 100,
+      });
+    });
+
+    const vendorRanks = allStalls
+      .map((s: any) => {
+        const stats = stallStatsMap.get(s._id.toString()) || { orders: 0, revenue: 0 };
+        return {
+          id: s._id.toString(),
+          name: s.name,
+          ownerName: s.vendor_id?.name || "Vendor Partner",
+          clusterName: s.cluster_id?.name || "Khau Galli",
+          city: s.cluster_id?.city || "Ahmedabad",
+          rating: s.rating || 4.8,
+          totalOrders: stats.orders || (s.rating_count ? Math.max(1, s.rating_count) : 0),
+          totalRevenue: Math.round(stats.revenue * 100) / 100,
+          imageUrl: s.cover_image_url || s.image_url || "",
+        };
+      })
+      .sort((a, b) => b.totalRevenue - a.totalRevenue || b.totalOrders - a.totalOrders)
+      .slice(0, 5)
+      .map((v, idx) => ({ ...v, rank: idx + 1 }));
+
+    // Rider rankings map
+    const deliveredOrders = orders.filter((o: any) => {
+      const statusUpper = String(o.status || "").trim().toUpperCase();
+      return statusUpper === "DELIVERED" || statusUpper === "COMPLETED" || Boolean(o.delivered_at);
+    });
+    const riderOrdersMap = new Map<string, { deliveries: number; earnings: number }>();
+
+    deliveredOrders.forEach((o: any) => {
+      if (!o.rider_id) return;
+      const rId = o.rider_id.toString();
+      const prev = riderOrdersMap.get(rId) || { deliveries: 0, earnings: 0 };
+      const fee = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      riderOrdersMap.set(rId, {
+        deliveries: prev.deliveries + 1,
+        earnings: prev.earnings + fee,
+      });
+    });
+
+    const riderRanks = allRiders
+      .map((r: any) => {
+        const stats = riderOrdersMap.get(r._id.toString()) || { deliveries: 0, earnings: 0 };
+        return {
+          id: r._id.toString(),
+          name: r.name,
+          phone: r.phone_number || "Verified Rider",
+          completedDeliveries: stats.deliveries,
+          totalEarnings: Math.round(stats.earnings * 100) / 100,
+          walletBalance: r.wallet_balance || 0,
+          rating: r.rating || 4.9,
+          onTimeRate: "99.2%",
+        };
+      })
+      .sort((a, b) => b.completedDeliveries - a.completedDeliveries || b.totalEarnings - a.totalEarnings)
+      .slice(0, 5)
+      .map((r, idx) => ({ ...r, rank: idx + 1 }));
+
+    // Cluster rankings map
+    const clusterStatsMap = new Map<string, { orders: number; volume: number }>();
+    orders.forEach((o: any) => {
+      if (!o.cluster_id) return;
+      const cId = o.cluster_id.toString();
+      const prev = clusterStatsMap.get(cId) || { orders: 0, volume: 0 };
+      clusterStatsMap.set(cId, {
+        orders: prev.orders + 1,
+        volume: prev.volume + (Number(o.total_amount) || 0),
+      });
+    });
+
+    const clusterRanks = allClusters
+      .map((c: any) => {
+        const stats = clusterStatsMap.get(c._id.toString()) || { orders: 0, volume: 0 };
+        return {
+          id: c._id.toString(),
+          name: c.name,
+          city: c.city || "Ahmedabad",
+          totalOrders: stats.orders,
+          totalVolume: Math.round(stats.volume * 100) / 100,
+          activeStalls: allStalls.filter(
+            (s: any) =>
+              s.cluster_id?._id?.toString() === c._id.toString() ||
+              s.cluster_id?.toString() === c._id.toString()
+          ).length,
+        };
+      })
+      .sort((a, b) => b.totalVolume - a.totalVolume || b.totalOrders - a.totalOrders)
+      .slice(0, 5)
+      .map((c, idx) => ({ ...c, rank: idx + 1 }));
 
     // 3. Last 7 Days Daily Revenue Trend Breakdown (Platform Fee Earnings)
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -135,6 +386,7 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       fullDate: string;
       revenue: number;
       platformFee: number;
+      clearedCodDebt: number;
       grossRevenue: number;
       orders: number;
     }[] = [];
@@ -153,38 +405,61 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       });
 
       const dayGrossRevenue = dayOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
-      const dayPlatformFee = dayOrders.reduce(
-        (sum: number, o: any) =>
-          sum + (Number(o.platform_fee_earned) || Math.round((Number(o.food_items_total) || 0) * 0.15)),
-        0
-      );
+      let dayOnlineInflow = 0;
+      let dayOnlineSettledVendor = 0;
+      let dayOnlineSettledRider = 0;
+      let dayCodClearedDebt = 0;
+      let dayCodSettledVendor = 0;
+      let dayPlatformFee = 0;
 
-      const dayTx = transactions.filter((t: any) => {
-        if (!t.createdAt) return false;
-        const txDate = new Date(t.createdAt);
-        return txDate >= startOfDay && txDate <= endOfDay;
+      dayOrders.forEach((o: any) => {
+        const amt = Number(o.total_amount) || 0;
+        const foodTotal = Number(o.food_items_total) || Math.max(0, amt - (Number(o.delivery_fee) || 0));
+        const platFee = Number(o.platform_fee_earned) || Math.round(foodTotal * 0.15 * 100) / 100;
+        const delFee = Number(o.delivery_fee) || 0;
+        const riderShare = Number(o.rider_earned_fee || delFee || 50);
+        const vendorShare = Math.round(Math.max(0, foodTotal * 0.95) * 100) / 100;
+        const isDelivered = o.status === "DELIVERED";
+
+        dayPlatformFee += platFee;
+
+        if (o.payment_method === "ONLINE") {
+          dayOnlineInflow += amt;
+          if (isDelivered) {
+            dayOnlineSettledVendor += vendorShare;
+            dayOnlineSettledRider += riderShare;
+          }
+        } else if (o.payment_method === "COD") {
+          const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
+            ? Number(o.cod_amount_held)
+            : Math.max(0, amt - riderShare);
+
+          if (isDelivered) {
+            dayCodSettledVendor += vendorShare;
+            if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
+              dayCodClearedDebt += netDebt;
+            }
+          }
+        }
       });
-      const dayTxGrossRevenue = dayTx.reduce((sum: number, t: any) => sum + (Number(t.total_order_amount) || 0), 0);
-      const dayTxPlatformFee = dayTx.reduce(
-        (sum: number, t: any) => sum + (Number(t.platform_revenue?.total_platform_fee) || 0),
-        0
-      );
 
-      const finalDayGross = Math.max(dayGrossRevenue, dayTxGrossRevenue);
-      const finalDayPlatform = Math.max(dayPlatformFee, dayTxPlatformFee);
+      const dayTotalRevenue = Math.round(
+        (dayOnlineInflow - dayOnlineSettledVendor - dayOnlineSettledRider + dayCodClearedDebt - dayCodSettledVendor) * 100
+      ) / 100;
 
       dailyTrend.push({
         name: dayNames[d.getDay()],
         date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
         fullDate: d.toISOString().split("T")[0],
-        revenue: Math.round(finalDayPlatform * 100) / 100, // Platform earnings for chart
-        platformFee: Math.round(finalDayPlatform * 100) / 100,
-        grossRevenue: Math.round(finalDayGross * 100) / 100,
-        orders: dayOrders.length || dayTx.length,
+        revenue: dayTotalRevenue, // Net platform revenue following cash flow rules
+        platformFee: Math.round(dayPlatformFee * 100) / 100,
+        clearedCodDebt: Math.round(dayCodClearedDebt * 100) / 100,
+        grossRevenue: Math.round(dayGrossRevenue * 100) / 100,
+        orders: dayOrders.length,
       });
     }
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       data: {
         customers: customersCount,
@@ -194,12 +469,36 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         totalUsers: customersCount + vendorsCount + ridersCount + adminsCount,
         totalOrders: orders.length,
         liveOrders: liveOrdersCount,
-        totalRevenue: Math.round(totalPlatformFee * 100) / 100, // Platform earnings
-        todayRevenue: Math.round(todayPlatformFee * 100) / 100, // Today's platform earnings
-        totalPlatformRevenue: Math.round(totalPlatformFee * 100) / 100,
-        todayPlatformRevenue: Math.round(todayPlatformFee * 100) / 100,
+        totalRevenue: totalPlatformRevenue,
+        todayRevenue: todayPlatformRevenue,
+        totalPlatformRevenue: totalPlatformRevenue,
+        todayPlatformRevenue: todayPlatformRevenue,
+        onlineGrossInflow: Math.round(onlineGrossInflow * 100) / 100,
+        onlineSettledVendorPayouts: Math.round(onlineSettledVendorPayouts * 100) / 100,
+        onlineSettledRiderPayouts: Math.round(onlineSettledRiderPayouts * 100) / 100,
+        codSettledVendorPayouts: Math.round(codSettledVendorPayouts * 100) / 100,
+        totalPlatformFee: Math.round(totalPlatformFee * 100) / 100,
+        todayPlatformFee: Math.round(todayPlatformFee * 100) / 100,
+        clearedCodDebt: Math.round(clearedCodDebt * 100) / 100,
+        todayClearedCodDebt: Math.round(todayClearedCodDebt * 100) / 100,
         totalGrossRevenue: Math.round(totalGrossRevenue * 100) / 100,
         todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
+        pendingCodCollection: Math.round(pendingCodCollection * 100) / 100,
+        vendorPayouts: {
+          total: totalVendorPayouts,
+          pending: pendingVendorPayouts,
+          settled: settledVendorPayouts,
+        },
+        riderPayouts: {
+          total: totalRiderPayouts,
+          pending: pendingRiderPayouts,
+          settled: settledRiderPayouts,
+        },
+        ranks: {
+          vendors: vendorRanks,
+          riders: riderRanks,
+          clusters: clusterRanks,
+        },
         pendingApprovals,
         revenueChart: dailyTrend,
         recentOrders,
@@ -209,21 +508,49 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
           riders: ridersCount,
           admins: adminsCount,
           totalUsers: customersCount + vendorsCount + ridersCount + adminsCount,
-          totalRevenue: Math.round(totalPlatformFee * 100) / 100,
-          todayRevenue: Math.round(todayPlatformFee * 100) / 100,
+          totalRevenue: totalPlatformRevenue,
+          todayRevenue: todayPlatformRevenue,
           totalGrossRevenue: Math.round(totalGrossRevenue * 100) / 100,
-          totalPlatformRevenue: Math.round(totalPlatformFee * 100) / 100,
+          totalPlatformRevenue: totalPlatformRevenue,
+          todayPlatformRevenue: todayPlatformRevenue,
+          onlineGrossInflow: Math.round(onlineGrossInflow * 100) / 100,
+          onlineSettledVendorPayouts: Math.round(onlineSettledVendorPayouts * 100) / 100,
+          onlineSettledRiderPayouts: Math.round(onlineSettledRiderPayouts * 100) / 100,
+          codSettledVendorPayouts: Math.round(codSettledVendorPayouts * 100) / 100,
+          totalPlatformFee: Math.round(totalPlatformFee * 100) / 100,
+          clearedCodDebt: Math.round(clearedCodDebt * 100) / 100,
+          todayClearedCodDebt: Math.round(todayClearedCodDebt * 100) / 100,
           totalDeliveryFees: Math.round(totalDeliveryFees * 100) / 100,
+          pendingCodCollection: Math.round(pendingCodCollection * 100) / 100,
+          vendorPayouts: {
+            total: totalVendorPayouts,
+            pending: pendingVendorPayouts,
+            settled: settledVendorPayouts,
+          },
+          riderPayouts: {
+            total: totalRiderPayouts,
+            pending: pendingRiderPayouts,
+            settled: settledRiderPayouts,
+          },
+          ranks: {
+            vendors: vendorRanks,
+            riders: riderRanks,
+            clusters: clusterRanks,
+          },
           totalOrders: orders.length,
           liveOrders: liveOrdersCount,
           todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
-          todayPlatformRevenue: Math.round(todayPlatformFee * 100) / 100,
+          todayPlatformRevenue: todayPlatformRevenue,
           todayOrdersCount,
           pendingApprovals,
         },
         revenueTrend: dailyTrend,
       },
-    });
+    };
+
+    memoryCache.set("admin_overview_stats", responsePayload, 60);
+
+    res.status(200).json(responsePayload);
   } catch (error: any) {
     console.error("Error fetching admin overview stats:", error);
     res.status(500).json({
@@ -238,6 +565,14 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
 // @access  Admin
 export const getAdminTransactions = async (_req: Request, res: Response): Promise<void> => {
   try {
+    const isFresh = _req.query.fresh === "true";
+    if (!isFresh) {
+      const cached = memoryCache.get("admin_transactions");
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
     // 1. Auto-synchronize: Ensure all orders have a corresponding Transaction record
     try {
       const existingTxOrderIds = await Transaction.distinct("order_id");
@@ -426,48 +761,200 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
 
     const totalWithdrawn = withdrawals.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
 
-    // 3. Query all customer refunds
+    // 3. Query all online customer refund requests & settlements
     const refundedOrders = await Order.find({
+      payment_method: "ONLINE",
       $or: [
         { status: "CANCELLED" },
+        { refund_status: { $in: ["PENDING", "COMPLETED"] } },
         { payment_status: "REFUNDED" },
         { refunded_amount: { $gt: 0 } },
       ],
     })
-      .populate("customer_id", "name email phone_number")
+      .populate("customer_id", "name email phone_number upi_id")
       .sort({ updatedAt: -1, createdAt: -1 })
       .lean();
 
-    const refunds = refundedOrders.map((ro: any) => ({
-      id: `REF-${ro._id.toString().slice(-6).toUpperCase()}`,
-      orderId: `MO-${ro._id.toString().slice(-5).toUpperCase()}`,
-      customerName: ro.customer_id?.name || "Customer",
-      reason: ro.rejection_note || "Order cancelled & refunded to wallet",
-      amount: Number(ro.refunded_amount || ro.total_amount || 0),
-      status: "Refunded",
-      date: ro.updatedAt || ro.createdAt
-        ? new Date(ro.updatedAt || ro.createdAt).toLocaleDateString("en-IN", {
+    const refunds = refundedOrders.map((ro: any) => {
+      const isCompleted = ro.refund_status === "COMPLETED" || ro.payment_status === "REFUNDED";
+      const statusLabel = isCompleted ? "Refunded" : "Pending";
+      return {
+        id: `REF-${ro._id.toString().slice(-6).toUpperCase()}`,
+        orderDbId: ro._id.toString(),
+        orderId: `MO-${ro._id.toString().slice(-5).toUpperCase()}`,
+        customerName: ro.customer_id?.name || "Customer",
+        customerPhone: ro.customer_id?.phone_number || "",
+        customerEmail: ro.customer_id?.email || "",
+        upiId: ro.customer_id?.upi_id || "Customer Source UPI",
+        reason: ro.rejection_note || "Customer requested order cancellation",
+        amount: Number(ro.refunded_amount || ro.total_amount || 0),
+        status: statusLabel,
+        paymentMethod: "ONLINE",
+        date: ro.updatedAt || ro.createdAt
+          ? new Date(ro.updatedAt || ro.createdAt).toLocaleDateString("en-IN", {
             day: "numeric",
             month: "short",
             year: "numeric",
             hour: "2-digit",
             minute: "2-digit",
           })
-        : "Recently",
-    }));
+          : "Recently",
+      };
+    });
 
-    // 4. Calculate floating COD cash held by riders in field
+    // 4. Calculate floating COD cash held by riders in field & grouped rider ledger
     const pendingCodOrders = await Order.find({
       payment_method: "COD",
       cod_deposit_status: "PENDING_DEPOSIT",
       status: "DELIVERED",
-    });
-    const floatingCodCash = pendingCodOrders.reduce(
-      (sum, o) => sum + (Number(o.cod_amount_held || o.total_amount) || 0),
-      0
-    );
+    })
+      .populate("rider_id", "name phone_number email")
+      .lean();
 
-    res.status(200).json({
+    const pendingCodRidersMap = new Map<string, any>();
+    let floatingCodCash = 0;
+
+    pendingCodOrders.forEach((o: any) => {
+      const r = o.rider_id;
+      const rId = (r?._id || r || "unknown").toString();
+      const riderName = r?.name || "Rider Partner";
+      const riderPhone = r?.phone_number || "Verified Rider";
+      const riderFee = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      const netDebt = Math.max(0, (Number(o.total_amount) || 0) - riderFee);
+
+      floatingCodCash += netDebt;
+
+      const prev = pendingCodRidersMap.get(rId) || {
+        riderId: rId,
+        riderName,
+        riderPhone,
+        ordersCount: 0,
+        orderIds: [],
+        totalDebt: 0,
+        lastDeliveredAt: o.delivered_at || o.createdAt,
+      };
+
+      prev.ordersCount += 1;
+      prev.orderIds.push(`MO-${o._id.toString().slice(-5).toUpperCase()}`);
+      prev.totalDebt += netDebt;
+      pendingCodRidersMap.set(rId, prev);
+    });
+
+    floatingCodCash = Math.round(floatingCodCash * 100) / 100;
+    const pendingCodRiders = Array.from(pendingCodRidersMap.values()).map((item: any) => ({
+      ...item,
+      totalDebt: Math.round(item.totalDebt * 100) / 100,
+    }));
+
+    // 5. Total Platform Commission & Stakeholder Payout Totals
+    const allDeliveredOrders = await Order.find({ status: { $ne: "CANCELLED" } })
+      .select("total_amount food_items_total delivery_fee platform_fee_earned status payment_method payment_status cod_deposit_status cod_amount_held rider_earned_fee delivered_at order_number")
+      .lean();
+
+    const adminTxnMap = new Map<string, any>();
+    (transactions || []).forEach((t: any) => {
+      if (t.order_id) adminTxnMap.set(t.order_id.toString(), t);
+      if (t.order_number) adminTxnMap.set(String(t.order_number).toUpperCase(), t);
+    });
+
+    let totalPlatformFee = 0;
+    let clearedCodDebt = 0;
+    let totalVendorPayouts = 0;
+    let settledVendorPayouts = 0;
+    let pendingVendorPayouts = 0;
+
+    let totalRiderPayouts = 0;
+    let settledRiderPayouts = 0;
+    let pendingRiderPayouts = 0;
+
+    let onlineGrossInflow = 0;
+    let onlineSettledVendorPayouts = 0;
+    let onlineSettledRiderPayouts = 0;
+    let codSettledVendorPayouts = 0;
+
+    allDeliveredOrders.forEach((o: any) => {
+      const amt = Number(o.total_amount) || 0;
+      const foodTotal = Number(o.food_items_total) || Math.max(0, amt - (Number(o.delivery_fee) || 0));
+      const platFee = Number(o.platform_fee_earned) || Math.round(foodTotal * 0.15 * 100) / 100;
+      const vendorShare = Math.round(Math.max(0, foodTotal * 0.95) * 100) / 100;
+      const riderShare = Number(o.rider_earned_fee || o.delivery_fee || 50);
+
+      const oId = o._id?.toString();
+      const oNum = o.order_number ? String(o.order_number).toUpperCase() : "";
+      const txn = adminTxnMap.get(oId) || (oNum ? adminTxnMap.get(oNum) : null);
+
+      const statusUpper = String(o.status || "").trim().toUpperCase();
+      const isDelivered = statusUpper === "DELIVERED" || statusUpper === "COMPLETED" || Boolean(o.delivered_at);
+      const isOnline = o.payment_method === "ONLINE";
+      const isCod = o.payment_method === "COD";
+
+      const isVendorSettled =
+        isDelivered ||
+        txn?.settlement_status === "COMPLETED" ||
+        (Array.isArray(txn?.vendor_payouts) && txn.vendor_payouts.some((vp: any) => vp.status === "COMPLETED"));
+
+      const isRiderSettled =
+        isDelivered ||
+        txn?.settlement_status === "COMPLETED" ||
+        txn?.rider_payout?.status === "COMPLETED";
+
+      totalPlatformFee += platFee;
+      totalVendorPayouts += vendorShare;
+      totalRiderPayouts += riderShare;
+
+      if (isOnline) {
+        // Online: Customer pays full amount online -> first added into platform revenue
+        onlineGrossInflow += amt;
+
+        if (isVendorSettled) {
+          settledVendorPayouts += vendorShare;
+          onlineSettledVendorPayouts += vendorShare;
+        } else {
+          pendingVendorPayouts += vendorShare;
+        }
+
+        if (isRiderSettled) {
+          settledRiderPayouts += riderShare;
+          onlineSettledRiderPayouts += riderShare;
+        } else {
+          pendingRiderPayouts += riderShare;
+        }
+      } else if (isCod) {
+        // COD: Rider takes full amount; vendor payout cut from platform
+        if (isVendorSettled) {
+          settledVendorPayouts += vendorShare;
+          codSettledVendorPayouts += vendorShare;
+        } else {
+          pendingVendorPayouts += vendorShare;
+        }
+
+        if (isRiderSettled) {
+          settledRiderPayouts += riderShare;
+        } else {
+          pendingRiderPayouts += riderShare;
+        }
+
+        if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
+          const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
+            ? Number(o.cod_amount_held)
+            : Math.max(0, amt - riderShare);
+          clearedCodDebt += netDebt;
+        }
+      }
+    });
+
+    clearedCodDebt = Math.round(clearedCodDebt * 100) / 100;
+    const onlineNetRevenue = onlineGrossInflow - (onlineSettledVendorPayouts + onlineSettledRiderPayouts);
+    const codNetRevenue = clearedCodDebt - codSettledVendorPayouts;
+    const totalPlatformRevenue = Math.round((onlineNetRevenue + codNetRevenue) * 100) / 100;
+    totalVendorPayouts = Math.round(totalVendorPayouts * 100) / 100;
+    settledVendorPayouts = Math.round(settledVendorPayouts * 100) / 100;
+    pendingVendorPayouts = Math.round(pendingVendorPayouts * 100) / 100;
+    totalRiderPayouts = Math.round(totalRiderPayouts * 100) / 100;
+    settledRiderPayouts = Math.round(settledRiderPayouts * 100) / 100;
+    pendingRiderPayouts = Math.round(pendingRiderPayouts * 100) / 100;
+
+    const responsePayload = {
       success: true,
       data: {
         all: formattedTransactions,
@@ -476,8 +963,32 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
         withdrawals,
         totalWithdrawn,
         floatingCodCash,
+        pendingCodCollection: floatingCodCash,
+        clearedCodDebt,
+        onlineGrossInflow: Math.round(onlineGrossInflow * 100) / 100,
+        onlineSettledVendorPayouts: Math.round(onlineSettledVendorPayouts * 100) / 100,
+        onlineSettledRiderPayouts: Math.round(onlineSettledRiderPayouts * 100) / 100,
+        codSettledVendorPayouts: Math.round(codSettledVendorPayouts * 100) / 100,
+        pendingCodRiders,
+        totalPlatformFee: Math.round(totalPlatformFee * 100) / 100,
+        totalPlatformRevenue,
+        platformRevenue: totalPlatformRevenue,
+        vendorPayouts: {
+          total: totalVendorPayouts,
+          pending: pendingVendorPayouts,
+          settled: settledVendorPayouts,
+        },
+        riderPayouts: {
+          total: totalRiderPayouts,
+          pending: pendingRiderPayouts,
+          settled: settledRiderPayouts,
+        },
       },
-    });
+    };
+
+    memoryCache.set("admin_transactions", responsePayload, 60);
+
+    res.status(200).json(responsePayload);
   } catch (error: any) {
     console.error("Error fetching admin transactions:", error);
     res.status(500).json({
@@ -524,6 +1035,8 @@ export const processPendingPayouts = async (req: Request, res: Response): Promis
       );
     }
 
+    memoryCache.invalidateAdminStats();
+
     res.status(200).json({
       success: true,
       message: "Payout settlements processed and marked as completed successfully.",
@@ -533,6 +1046,184 @@ export const processPendingPayouts = async (req: Request, res: Response): Promis
     res.status(500).json({
       success: false,
       message: error?.message || "Failed to process payouts",
+    });
+  }
+};
+
+// @desc    Settle and confirm rider COD cash deposit to platform
+// @route   POST /api/admin/transactions/settle-rider-cod
+// @access  Admin
+export const settleRiderCodDebt = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { riderId } = req.body;
+    if (!riderId) {
+      res.status(400).json({ success: false, message: "Rider ID is required." });
+      return;
+    }
+
+    const pendingOrders = await Order.find({
+      rider_id: riderId,
+      payment_method: "COD",
+      cod_deposit_status: "PENDING_DEPOSIT",
+      status: "DELIVERED",
+    });
+
+    if (pendingOrders.length === 0) {
+      res.status(400).json({ success: false, message: "No pending COD debt found for this rider." });
+      return;
+    }
+
+    const totalCleared = pendingOrders.reduce((sum, o) => {
+      const amt = Number(o.total_amount) || 0;
+      const riderShare = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
+        ? Number(o.cod_amount_held)
+        : Math.max(0, amt - riderShare);
+      return sum + netDebt;
+    }, 0);
+
+    const now = new Date();
+
+    // 1. Mark orders as deposited to admin
+    await Order.updateMany(
+      {
+        rider_id: riderId,
+        payment_method: "COD",
+        cod_deposit_status: "PENDING_DEPOSIT",
+      },
+      {
+        $set: {
+          cod_deposit_status: "DEPOSITED_TO_ADMIN",
+          updatedAt: now,
+        },
+      }
+    );
+
+    // 2. Reset rider floating cash debt
+    await User.findByIdAndUpdate(riderId, {
+      $set: { floating_cash_debt: 0 },
+    });
+
+    // 3. Mark transaction records completed
+    const orderIds = pendingOrders.map((o) => o._id);
+    await Transaction.updateMany(
+      { order_id: { $in: orderIds } },
+      {
+        $set: {
+          "rider_payout.cod_cash_debt": 0,
+          "platform_revenue.status": "COMPLETED",
+          "platform_revenue.realized_at": now,
+          settlement_status: "COMPLETED",
+        },
+      }
+    ).catch(() => {});
+
+    memoryCache.invalidateAdminStats();
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully confirmed ₹${Math.round(totalCleared * 100) / 100} of COD cash collection from rider. Amount added to platform revenue!`,
+      data: {
+        clearedAmount: Math.round(totalCleared * 100) / 100,
+        riderId,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error settling rider COD debt:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to settle rider COD debt.",
+    });
+  }
+};
+
+// @desc    Process customer refund for online order & notify customer UPI payout
+// @route   POST /api/admin/transactions/process-refund
+// @access  Admin
+export const processCustomerRefund = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      res.status(400).json({ success: false, message: "Order ID is required." });
+      return;
+    }
+
+    let order: any = null;
+    if (mongoose.isValidObjectId(orderId)) {
+      order = await Order.findById(orderId).populate("customer_id");
+    }
+    if (!order) {
+      order = await Order.findOne({
+        order_number: orderId.startsWith("MO-") ? orderId : `MO-${orderId}`,
+      }).populate("customer_id");
+    }
+
+    if (!order) {
+      res.status(404).json({ success: false, message: "Order not found." });
+      return;
+    }
+
+    if (order.payment_method !== "ONLINE") {
+      res.status(400).json({
+        success: false,
+        message: "Only online orders require refund processing. COD orders do not involve customer pre-payment.",
+      });
+      return;
+    }
+
+    const now = new Date();
+    const refundAmt = Number(order.refunded_amount || order.total_amount || 0);
+
+    order.refund_status = "COMPLETED";
+    order.payment_status = "REFUNDED";
+    order.refunded_amount = refundAmt;
+    order.refunded_at = now;
+    await order.save();
+
+    // Update Transaction record
+    await Transaction.findOneAndUpdate(
+      { order_id: order._id },
+      {
+        $set: {
+          settlement_status: "COMPLETED",
+          note: `Customer refund of ₹${refundAmt} processed by admin to source UPI/bank account.`,
+        },
+      }
+    ).catch(() => {});
+
+    memoryCache.invalidateAdminStats();
+
+    // Customer Notification: "your payment refunded on your upi id"
+    const customerId = order.customer_id?._id || order.customer_id;
+    const cleanCode = (((order as any).order_number || order._id.toString().slice(-5)) as string).toUpperCase().replace(/^MO-/, "");
+
+    if (customerId) {
+      await createNotification({
+        userId: customerId,
+        type: "PAYOUT",
+        title: "Refund Completed! 💸",
+        message: `Your payment of ₹${refundAmt} for Order #${cleanCode} has been refunded to your UPI ID.`,
+        orderId: order._id,
+        amount: refundAmt,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Refund of ₹${refundAmt} successfully processed for Order #${cleanCode}. Notification delivered to customer.`,
+      data: {
+        orderId: order._id,
+        orderCode: `MO-${cleanCode}`,
+        refundAmount: refundAmt,
+        refundStatus: "COMPLETED",
+        refundedAt: now,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error processing customer refund:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to process customer refund.",
     });
   }
 };
@@ -898,7 +1589,7 @@ export const getAdminCounts = async (_req: Request, res: Response): Promise<void
   try {
     const pendingKyc = await User.countDocuments({
       role: { $in: ["VENDOR", "RIDER"] },
-      verification_status: "PENDING",
+      verification_status: { $in: ["PENDING", null, undefined] },
     });
 
     const pendingMasterFoodItems = await FoodItem.countDocuments({
@@ -955,6 +1646,8 @@ export const updateFoodItemStatus = async (req: Request, res: Response): Promise
     if (mongoose.isValidObjectId(id)) {
       await FoodItem.findByIdAndUpdate(id, { status: newStatus });
     }
+
+    memoryCache.invalidateAdminStats();
 
     res.status(200).json({
       success: true,

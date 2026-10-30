@@ -35,10 +35,12 @@ const onRefreshed = (success: boolean) => {
 
 const refreshAuthTokens = async (): Promise<boolean> => {
   try {
+    const storedRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
     const res = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      body: storedRefreshToken ? JSON.stringify({ refreshToken: storedRefreshToken }) : undefined,
     });
 
     if (!res.ok) {
@@ -46,7 +48,16 @@ const refreshAuthTokens = async (): Promise<boolean> => {
     }
 
     const data = await res.json().catch(() => ({}));
-    return Boolean(data && data.success);
+    if (data && data.success && data.data?.accessToken) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("streetbites_access_token", data.data.accessToken);
+        if (data.data.refreshToken) {
+          localStorage.setItem("streetbites_refresh_token", data.data.refreshToken);
+        }
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -67,12 +78,20 @@ export async function apiRequest<T = any>(
   const { requiresAuth = true, headers = {}, timeoutMs = 15000, ...customConfig } = options;
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
 
+  const isValidToken = (t: string | null | undefined): t is string => {
+    return Boolean(t && t !== "undefined" && t !== "null" && t !== "[object Object]" && t.trim().length > 20);
+  };
+
   const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("streetbites_customer_id") : null;
   const storedToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
+  const storedRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
   const configHeaders: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(storedToken ? { Authorization: `Bearer ${storedToken}` } : {}),
-    ...(storedCustomerId ? { "x-customer-id": storedCustomerId, "x-user-id": storedCustomerId } : {}),
+    ...(isValidToken(storedToken) ? { Authorization: `Bearer ${storedToken}` } : {}),
+    ...(isValidToken(storedRefreshToken) ? { "x-refresh-token": storedRefreshToken } : {}),
+    ...(storedCustomerId && storedCustomerId !== "undefined" && storedCustomerId !== "null"
+      ? { "x-customer-id": storedCustomerId, "x-user-id": storedCustomerId }
+      : {}),
     ...(headers as Record<string, string>),
   };
 
@@ -89,6 +108,14 @@ export async function apiRequest<T = any>(
 
     clearTimeout(timeoutId);
 
+    // Pick up sliding session tokens from response headers
+    if (typeof window !== "undefined") {
+      const headerAccessToken = response.headers.get("x-access-token");
+      const headerRefreshToken = response.headers.get("x-refresh-token");
+      if (headerAccessToken) localStorage.setItem("streetbites_access_token", headerAccessToken);
+      if (headerRefreshToken) localStorage.setItem("streetbites_refresh_token", headerRefreshToken);
+    }
+
     // Handle 401 Token Expired -> Attempt refresh
     if (response.status === 401 && requiresAuth) {
       if (!isRefreshing) {
@@ -98,10 +125,17 @@ export async function apiRequest<T = any>(
 
         if (refreshed) {
           onRefreshed(true);
-          // Retry original request
+          // Retry original request with newly minted token
+          const freshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
+          const freshRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+          const retryHeaders = {
+            ...configHeaders,
+            ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
+            ...(freshRefreshToken ? { "x-refresh-token": freshRefreshToken } : {}),
+          };
           response = await fetch(url, {
             ...customConfig,
-            headers: configHeaders,
+            headers: retryHeaders,
             credentials: "include",
           });
         } else {
@@ -111,9 +145,16 @@ export async function apiRequest<T = any>(
         const retryOriginalRequest = new Promise<Response>((resolve) => {
           subscribeTokenRefresh(async (refreshed: boolean) => {
             if (refreshed) {
+              const freshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
+              const freshRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+              const retryHeaders = {
+                ...configHeaders,
+                ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
+                ...(freshRefreshToken ? { "x-refresh-token": freshRefreshToken } : {}),
+              };
               const res = await fetch(url, {
                 ...customConfig,
-                headers: configHeaders,
+                headers: retryHeaders,
                 credentials: "include",
               });
               resolve(res);
@@ -128,11 +169,11 @@ export async function apiRequest<T = any>(
 
     const resJson = await response.json().catch(() => ({}));
 
-    if (resJson?.data?.accessToken || resJson?.accessToken) {
+    if (typeof window !== "undefined") {
       const token = resJson?.data?.accessToken || resJson?.accessToken;
-      if (typeof window !== "undefined" && token) {
-        localStorage.setItem("streetbites_access_token", token);
-      }
+      const refToken = resJson?.data?.refreshToken || resJson?.refreshToken;
+      if (token) localStorage.setItem("streetbites_access_token", token);
+      if (refToken) localStorage.setItem("streetbites_refresh_token", refToken);
     }
 
     if (!response.ok) {
@@ -152,7 +193,10 @@ export async function apiRequest<T = any>(
         message: "Server response timed out. Waking up backend, please retry in a moment.",
       };
     }
-    console.error(`API Error on [${endpoint}]:`, error);
+    // Suppress console spam for optional/initial auth verification
+    if (!endpoint.includes("/auth/profile") && !endpoint.includes("/health")) {
+      console.warn(`[API] ${endpoint}:`, error?.message || error);
+    }
     return {
       success: false,
       message: error.message || "Network error. Please check your backend connection.",

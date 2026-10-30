@@ -2,25 +2,34 @@ import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import argon2 from "argon2";
 import User, { type UserRole, type VerificationStatus } from "../models/User.ts";
+import { maskBankAccount, maskUpiId } from "../utils/securityPii.ts";
 
 const isProduction = process.env.NODE_ENV === "production";
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-// Set secure HTTP-only cookies
+// Set secure HTTP-only cookies and client-readable session indicator
 export const setAuthCookies = (res: Response, accessToken: string, refreshToken: string): void => {
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
   });
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  });
+
+  // Client-accessible session hint cookie so frontend JavaScript can detect active session
+  res.cookie("sb_auth_active", "1", {
+    httpOnly: false,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 };
 
@@ -36,20 +45,40 @@ export const clearAuthCookies = (res: Response): void => {
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
   });
+  res.clearCookie("sb_auth_active", {
+    httpOnly: false,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+  });
 };
 
-// Generate Access & Refresh tokens
-export const generateTokens = (userId: string, role: string) => {
+// Helper: Append OAuth authentication token parameter to redirect URL safely
+const appendAuthParam = (targetUrl: string, token: string, refreshToken?: string): string => {
+  const delimiter = targetUrl.includes("?") ? "&" : "?";
+  let url = `${targetUrl}${delimiter}oauth_token=${encodeURIComponent(token)}`;
+  if (refreshToken) {
+    url += `&refresh_token=${encodeURIComponent(refreshToken)}`;
+  }
+  return url;
+};
+
+// Generate Access & Refresh tokens (with identity claims for immediate client-side hydration)
+export const generateTokens = (userId: string, role: string, name?: string, email?: string) => {
   const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "";
   const refreshSecret = process.env.JWT_REFRESH_SECRET || "";
 
-  const accessToken = jwt.sign({ id: userId, role }, accessSecret, { expiresIn: "15m" });
-  const refreshToken = jwt.sign({ id: userId, role }, refreshSecret, { expiresIn: "7d" });
+  const payload: Record<string, any> = { id: userId, role };
+  if (name) payload.name = name;
+  if (email) payload.email = email;
+
+  // 24 hours access token + 30 days refresh token for stable user experience
+  const accessToken = jwt.sign(payload, accessSecret, { expiresIn: "24h" });
+  const refreshToken = jwt.sign(payload, refreshSecret, { expiresIn: "30d" });
 
   return { accessToken, refreshToken };
 };
 
-// Format user data for API responses
+// Format user data for API responses (with PII masking)
 const formatUserResponse = (user: any) => ({
   id: user._id,
   name: user.name,
@@ -61,9 +90,9 @@ const formatUserResponse = (user: any) => ({
   wallet_balance: user.wallet_balance || 0,
   avatar_url: user.avatar_url,
   bank_name: user.bank_name || null,
-  bank_account_no: user.bank_account_no || null,
+  bank_account_no: maskBankAccount(user.bank_account_no),
   bank_ifsc: user.bank_ifsc || null,
-  upi_id: user.upi_id || null,
+  upi_id: maskUpiId(user.upi_id),
 });
 
 // ─── Controller Handlers ──────────────────────────────────────────────
@@ -163,7 +192,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     const user: any = await User.create(userData);
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -172,7 +201,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     res.status(201).json({
       success: true,
       message: "Registration successful!",
-      data: { user: formatUserResponse(user), accessToken },
+      data: { user: formatUserResponse(user), accessToken, refreshToken },
     });
   } catch (error: any) {
     console.error("Register Error:", error);
@@ -234,6 +263,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const requestedRole = req.body.role ? String(req.body.role).trim().toUpperCase() : null;
+
+    // Block Admin accounts from non-Admin logins
+    if (user.role === "ADMIN" && requestedRole !== "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Admin accounts must sign in via the dedicated Admin Portal.",
+      });
+      return;
+    }
+
+    // Strict Role Enforcement: verify user's account role matches the active tab / role context
+    if (requestedRole) {
+      const userRole = String(user.role || "CUSTOMER").toUpperCase();
+      if (userRole !== requestedRole) {
+        res.status(401).json({
+          success: false,
+          field: "email",
+          message: "No user found with this email.",
+        });
+        return;
+      }
+    }
+
     // If user is ADMIN, verify Admin Secret Key against .env ADMIN_SECRET_KEY
     if (user.role === "ADMIN") {
       const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
@@ -255,7 +308,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -264,7 +317,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       success: true,
       message: "Login successful!",
-      data: { user: formatUserResponse(user), accessToken },
+      data: { user: formatUserResponse(user), accessToken, refreshToken },
     });
   } catch (error: any) {
     console.error("Login Error:", error);
@@ -299,13 +352,17 @@ export const refreshAccessToken = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const tokens = generateTokens(String(user._id), user.role);
+    const tokens = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = tokens.refreshToken;
     await user.save();
 
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
-    res.status(200).json({ success: true, message: "Tokens refreshed successfully." });
+    res.status(200).json({
+      success: true,
+      message: "Tokens refreshed successfully.",
+      data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+    });
   } catch (error: any) {
     console.error("Refresh Error:", error);
     res.status(500).json({ success: false, message: "Failed to refresh token." });
@@ -352,7 +409,7 @@ const fetchGoogleProfile = async (googleToken?: string, code?: string) => {
 // @route   POST /api/auth/google
 export const googleAuth = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { token, id_token, credential, code, action = "signin" } = req.body || {};
+    const { token, id_token, credential, code, action = "signin", role: requestedRole } = req.body || {};
     const googleUser = await fetchGoogleProfile(token || id_token || credential, code);
 
     if (!googleUser || !googleUser.email) {
@@ -363,6 +420,26 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     let user: any = await User.findOne({
       $or: [{ google_id: googleUser.sub }, { email: googleUser.email.toLowerCase() }],
     });
+
+    if (user && user.role === "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Admin accounts cannot sign in via OAuth. Please sign in with your Secret Key at the Admin Portal.",
+      });
+      return;
+    }
+
+    if (user && action === "signin" && requestedRole) {
+      const userRole = String(user.role || "CUSTOMER").toUpperCase();
+      const expectedRole = String(requestedRole).toUpperCase();
+      if (userRole !== expectedRole) {
+        res.status(401).json({
+          success: false,
+          message: "No user found with this email.",
+        });
+        return;
+      }
+    }
 
     if (!user) {
       // Option B: If attempting to sign in but account does not exist, reject!
@@ -388,7 +465,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       await user.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -397,7 +474,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     res.status(200).json({
       success: true,
       message: action === "signup" ? "Google signup successful!" : "Google login successful!",
-      data: { user: formatUserResponse(user) },
+      data: { user: formatUserResponse(user), accessToken, refreshToken },
     });
   } catch (error: any) {
     console.error("Google Auth Error:", error);
@@ -413,7 +490,21 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     const code = req.query.code as string;
     const rawState = (req.query.state as string) || "signin:customer";
     const [action, roleParam] = rawState.split(":");
-    const targetRole = (roleParam || "CUSTOMER").toUpperCase() as UserRole;
+    const normalizedRole = (roleParam || "CUSTOMER").toUpperCase().trim();
+
+    // Security Check: Strictly prevent Admin privilege escalation via OAuth state manipulation
+    if (normalizedRole === "ADMIN") {
+      console.warn("Security Alert: Blocked attempted Admin privilege escalation via Google OAuth state manipulation.");
+      res.redirect(
+        `${clientUrl}/signin?error=${encodeURIComponent("Admin accounts cannot be registered or accessed via OAuth social login.")}`
+      );
+      return;
+    }
+
+    const ALLOWED_OAUTH_ROLES: UserRole[] = ["CUSTOMER", "VENDOR", "RIDER"];
+    const targetRole: UserRole = ALLOWED_OAUTH_ROLES.includes(normalizedRole as UserRole)
+      ? (normalizedRole as UserRole)
+      : "CUSTOMER";
 
     const googleUser = await fetchGoogleProfile(undefined, code);
 
@@ -425,6 +516,14 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     let user: any = await User.findOne({
       $or: [{ google_id: googleUser.sub }, { email: googleUser.email.toLowerCase() }],
     });
+
+    if (user && user.role === "ADMIN") {
+      console.warn("Security Alert: Blocked Admin login attempt via Google OAuth callback.");
+      res.redirect(
+        `${clientUrl}/admin/signin?error=${encodeURIComponent("Admin accounts require secure password and Secret Key authentication at the Admin Portal.")}`
+      );
+      return;
+    }
 
     let isNewUser = false;
 
@@ -452,7 +551,21 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       await user.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    // Role Verification on Sign In: Enforce that selected role matches user's registered role
+    if (user && !isNewUser && action === "signin" && targetRole) {
+      const userRole = String(user.role || "CUSTOMER").toUpperCase();
+      const expectedRole = String(targetRole).toUpperCase();
+      if (userRole !== expectedRole) {
+        res.redirect(
+          `${clientUrl}/signin?error=${encodeURIComponent(
+            "No user found with this email."
+          )}`
+        );
+        return;
+      }
+    }
+
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -464,19 +577,19 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     // If Customer signing up or missing mobile number -> redirect to enter mobile number
     if (effectiveRole === "CUSTOMER" && (isNewUser || !user.phone_number || action === "signup")) {
       if (!user.phone_number) {
-        res.redirect(`${clientUrl}/signup?step=phone`);
+        res.redirect(appendAuthParam(`${clientUrl}/signup?step=phone`, accessToken, refreshToken));
         return;
       }
-      res.redirect(`${clientUrl}/home`);
+      res.redirect(appendAuthParam(`${clientUrl}/home`, accessToken, refreshToken));
       return;
     }
 
     // If Vendor
     if (effectiveRole === "VENDOR") {
       if (!user.verification_status) {
-        res.redirect(`${clientUrl}/vendor/registration`);
+        res.redirect(appendAuthParam(`${clientUrl}/vendor/registration`, accessToken, refreshToken));
       } else {
-        res.redirect(`${clientUrl}/vendor/Dashboard`);
+        res.redirect(appendAuthParam(`${clientUrl}/vendor/Dashboard`, accessToken, refreshToken));
       }
       return;
     }
@@ -484,21 +597,21 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     // If Rider
     if (effectiveRole === "RIDER") {
       if (!user.verification_status) {
-        res.redirect(`${clientUrl}/rider/registration`);
+        res.redirect(appendAuthParam(`${clientUrl}/rider/registration`, accessToken, refreshToken));
       } else {
-        res.redirect(`${clientUrl}/rider/Dashboard`);
+        res.redirect(appendAuthParam(`${clientUrl}/rider/Dashboard`, accessToken, refreshToken));
       }
       return;
     }
 
-    // If Admin
+    // If Admin (safety check: Admin portal access strictly requires Secret Key)
     if (effectiveRole === "ADMIN") {
-      res.redirect(`${clientUrl}/admin/Dashboard`);
+      res.redirect(`${clientUrl}/admin/signin?error=${encodeURIComponent("Admin accounts require secure password and Secret Key authentication.")}`);
       return;
     }
 
     // Default Customer
-    res.redirect(`${clientUrl}/home`);
+    res.redirect(appendAuthParam(`${clientUrl}/home`, accessToken, refreshToken));
   } catch (error: any) {
     console.error("Google Callback Error:", error);
     res.redirect(`${clientUrl}/signin?error=${encodeURIComponent("Server error during Google auth")}`);
@@ -554,7 +667,7 @@ const fetchFacebookProfile = async (accessToken?: string, code?: string) => {
 // @route   POST /api/auth/facebook
 export const facebookAuth = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { token, code, action = "signin" } = req.body || {};
+    const { token, code, action = "signin", role: requestedRole } = req.body || {};
     const fbUser = await fetchFacebookProfile(token, code);
 
     if (!fbUser || !fbUser.sub) {
@@ -565,6 +678,26 @@ export const facebookAuth = async (req: Request, res: Response): Promise<void> =
     let user: any = await User.findOne({
       $or: [{ facebook_id: fbUser.sub }, { email: fbUser.email.toLowerCase() }],
     });
+
+    if (user && user.role === "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Admin accounts cannot sign in via OAuth. Please sign in with your Secret Key at the Admin Portal.",
+      });
+      return;
+    }
+
+    if (user && action === "signin" && requestedRole) {
+      const userRole = String(user.role || "CUSTOMER").toUpperCase();
+      const expectedRole = String(requestedRole).toUpperCase();
+      if (userRole !== expectedRole) {
+        res.status(401).json({
+          success: false,
+          message: "No user found with this email.",
+        });
+        return;
+      }
+    }
 
     if (!user) {
       if (action === "signin") {
@@ -590,7 +723,7 @@ export const facebookAuth = async (req: Request, res: Response): Promise<void> =
       await user.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -599,7 +732,7 @@ export const facebookAuth = async (req: Request, res: Response): Promise<void> =
     res.status(200).json({
       success: true,
       message: action === "signup" ? "Facebook signup successful!" : "Facebook login successful!",
-      data: { user: formatUserResponse(user) },
+      data: { user: formatUserResponse(user), accessToken, refreshToken },
     });
   } catch (error: any) {
     console.error("Facebook Auth Error:", error);
@@ -615,7 +748,21 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
     const code = req.query.code as string;
     const rawState = (req.query.state as string) || "signin:customer";
     const [action, roleParam] = rawState.split(":");
-    const targetRole = (roleParam || "CUSTOMER").toUpperCase() as UserRole;
+    const normalizedRole = (roleParam || "CUSTOMER").toUpperCase().trim();
+
+    // Security Check: Strictly prevent Admin privilege escalation via OAuth state manipulation
+    if (normalizedRole === "ADMIN") {
+      console.warn("Security Alert: Blocked attempted Admin privilege escalation via Facebook OAuth state manipulation.");
+      res.redirect(
+        `${clientUrl}/signin?error=${encodeURIComponent("Admin accounts cannot be registered or accessed via OAuth social login.")}`
+      );
+      return;
+    }
+
+    const ALLOWED_OAUTH_ROLES: UserRole[] = ["CUSTOMER", "VENDOR", "RIDER"];
+    const targetRole: UserRole = ALLOWED_OAUTH_ROLES.includes(normalizedRole as UserRole)
+      ? (normalizedRole as UserRole)
+      : "CUSTOMER";
 
     const fbUser = await fetchFacebookProfile(undefined, code);
 
@@ -627,6 +774,14 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
     let user: any = await User.findOne({
       $or: [{ facebook_id: fbUser.sub }, { email: fbUser.email.toLowerCase() }],
     });
+
+    if (user && user.role === "ADMIN") {
+      console.warn("Security Alert: Blocked Admin login attempt via Facebook OAuth callback.");
+      res.redirect(
+        `${clientUrl}/admin/signin?error=${encodeURIComponent("Admin accounts require secure password and Secret Key authentication at the Admin Portal.")}`
+      );
+      return;
+    }
 
     let isNewUser = false;
 
@@ -656,7 +811,21 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
       await user.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role);
+    // Role Verification on Sign In: Enforce that selected role matches user's registered role
+    if (user && !isNewUser && action === "signin" && targetRole) {
+      const userRole = String(user.role || "CUSTOMER").toUpperCase();
+      const expectedRole = String(targetRole).toUpperCase();
+      if (userRole !== expectedRole) {
+        res.redirect(
+          `${clientUrl}/signin?error=${encodeURIComponent(
+            "No user found with this email."
+          )}`
+        );
+        return;
+      }
+    }
+
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
     user.refresh_token = refreshToken;
     await user.save();
 
@@ -666,37 +835,37 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
 
     if (effectiveRole === "CUSTOMER" && (isNewUser || !user.phone_number || action === "signup")) {
       if (!user.phone_number) {
-        res.redirect(`${clientUrl}/signup?step=phone`);
+        res.redirect(appendAuthParam(`${clientUrl}/signup?step=phone`, accessToken, refreshToken));
         return;
       }
-      res.redirect(`${clientUrl}/home`);
+      res.redirect(appendAuthParam(`${clientUrl}/home`, accessToken, refreshToken));
       return;
     }
 
     if (effectiveRole === "VENDOR") {
       if (isNewUser || action === "signup" || !user.verification_status) {
-        res.redirect(`${clientUrl}/vendor/registration`);
+        res.redirect(appendAuthParam(`${clientUrl}/vendor/registration`, accessToken, refreshToken));
       } else {
-        res.redirect(`${clientUrl}/vendor/Dashboard`);
+        res.redirect(appendAuthParam(`${clientUrl}/vendor/Dashboard`, accessToken, refreshToken));
       }
       return;
     }
 
     if (effectiveRole === "RIDER") {
       if (isNewUser || action === "signup" || !user.verification_status) {
-        res.redirect(`${clientUrl}/rider/registration`);
+        res.redirect(appendAuthParam(`${clientUrl}/rider/registration`, accessToken, refreshToken));
       } else {
-        res.redirect(`${clientUrl}/rider/Dashboard`);
+        res.redirect(appendAuthParam(`${clientUrl}/rider/Dashboard`, accessToken, refreshToken));
       }
       return;
     }
 
     if (effectiveRole === "ADMIN") {
-      res.redirect(`${clientUrl}/admin/Dashboard`);
+      res.redirect(`${clientUrl}/admin/signin?error=${encodeURIComponent("Admin accounts require secure password and Secret Key authentication.")}`);
       return;
     }
 
-    res.redirect(`${clientUrl}/home`);
+    res.redirect(appendAuthParam(`${clientUrl}/home`, accessToken, refreshToken));
   } catch (error: any) {
     console.error("Facebook Callback Error:", error);
     res.redirect(`${clientUrl}/signin?error=${encodeURIComponent("Server error during Facebook auth")}`);
@@ -708,7 +877,8 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
 export const getFacebookAuthUrl = (req: Request, res: Response): void => {
   const rootUrl = "https://www.facebook.com/v19.0/dialog/oauth";
   const action = (req.query.action as string) || "signin";
-  const role = (req.query.role as string) || "customer";
+  const requestedRole = String(req.query.role || "customer").toLowerCase().trim();
+  const safeRole = ["customer", "vendor", "rider"].includes(requestedRole) ? requestedRole : "customer";
 
   const clientId = (process.env.FACEBOOK_CLIENT_ID || "").trim();
   const callbackUrl = (
@@ -716,7 +886,7 @@ export const getFacebookAuthUrl = (req: Request, res: Response): void => {
     ``
   ).trim();
 
-  const state = `${action}:${role.toLowerCase()}`;
+  const state = `${action}:${safeRole}`;
 
   const qs = new URLSearchParams({
     client_id: clientId,
@@ -737,13 +907,14 @@ export const getFacebookAuthUrl = (req: Request, res: Response): void => {
 export const getGoogleAuthUrl = (req: Request, res: Response): void => {
   const rootUrl = "https://accounts.google.com/o/oauth2/v2/auth";
   const action = (req.query.action as string) || "signin"; // 'signin' or 'signup'
-  const role = (req.query.role as string) || "customer"; // 'customer' | 'vendor' | 'rider'
+  const requestedRole = String(req.query.role || "customer").toLowerCase().trim();
+  const safeRole = ["customer", "vendor", "rider"].includes(requestedRole) ? requestedRole : "customer";
 
   const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
   const callbackUrl = (process.env.GOOGLE_CALLBACK_URL || ``).trim();
 
-  // Combine action and role into state (e.g., 'signup:customer', 'signup:vendor', 'signin:customer')
-  const state = `${action}:${role.toLowerCase()}`;
+  // Combine action and sanitized safe role into state (e.g., 'signup:customer', 'signup:vendor', 'signin:customer')
+  const state = `${action}:${safeRole}`;
 
   const qs = new URLSearchParams({
     client_id: clientId,
@@ -799,7 +970,17 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    res.status(200).json({ success: true, data: { user: formatUserResponse(user) } });
+    const { accessToken, refreshToken } = generateTokens(String(user._id), user.role, user.name, user.email);
+    setAuthCookies(res, accessToken, refreshToken);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user: formatUserResponse(user),
+        accessToken,
+        refreshToken,
+      },
+    });
   } catch (error: any) {
     console.error("Get Profile Error:", error);
     res.status(500).json({ success: false, message: "Failed to fetch profile." });
@@ -872,25 +1053,27 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      // Graceful response for security
+      // Graceful response for security (prevents account enumeration)
       res.status(200).json({
         success: true,
-        message: "If an account with this email exists, a password reset link has been dispatched.",
+        message: "If an account with this email exists, a password reset code has been dispatched.",
       });
       return;
     }
 
+    // Cryptographically secure 6-digit verification code
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
     user.reset_password_token = resetToken;
-    user.reset_password_expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    user.reset_password_expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
     await user.save();
 
+    // Log securely on server terminal for development/testing visibility
     console.log(`🔑 [StreetBites Auth] Password Reset Code for ${cleanEmail}: ${resetToken}`);
 
+    // SECURITY: Never return resetToken in the client HTTP response payload
     res.status(200).json({
       success: true,
-      message: "Password reset instructions sent to your email.",
-      resetToken,
+      message: "Password reset instructions and 6-digit code sent to your email.",
     });
   } catch (error: any) {
     console.error("Forgot Password Error:", error);
@@ -905,31 +1088,45 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     const { email, token, password, newPassword } = req.body || {};
     const finalPassword = password || newPassword;
 
+    if (!email || !String(email).trim()) {
+      res.status(400).json({ success: false, message: "Registered email address is required." });
+      return;
+    }
+
+    if (!token || !String(token).trim()) {
+      res.status(400).json({ success: false, message: "Valid 6-digit reset code is required." });
+      return;
+    }
+
     if (!finalPassword || String(finalPassword).length < 6) {
       res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
       return;
     }
 
-    let user: any = null;
-    if (token) {
-      user = await User.findOne({
-        reset_password_token: String(token).trim(),
-        reset_password_expires: { $gt: new Date() },
-      });
-    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanToken = String(token).trim();
 
-    if (!user && email) {
-      user = await User.findOne({ email: String(email).trim().toLowerCase() });
-    }
+    // SECURITY: Strictly require BOTH matching email AND valid, non-expired token
+    // NEVER fall back to email-only lookup
+    const user = await User.findOne({
+      email: cleanEmail,
+      reset_password_token: cleanToken,
+      reset_password_expires: { $gt: new Date() },
+    });
 
     if (!user) {
-      res.status(400).json({ success: false, message: "Invalid or expired password reset request." });
+      res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset code. Please request a new one.",
+      });
       return;
     }
 
+    // Hash the new password with Argon2
     user.password = await argon2.hash(finalPassword);
     user.reset_password_token = null;
     user.reset_password_expires = null;
+    user.refresh_token = null; // Revoke existing sessions for security
     await user.save();
 
     res.status(200).json({

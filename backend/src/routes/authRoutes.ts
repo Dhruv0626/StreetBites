@@ -19,7 +19,7 @@ import {
   updateUserStatus,
   deleteUser,
 } from "../controllers/authController.ts";
-import { protect } from "../middlewares/authMiddleware.ts";
+import { protect, authorize } from "../middlewares/authMiddleware.ts";
 import { authRateLimiter } from "../middlewares/rateLimiter.ts";
 
 const router: any = express.Router();
@@ -49,9 +49,9 @@ router.get("/profile", protect, getProfile);
 router.put("/profile", protect, updateProfile);
 router.delete("/profile", protect, deleteSelfAccount);
 
-// Admin User Management Routes
-router.get("/users", getAllUsers);
-router.put("/users/:id/status", updateUserStatus);
-router.delete("/users/:id", deleteUser);
+// Admin User Management Routes (Strictly Restricted to System Admins)
+router.get("/users", protect, authorize("ADMIN"), getAllUsers);
+router.put("/users/:id/status", protect, authorize("ADMIN"), updateUserStatus);
+router.delete("/users/:id", protect, authorize("ADMIN"), deleteUser);
 
 export default router;

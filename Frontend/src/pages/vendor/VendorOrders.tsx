@@ -12,7 +12,9 @@ import {
   Phone,
   MapPin,
   FileText,
-  X
+  X,
+  Bike,
+  AlertTriangle
 } from 'lucide-react';
 import {
   vendorOrderService,
@@ -86,8 +88,8 @@ export const VendorOrders: React.FC = () => {
   const [orders, setOrders] = useState<VendorOrder[]>([]);
   const [metrics, setMetrics] = useState<VendorOrderMetrics>({
     liveCount: 0,
-    avgPrep: '15m',
-    rating: '4.8',
+    avgPrep: '--',
+    rating: '--',
     todayPayout: 0,
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -254,14 +256,17 @@ export const VendorOrders: React.FC = () => {
 
     try {
       setIsRejecting(true);
-      const reasonLabel =
-        rejectReason === 'OUT_OF_STOCK'
-          ? 'Item Out of Stock'
-          : rejectReason === 'TOO_BUSY'
-            ? 'Kitchen Overloaded / Too Busy'
-            : rejectReason === 'STALL_CLOSED'
-              ? 'Stall Closing Soon'
-              : 'Kitchen unable to prepare order';
+      const isPreparing = rejectModalOrder.status === 'Preparing';
+      const reasonMap: Record<string, string> = {
+        OUT_OF_STOCK: 'Stall Out of Stock (Ingredient Exhaustion)',
+        KITCHEN_BREAKDOWN: 'Kitchen / Equipment Breakdown',
+        FOOD_QUALITY: 'Food Quality / Preparation Hazard',
+        EXCESSIVE_DELAY: 'Excessive Delay (Over 45min rush)',
+        DAMAGED_PACKAGING: 'Damaged or Compromised Packaging',
+        TOO_BUSY: 'Kitchen Overloaded / Too Busy',
+        OTHER: 'Other Kitchen Issue',
+      };
+      const reasonLabel = reasonMap[rejectReason] || 'Kitchen unable to fulfill order';
 
       const res = await vendorOrderService.rejectOrder(
         targetOrderId,
@@ -270,7 +275,7 @@ export const VendorOrders: React.FC = () => {
       );
 
       if (res.success) {
-        toast.info(res.message || 'Order rejected. Customer notified and refunded.');
+        toast.info(res.message || (isPreparing ? 'Kitchen issue reported. Order cancelled & customer refunded.' : 'Order rejected. Customer notified and refunded.'));
         const isOffline = Boolean((res as any)?.isStallOffline || res?.data?.isStallOffline);
         if (isOffline) {
           toast.warning('⚠️ Your stall has been placed in 30-minute busy cooldown after 2 missed/rejected orders.');
@@ -503,7 +508,19 @@ export const VendorOrders: React.FC = () => {
                             order.status === 'Completed' ? 'text-stone-600' : order.status === 'Rejected' ? 'text-stone-700' : 'text-stone-900'
                           }`}
                         >
-                          {order.customer} · {order.items.reduce((s, it) => s + (it.quantity || 1), 0)} items
+                          {order.rider ? (
+                            <span className="inline-flex items-center gap-1.5 text-stone-900">
+                              <Bike className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Rider: {order.rider}</span>
+                            </span>
+                          ) : (
+                            <span className="text-stone-600 font-semibold">
+                              Rider: <span className="font-mono text-stone-400 font-bold">---</span> <span className="text-stone-400 font-normal text-xs">(Awaiting Assignment)</span>
+                            </span>
+                          )}
+                          <span className="text-stone-400 font-normal ml-2">
+                            · {order.items.reduce((s, it) => s + (it.quantity || 1), 0)} items
+                          </span>
                         </div>
                         <div
                           className={`text-[11px] mt-0.5 flex flex-wrap items-center gap-1.5 ${
@@ -521,7 +538,7 @@ export const VendorOrders: React.FC = () => {
                             {order.status === 'Completed'
                               ? 'Ready for Pickup'
                               : order.status === 'Rejected'
-                              ? 'Order Rejected'
+                              ? 'Order Rejected / Issue Reported'
                               : order.time}
                           </span>
 
@@ -537,9 +554,13 @@ export const VendorOrders: React.FC = () => {
                             </span>
                           )}
 
-                          {order.customerPhone && (
+                          {order.riderPhone ? (
+                            <span className="hidden sm:inline-flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                              · <Phone className="w-2.5 h-2.5" /> {order.riderPhone}
+                            </span>
+                          ) : (
                             <span className="hidden sm:inline-flex items-center gap-1 text-stone-400">
-                              · <Phone className="w-2.5 h-2.5" /> {order.customerPhone}
+                              · Rider Phone: ---
                             </span>
                           )}
                         </div>
@@ -583,23 +604,55 @@ export const VendorOrders: React.FC = () => {
                         order.status === 'New' ? 'border-[#E54B3C]/20 bg-white/70' : 'border-[#E7E2D9] bg-stone-50/70'
                       }`}
                     >
-                      {/* Delivery & Customer Info */}
-                      {(order.deliveryAddress || order.deliveryNotes) && (
-                        <div className="mb-4 bg-white p-3 rounded-xl border border-[#E7E2D9] space-y-1 text-xs">
-                          {order.deliveryAddress && (
-                            <div className="flex items-center gap-1.5 text-stone-700">
-                              <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="break-words">{order.deliveryAddress}</span>
-                            </div>
-                          )}
-                          {order.deliveryNotes && (
-                            <div className="flex items-center gap-1.5 text-amber-800 font-medium">
-                              <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <span>Note: {order.deliveryNotes}</span>
+                      {/* Delivery Rider & Customer Info */}
+                      <div className="mb-4 bg-white p-3.5 rounded-2xl border border-[#E7E2D9] space-y-2 text-xs">
+                        {/* Rider Assignment Status */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-stone-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Bike className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span className="font-bold text-stone-800">Assigned Delivery Rider:</span>
+                            {order.rider ? (
+                              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                {order.rider} {order.riderVehicle ? `(${order.riderVehicle})` : ''}
+                              </span>
+                            ) : (
+                              <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-[11px]">
+                                --- (Awaiting assignment by delivery system)
+                              </span>
+                            )}
+                          </div>
+                          {order.riderPhone && (
+                            <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
+                              <Phone className="w-3 h-3 text-emerald-600" />
+                              <span>{order.riderPhone}</span>
                             </div>
                           )}
                         </div>
-                      )}
+
+                        {/* Customer Info */}
+                        <div className="flex items-center justify-between text-stone-600 pt-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-stone-700">Customer:</span>
+                            <span>{order.customer}</span>
+                          </div>
+                          {order.customerPhone && (
+                            <span className="text-stone-500 font-mono text-[11px]">{order.customerPhone}</span>
+                          )}
+                        </div>
+
+                        {order.deliveryAddress && (
+                          <div className="flex items-start gap-1.5 text-stone-600 pt-1">
+                            <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                            <span className="break-words line-clamp-2">{order.deliveryAddress}</span>
+                          </div>
+                        )}
+                        {order.deliveryNotes && (
+                          <div className="flex items-center gap-1.5 text-amber-800 font-medium italic pt-0.5">
+                            <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Note: "{order.deliveryNotes}"</span>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Ordered Sub-Order Items List */}
                       <div className="space-y-2.5 mb-5">
@@ -759,16 +812,15 @@ export const VendorOrders: React.FC = () => {
                         <div className="flex flex-col sm:flex-row gap-3">
                           <button
                             onClick={() => {
-                              if (order.status === 'New') {
-                                setRejectModalOrder(order);
-                              } else {
-                                handleUpdateOrderStatus(order, 'Cancelled');
-                              }
+                              setRejectReason('OUT_OF_STOCK');
+                              setItemOutStock(true);
+                              setRejectModalOrder(order);
                             }}
                             disabled={updatingOrderId === order.id}
-                            className="flex-1 bg-white border border-stone-300 hover:border-red-300 hover:text-red-700 text-stone-700 text-sm font-bold py-3.5 rounded-xl hover:bg-red-50/40 transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex-1 bg-white border border-stone-300 hover:border-rose-400 hover:text-rose-700 text-stone-700 text-sm font-bold py-3.5 rounded-xl hover:bg-rose-50/50 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                           >
-                            {order.status === 'New' ? 'Reject Order' : 'Cancel Order'}
+                            <AlertTriangle className="w-4 h-4 text-rose-500" />
+                            <span>{order.status === 'New' ? 'Reject Order' : 'Report Issue & Cancel'}</span>
                           </button>
                           <button
                             onClick={() =>
@@ -818,7 +870,9 @@ export const VendorOrders: React.FC = () => {
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 border border-stone-200">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-stone-900">Reject Incoming Order</h3>
+                <h3 className="text-base font-bold text-stone-900">
+                  {rejectModalOrder.status === 'Preparing' ? 'Report Kitchen Issue & Cancel Order' : 'Reject Incoming Order'}
+                </h3>
                 <span className="text-xs text-stone-500 font-mono">Order #{rejectModalOrder.id}</span>
               </div>
               <button
@@ -831,17 +885,21 @@ export const VendorOrders: React.FC = () => {
 
             <div className="space-y-4">
               <p className="text-xs text-stone-600 leading-relaxed">
-                Select a reason for rejecting this order. The customer will be instantly notified and an automated refund will be processed for unavailable items.
+                {rejectModalOrder.status === 'Preparing'
+                  ? 'If a kitchen issue occurred while cooking this order (e.g., sudden ingredient exhaustion or kitchen breakdown), reporting it will cancel the order, immediately notify the customer, and trigger an automated refund to their wallet.'
+                  : 'Select a reason for rejecting this order. The customer will be instantly notified and an automated refund will be processed for unavailable items.'}
               </p>
 
-              {/* Rejection Reason Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-stone-800 block">Select Rejection Reason:</label>
+              {/* Rejection / Issue Reason Selector matching Refund Policy Criteria */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <label className="text-xs font-bold text-stone-800 block">Select Issue Reason:</label>
                 {[
-                  { id: 'OUT_OF_STOCK', label: 'Item(s) Out of Stock', desc: 'Auto-marks item unavailable for today' },
-                  { id: 'TOO_BUSY', label: 'Kitchen Overloaded / Too Busy', desc: 'Too many pending orders to cook' },
-                  { id: 'STALL_CLOSED', label: 'Stall Closing Soon', desc: 'Kitchen shutting down for shift' },
-                  { id: 'OTHER', label: 'Other Reason', desc: 'Custom kitchen issue' },
+                  { id: 'OUT_OF_STOCK', label: 'Stall Out of Stock', desc: 'Sudden ingredient exhaustion - unable to fulfill item' },
+                  { id: 'KITCHEN_BREAKDOWN', label: 'Kitchen / Equipment Breakdown', desc: 'Stove, burner, gas cylinder, or equipment failure' },
+                  { id: 'FOOD_QUALITY', label: 'Food Quality / Preparation Hazard', desc: 'Item spoiled or burned during cooking and cannot be remade' },
+                  { id: 'EXCESSIVE_DELAY', label: 'Excessive Delay (Over 45min rush)', desc: 'Kitchen overwhelmed and unable to meet delivery window' },
+                  { id: 'DAMAGED_PACKAGING', label: 'Packaging Compromised', desc: 'Packaging damaged or spilled during prep' },
+                  { id: 'OTHER', label: 'Other Kitchen Emergency', desc: 'Unable to complete order' },
                 ].map((r) => (
                   <label
                     key={r.id}
@@ -879,7 +937,7 @@ export const VendorOrders: React.FC = () => {
                     onChange={(e) => setItemOutStock(e.target.checked)}
                     className="accent-amber-600 rounded"
                   />
-                  <span>Automatically mark rejected items "Out of Stock"</span>
+                  <span>Automatically mark items "Out of Stock"</span>
                 </label>
                 <span className="text-[10px] text-amber-700 block mt-1 ml-5">
                   Prevents other customers from ordering these items until you restock them in menu settings.
@@ -902,8 +960,15 @@ export const VendorOrders: React.FC = () => {
                 disabled={isRejecting}
                 className="px-5 py-2.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-50"
               >
-                {isRejecting ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : null}
-                {isRejecting ? 'Processing Refund...' : 'Confirm Rejection & Refund'}
+                {isRejecting ? (
+                  <span className="flex items-center gap-2">
+                    <RotateCw className="w-4 h-4 animate-spin" /> Processing...
+                  </span>
+                ) : rejectModalOrder.status === 'Preparing' ? (
+                  'Confirm Issue & Refund'
+                ) : (
+                  'Confirm Rejection'
+                )}
               </button>
             </div>
           </div>

@@ -48,6 +48,7 @@ export const AdminSignIn: React.FC = () => {
         email: email.trim(),
         password,
         secretKey: SecretKey.trim(),
+        role: "ADMIN",
       });
       if (res.success) {
         navigate('/admin/Dashboard');

@@ -12,9 +12,17 @@
 let audioCtx: AudioContext | null = null;
 let isAudioUnlocked = false;
 
+export function getIsAudioUnlocked(): boolean {
+  return isAudioUnlocked;
+}
+
 // Initialize or resume Web Audio context on user gesture
 export function initAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
+  // If no user gesture has occurred yet, avoid eager creation to prevent browser autoplay warnings
+  if (!isAudioUnlocked && typeof navigator !== 'undefined' && (navigator as any).userActivation && !(navigator as any).userActivation.hasBeenActive) {
+    return null;
+  }
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return null;
@@ -29,8 +37,7 @@ export function initAudioContext(): AudioContext | null {
       isAudioUnlocked = true;
     }
     return audioCtx;
-  } catch (err) {
-    console.warn('AudioContext init error:', err);
+  } catch {
     return null;
   }
 }
@@ -38,16 +45,28 @@ export function initAudioContext(): AudioContext | null {
 // Auto-unlock audio on first user interaction anywhere on the window
 if (typeof window !== 'undefined') {
   const unlockListener = () => {
-    initAudioContext();
-    if (isAudioUnlocked) {
-      window.removeEventListener('click', unlockListener);
-      window.removeEventListener('touchstart', unlockListener);
-      window.removeEventListener('keydown', unlockListener);
-    }
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().then(() => {
+            isAudioUnlocked = true;
+          }).catch(() => {});
+        } else {
+          isAudioUnlocked = true;
+        }
+      }
+    } catch {}
+    window.removeEventListener('click', unlockListener);
+    window.removeEventListener('touchstart', unlockListener);
+    window.removeEventListener('keydown', unlockListener);
   };
-  window.addEventListener('click', unlockListener, { once: false, passive: true });
-  window.addEventListener('touchstart', unlockListener, { once: false, passive: true });
-  window.addEventListener('keydown', unlockListener, { once: false, passive: true });
+  window.addEventListener('click', unlockListener, { once: true, passive: true });
+  window.addEventListener('touchstart', unlockListener, { once: true, passive: true });
+  window.addEventListener('keydown', unlockListener, { once: true, passive: true });
 }
 
 /**

@@ -48,7 +48,7 @@ export const getClusters = async (req: Request, res: Response): Promise<void> =>
         let stalls: any[] = [];
         try {
           stalls = await Stall.find({ cluster_id: cluster._id })
-            .populate("vendor_id", "name email phone_number")
+            .populate("vendor_id", "name")
             .populate("menu_items.food_item_id", "name image_url status")
             .lean();
         } catch (stallErr) {
@@ -59,7 +59,7 @@ export const getClusters = async (req: Request, res: Response): Promise<void> =>
         const formattedStalls = (stalls || []).map((stall: any) => ({
           _id: stall._id,
           id: stall._id ? stall._id.toString() : "",
-          vendor_id: stall.vendor_id,
+          vendor_id: stall.vendor_id?._id ? stall.vendor_id._id.toString() : (stall.vendor_id?.toString() || ""),
           cluster_id: stall.cluster_id,
           name: stall.name,
           stall_category: stall.stall_category,
@@ -127,8 +127,8 @@ export const getClusters = async (req: Request, res: Response): Promise<void> =>
       })),
     };
 
-    // Cache in RAM for 45 seconds
-    memoryCache.set(cacheKey, responsePayload, 45);
+    // Cache in RAM for 10 minutes (600 seconds) - safely invalidated on any stall/cluster/menu mutation
+    memoryCache.set(cacheKey, responsePayload, 600);
 
     res.status(200).json(responsePayload);
   } catch (error: any) {
@@ -211,7 +211,8 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
       },
     };
 
-    memoryCache.set(cacheKey, responsePayload, 45);
+    // Cache single cluster for 10 minutes (600 seconds)
+    memoryCache.set(cacheKey, responsePayload, 600);
 
     res.status(200).json(responsePayload);
   } catch (error: any) {

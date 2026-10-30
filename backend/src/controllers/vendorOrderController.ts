@@ -6,59 +6,46 @@ import SubOrder from "../models/SubOrder.ts";
 import Stall from "../models/Stall.ts";
 import User from "../models/User.ts";
 import Transaction from "../models/Transaction.ts";
+import Feedback from "../models/Feedback.ts";
 import type { AuthRequest } from "../middlewares/authMiddleware.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
+import { maskBankAccount, maskUpiId, encryptPii } from "../utils/securityPii.ts";
 
 /**
- * Safely extract user ID from auth context, cookies, or headers
+ * Safely extract vendor user ID strictly from authenticated request.
+ * Strictly prevents silent fallback and data leakage.
  */
 const resolveUserId = async (req: AuthRequest): Promise<string | null> => {
-  if (req.user?.id) return req.user.id;
+  const authUser = req.user;
+  if (!authUser?.id) return null;
 
-  const token =
-    req.cookies?.accessToken ||
-    (typeof req.headers?.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
-      ? req.headers.authorization.split(" ")[1]
-      : undefined);
-
-  if (token) {
-    try {
-      const accessSecret =
-        process.env.JWT_ACCESS_SECRET ||
-        process.env.JWT_SECRET ||
-        "";
-      const decoded = jwt.verify(token, accessSecret) as any;
-      if (decoded?.id) return decoded.id;
-    } catch {
-      // ignore token verification error
-    }
+  // Admins may inspect a specific vendor via query parameter
+  if (authUser.role === "ADMIN" && req.query?.userId && typeof req.query.userId === "string") {
+    const queryId = req.query.userId.trim();
+    if (mongoose.isValidObjectId(queryId)) return queryId;
   }
 
-  // Fallback query or headers
-  if (req.query?.userId && typeof req.query.userId === "string") return req.query.userId;
-  if (req.headers["x-user-id"] && typeof req.headers["x-user-id"] === "string") return req.headers["x-user-id"];
-
-  // Fallback: find first vendor user in database
-  const vendorUser = await User.findOne({ role: "VENDOR" });
-  return vendorUser ? vendorUser._id.toString() : null;
+  return authUser.id;
 };
 
 /**
- * Find existing Stall for this vendor
+ * Find existing Stall strictly owned by this vendor.
+ * Absolutely NO fallback to arbitrary Stall.findOne().
  */
 const resolveVendorStall = async (userId: string | null): Promise<any> => {
-  if (userId && mongoose.isValidObjectId(userId)) {
-    const user: any = await User.findById(userId);
-    if (user?.stall_id) {
-      const stall = await Stall.findById(user.stall_id);
-      if (stall) return stall;
-    }
-    const stall = await Stall.findOne({ vendor_id: userId });
-    if (stall) return stall;
+  if (!userId || !mongoose.isValidObjectId(userId)) {
+    return null;
   }
 
-  // Fallback: check existing registered stalls without creating dummy data
-  return await Stall.findOne();
+  const user: any = await User.findById(userId);
+  if (user?.stall_id) {
+    const stall = await Stall.findById(user.stall_id);
+    if (stall) return stall;
+  }
+  const stall = await Stall.findOne({ vendor_id: userId });
+  if (stall) return stall;
+
+  return null;
 };
 
 /**
@@ -91,7 +78,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
         success: true,
         data: {
           orders: [],
-          metrics: { liveCount: 0, avgPrep: "--", rating: "4.8", todayPayout: 0 },
+          metrics: { liveCount: 0, avgPrep: "--", rating: "--", todayPayout: 0 },
         },
       });
       return;
@@ -132,6 +119,28 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
       .sort({ createdAt: -1 })
       .lean();
 
+    // Query live customer reviews to calculate real rating
+    const reviews = await Feedback.find({
+      stall_id: { $in: stallIds },
+      feedback_type: "REVIEW",
+      rating: { $gte: 1, $lte: 5 },
+    }).select("rating").lean();
+
+    let liveRating: string;
+    if (reviews.length > 0) {
+      const sumRating = reviews.reduce((acc, r: any) => acc + (Number(r.rating) || 0), 0);
+      const avg = sumRating / reviews.length;
+      liveRating = avg.toFixed(1);
+      const roundedAvg = Math.round(avg * 10) / 10;
+      if (primaryStall.rating !== roundedAvg) {
+        await Stall.findByIdAndUpdate(primaryStall._id, { rating: roundedAvg });
+        primaryStall.rating = roundedAvg;
+      }
+    } else {
+      // No live customer reviews yet - show accurate indicator without artificial default
+      liveRating = "--";
+    }
+
     if (subOrders.length === 0) {
       res.status(200).json({
         success: true,
@@ -140,7 +149,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
           metrics: {
             liveCount: 0,
             avgPrep: "--",
-            rating: primaryStall.rating ? Number(primaryStall.rating).toFixed(1) : "4.8",
+            rating: liveRating,
             todayPayout: 0,
           },
           stall: {
@@ -160,6 +169,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
 
     const masterOrders = await Order.find({ _id: { $in: orderIds } })
       .populate("customer_id", "name phone_number email")
+      .populate("rider_id", "name phone_number vehicle_model")
       .lean();
 
     const orderMap = new Map(masterOrders.map((o: any) => [o._id.toString(), o]));
@@ -248,6 +258,9 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
         rejectionReason: vendorStatus === "Rejected" ? (rejectionReason || "Order rejected by vendor") : undefined,
         customer: parentOrder.customer_id?.name || "Customer",
         customerPhone: parentOrder.customer_id?.phone_number || "",
+        rider: parentOrder.rider_id?.name || null,
+        riderPhone: parentOrder.rider_id?.phone_number || null,
+        riderVehicle: parentOrder.rider_id?.vehicle_model || null,
         deliveryAddress: parentOrder.delivery_address || "",
         deliveryNotes: parentOrder.delivery_notes || "",
         paymentMethod: parentOrder.payment_method || "ONLINE",
@@ -293,10 +306,39 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
       .filter((o) => o.status === "Completed" && new Date(o.createdAt) >= todayStart)
       .reduce((sum, o) => sum + (o.net || 0), 0);
 
-    const avgPrep = liveCount > 0 ? "15m" : "12m";
-    const stallRating = primaryStall.rating
-      ? Number(primaryStall.rating).toFixed(1)
-      : "4.8";
+    // Calculate live avg prep time strictly based on past completed order preparation times
+    const pastOrderPrepTimes: number[] = [];
+    for (const orderId of orderIds) {
+      const stallItemsForOrder = subOrders.filter(
+        (so) => so.order_id?.toString() === orderId
+      );
+      if (stallItemsForOrder.length === 0) continue;
+
+      // Only evaluate past orders where items reached READY
+      const readyItems = stallItemsForOrder.filter(
+        (so: any) => so.stall_status === "READY"
+      );
+      if (readyItems.length > 0) {
+        const latestReady = Math.max(
+          ...readyItems.map((so: any) => new Date(so.updatedAt || so.createdAt).getTime())
+        );
+        const earliestCreated = Math.min(
+          ...stallItemsForOrder.map((so: any) => new Date(so.createdAt).getTime())
+        );
+        const elapsedMins = Math.round((latestReady - earliestCreated) / 60000);
+        if (elapsedMins >= 1 && elapsedMins <= 90) {
+          pastOrderPrepTimes.push(elapsedMins);
+        }
+      }
+    }
+
+    let avgPrep = "--";
+    if (pastOrderPrepTimes.length > 0) {
+      const avgMins = Math.round(
+        pastOrderPrepTimes.reduce((sum, v) => sum + v, 0) / pastOrderPrepTimes.length
+      );
+      avgPrep = `${avgMins}m`;
+    }
 
     res.status(200).json({
       success: true,
@@ -306,7 +348,7 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
           liveCount,
           rejectedCount,
           avgPrep,
-          rating: stallRating,
+          rating: liveRating,
           todayPayout,
         },
         stall: {
@@ -824,21 +866,42 @@ export const getVendorAnalytics = async (
     const orderTrend = calcTrend(currentOrdersCount, prevOrdersCount);
 
     // 3. Avg Prep Time
-    const prepTimes = validCurrentSubOrders
-      .map((so: any) => so.estimated_prep_time_minutes)
-      .filter((t: any) => typeof t === "number" && t > 0);
+    const currentPrepSamples: number[] = [];
+    for (const so of validCurrentSubOrders) {
+      if (so.stall_status === "READY" && so.updatedAt && so.createdAt) {
+        const elapsed = Math.round((new Date(so.updatedAt).getTime() - new Date(so.createdAt).getTime()) / 60000);
+        if (elapsed >= 1 && elapsed <= 90) {
+          currentPrepSamples.push(elapsed);
+          continue;
+        }
+      }
+      if (so.estimated_prep_time_minutes && so.estimated_prep_time_minutes > 0) {
+        currentPrepSamples.push(so.estimated_prep_time_minutes);
+      }
+    }
 
     const avgPrepMins =
-      prepTimes.length > 0
-        ? Math.round(prepTimes.reduce((a: number, b: number) => a + b, 0) / prepTimes.length)
-        : 15;
+      currentPrepSamples.length > 0
+        ? Math.round(currentPrepSamples.reduce((a: number, b: number) => a + b, 0) / currentPrepSamples.length)
+        : 0;
 
-    const prevPrepTimes = validPrevSubOrders
-      .map((so: any) => so.estimated_prep_time_minutes)
-      .filter((t: any) => typeof t === "number" && t > 0);
+    const prevPrepSamples: number[] = [];
+    for (const so of validPrevSubOrders) {
+      if (so.stall_status === "READY" && so.updatedAt && so.createdAt) {
+        const elapsed = Math.round((new Date(so.updatedAt).getTime() - new Date(so.createdAt).getTime()) / 60000);
+        if (elapsed >= 1 && elapsed <= 90) {
+          prevPrepSamples.push(elapsed);
+          continue;
+        }
+      }
+      if (so.estimated_prep_time_minutes && so.estimated_prep_time_minutes > 0) {
+        prevPrepSamples.push(so.estimated_prep_time_minutes);
+      }
+    }
+
     const prevAvgPrepMins =
-      prevPrepTimes.length > 0
-        ? Math.round(prevPrepTimes.reduce((a: number, b: number) => a + b, 0) / prevPrepTimes.length)
+      prevPrepSamples.length > 0
+        ? Math.round(prevPrepSamples.reduce((a: number, b: number) => a + b, 0) / prevPrepSamples.length)
         : avgPrepMins;
 
     const prepTrend = calcTrend(avgPrepMins, prevAvgPrepMins);
@@ -967,7 +1030,7 @@ export const getVendorAnalytics = async (
           },
           {
             label: "Avg. Prep Time",
-            value: `${avgPrepMins}m`,
+            value: avgPrepMins > 0 ? `${avgPrepMins}m` : "--",
             trend: prepTrend.trend,
             positive: prepTrend.positive,
           },
@@ -1164,9 +1227,9 @@ export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): P
       data: {
         walletBalance: vendorUser.wallet_balance || 0,
         bankName: vendorUser.bank_name || null,
-        bankAccountNo: vendorUser.bank_account_no || null,
+        bankAccountNo: maskBankAccount(vendorUser.bank_account_no),
         bankIfsc: vendorUser.bank_ifsc || null,
-        upiId: vendorUser.upi_id || null,
+        upiId: maskUpiId(vendorUser.upi_id),
         transactions: formattedHistory,
       },
     });
@@ -1202,9 +1265,19 @@ export const updateVendorBankDetails = async (req: AuthRequest, res: Response): 
     }
 
     if (bankName) vendorUser.bank_name = String(bankName).trim();
-    if (bankAccountNo) vendorUser.bank_account_no = String(bankAccountNo).trim();
+    if (bankAccountNo) {
+      const cleanAcct = String(bankAccountNo).trim();
+      if (!cleanAcct.includes("•") && !cleanAcct.includes("*")) {
+        vendorUser.bank_account_no = encryptPii(cleanAcct);
+      }
+    }
     if (bankIfsc) vendorUser.bank_ifsc = String(bankIfsc).trim().toUpperCase();
-    if (upiId) vendorUser.upi_id = String(upiId).trim();
+    if (upiId) {
+      const cleanUpi = String(upiId).trim();
+      if (!cleanUpi.includes("•") && !cleanUpi.includes("*")) {
+        vendorUser.upi_id = cleanUpi;
+      }
+    }
     await vendorUser.save();
 
     res.status(200).json({
@@ -1212,9 +1285,9 @@ export const updateVendorBankDetails = async (req: AuthRequest, res: Response): 
       message: "Bank details saved successfully.",
       data: {
         bankName: vendorUser.bank_name,
-        bankAccountNo: vendorUser.bank_account_no,
+        bankAccountNo: maskBankAccount(vendorUser.bank_account_no),
         bankIfsc: vendorUser.bank_ifsc,
-        upiId: vendorUser.upi_id,
+        upiId: maskUpiId(vendorUser.upi_id),
       },
     });
   } catch (error: any) {

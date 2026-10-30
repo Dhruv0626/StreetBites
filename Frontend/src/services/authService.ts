@@ -21,6 +21,8 @@ export interface User {
 
 export interface AuthResponseData {
   user: User;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 export interface RegisterPayload {
@@ -43,6 +45,7 @@ export interface LoginPayload {
   phone_number?: string;
   password: string;
   secretKey?: string;
+  role?: string;
 }
 
 export const authService = {
@@ -65,7 +68,7 @@ export const authService = {
   },
 
   // Google OAuth Auth API
-  async googleAuth(payload: { token?: string; id_token?: string; credential?: string; code?: string; action?: 'signin' | 'signup' }) {
+  async googleAuth(payload: { token?: string; id_token?: string; credential?: string; code?: string; action?: 'signin' | 'signup'; role?: string }) {
     return apiRequest<AuthResponseData>("/auth/google", {
       method: "POST",
       body: JSON.stringify(payload),

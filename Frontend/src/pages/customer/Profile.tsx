@@ -518,7 +518,6 @@ export const Profile: React.FC = () => {
   const displayEmail = isAuthenticated && user ? user.email : 'guest@streetbites.in';
   const displayPhone = isAuthenticated && user ? (user.phone_number || 'Not provided') : 'Not signed in';
   const displayRole = isAuthenticated && user ? user.role : 'GUEST';
-  const walletBalance = isAuthenticated && user ? (user.wallet_balance || 0) : 0;
 
   return (
     <div className="w-full max-w-7xl mx-auto md:mt-4 pb-20 font-sans">
@@ -567,10 +566,13 @@ export const Profile: React.FC = () => {
               {favorites.length}
             </span>
           </div>
-          <div className="flex-1 text-center cursor-pointer group">
-            <span className="text-[#8E8B85] text-[10px] font-bold uppercase tracking-widest block mb-1">Wallet Balance</span>
+          <div
+            className="flex-1 text-center cursor-pointer group"
+            onClick={() => toggleSection('addresses')}
+          >
+            <span className="text-[#8E8B85] text-[10px] font-bold uppercase tracking-widest block mb-1">Addresses</span>
             <span className="text-2xl font-black text-[#1C1917] group-hover:text-[#D94A38] transition-colors">
-              ₹{walletBalance}
+              {addresses.length}
             </span>
           </div>
         </div>

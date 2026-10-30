@@ -68,7 +68,7 @@ export async function getCustomerAddresses(forceRefresh = false): Promise<Addres
     try {
       const res = await apiRequest<AddressItem[]>("/addresses", {
         method: "GET",
-        requiresAuth: false,
+        requiresAuth: true,
       });
       if (res.success && Array.isArray(res.data)) {
         cachedAddresses = res.data;
@@ -84,8 +84,8 @@ export async function getCustomerAddresses(forceRefresh = false): Promise<Addres
   };
 
   if (!forceRefresh && cachedAddresses) {
-    // If older than 5s, trigger silent background revalidation
-    if (now - lastAddressFetchTime > 5000) {
+    // Revalidate in background only if older than 5 minutes (300,000ms)
+    if (now - lastAddressFetchTime > 300000) {
       fetchFresh();
     }
     return cachedAddresses;
@@ -102,7 +102,7 @@ export async function createCustomerAddress(payload: CreateAddressPayload): Prom
     const res = await apiRequest<AddressItem>("/addresses", {
       method: "POST",
       body: JSON.stringify(payload),
-      requiresAuth: false,
+      requiresAuth: true,
     });
     if (res.success && res.data) {
       clearAddressCache();
@@ -127,7 +127,7 @@ export async function updateCustomerAddress(
     const res = await apiRequest<AddressItem>(`/addresses/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
-      requiresAuth: false,
+      requiresAuth: true,
     });
     if (res.success && res.data) {
       clearAddressCache();
@@ -148,7 +148,7 @@ export async function deleteCustomerAddress(id: string): Promise<boolean> {
   try {
     const res = await apiRequest(`/addresses/${id}`, {
       method: "DELETE",
-      requiresAuth: false,
+      requiresAuth: true,
     });
     if (res.success) {
       clearAddressCache();

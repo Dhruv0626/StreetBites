@@ -8,43 +8,27 @@ import type { AuthRequest } from "../middlewares/authMiddleware.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
 import { memoryCache } from "../utils/cache.ts";
 
-// Helper to safely extract user ID from auth context, cookies, or headers
+// Helper to safely extract user ID strictly from authenticated session
 const resolveUserId = async (req: AuthRequest): Promise<string | null> => {
-  if (req.user?.id) return req.user.id;
+  const authUser = req.user;
+  if (!authUser?.id) return null;
 
-  const token =
-    req.cookies?.accessToken ||
-    (typeof req.headers?.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
-      ? req.headers.authorization.split(" ")[1]
-      : undefined);
-
-  if (token) {
-    try {
-      const accessSecret =
-        process.env.JWT_ACCESS_SECRET ||
-        process.env.JWT_SECRET ||
-        "";
-      const decoded = jwt.verify(token, accessSecret) as any;
-      if (decoded?.id) return decoded.id;
-    } catch {
-      // ignore
-    }
+  // Admins may inspect a vendor's menu via query parameter
+  if (authUser.role === "ADMIN" && req.query?.userId && typeof req.query.userId === "string") {
+    const queryId = req.query.userId.trim();
+    if (mongoose.isValidObjectId(queryId)) return queryId;
   }
 
-  // Fallback: check query or body
-  if (req.query?.userId && typeof req.query.userId === "string") return req.query.userId;
-  if (req.body?.userId && typeof req.body.userId === "string") return req.body.userId;
-
-  // Fallback: find first vendor user in DB
-  const vendorUser = await User.findOne({ role: "VENDOR" });
-  return vendorUser ? vendorUser._id.toString() : null;
+  return authUser.id;
 };
 
-// Helper to find existing Stall for a vendor user
+// Helper to find existing Stall strictly owned by this vendor
 const resolveVendorStall = async (userId: string | null, stallId?: string): Promise<any> => {
   if (stallId && mongoose.isValidObjectId(stallId)) {
     const stall = await Stall.findById(stallId);
-    if (stall) return stall;
+    if (stall && (!userId || stall.vendor_id?.toString() === userId)) {
+      return stall;
+    }
   }
 
   if (userId && mongoose.isValidObjectId(userId)) {
@@ -57,8 +41,7 @@ const resolveVendorStall = async (userId: string | null, stallId?: string): Prom
     if (stall) return stall;
   }
 
-  // Fallback to first existing registered stall without creating any new dummy documents
-  return await Stall.findOne();
+  return null;
 };
 
 // Helper to determine the item's food item category name

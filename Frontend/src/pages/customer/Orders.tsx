@@ -201,10 +201,10 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               let notifTitle = `Order Update: ${o.status.replace(/_/g, ' ')}`;
 
               if (o.status === 'CANCELLED') {
-                notifTitle = isCod ? 'Order Cancelled' : 'Order Cancelled & Refunded';
+                notifTitle = isCod ? 'Order Cancelled' : 'Order Cancelled - Refund Initiated ⏳';
                 statusMsg = isCod
                   ? `Your order #${cleanId} has been cancelled.`
-                  : `Your order #${cleanId} has been cancelled. ₹${o.totalAmount || o.total || ''} has been refunded to your wallet.`;
+                  : `Your order #${cleanId} has been cancelled. Your refund of ₹${o.totalAmount || o.total || ''} will be processed to your source UPI/bank account in 1-2 business days.`;
               }
 
               triggerDrop({
@@ -251,10 +251,26 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       ? o.deliveryAddress
       : (o.deliveryAddress?.formatted || o.deliveryAddress?.street || 'Saved Delivery Address');
 
+    // Retrieve exact road distance saved from checkout time
+    const oId = String(o.id || o._id || '');
+    const cachedDist = localStorage.getItem(`order_distance_${oId}`) ||
+                       localStorage.getItem(`order_distance_${orderNum}`) ||
+                       localStorage.getItem('last_checkout_distance');
+    let resolvedDist = Number(o.distance_km || o.distanceKm || cachedDist || 0);
+
+    if (resolvedDist <= 0 && o.deliveryFee && Number(o.deliveryFee) > 0) {
+      const fee = Number(o.deliveryFee);
+      resolvedDist = fee <= 22 ? 2.1 : Number((2.0 + (fee - 22) / 7).toFixed(1));
+    }
+
     return {
       id: orderNum,
       orderNumber: orderNum,
       realId: o.id || o._id,
+      distanceKm: resolvedDist > 0 ? Number(resolvedDist.toFixed(1)) : 0,
+      distance_km: resolvedDist > 0 ? Number(resolvedDist.toFixed(1)) : 0,
+      deliveryCoordinates: o.deliveryCoordinates || o.delivery_coordinates?.coordinates || null,
+      clusterCoordinates: o.clusterCoordinates || o.cluster_coordinates?.coordinates || null,
       date: o.createdAt
         ? new Date(o.createdAt).toLocaleDateString('en-IN', {
           month: 'short',
@@ -264,6 +280,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         })
         : 'Recently',
       total: o.totalAmount || 0,
+      totalAmount: o.totalAmount || 0,
       foodItemsTotal: o.foodItemsTotal || 0,
       deliveryFee: o.deliveryFee || 0,
       taxAmount: o.taxAmount || 0,
@@ -289,6 +306,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       isReviewed: Boolean(o.isReviewed),
       reviews: o.reviews || [],
       refundedAmount: o.refundedAmount || o.refunded_amount || 0,
+      refundStatus: o.refund_status || o.refundStatus || 'PENDING',
       deliveredAt: o.delivered_at || o.deliveredAt || o.updatedAt || o.createdAt,
       createdAt: o.createdAt,
       updatedAt: o.updatedAt,
@@ -315,6 +333,8 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       deliveryOtp: '',
       address: 'Saved Delivery Address',
       rider: null,
+      distanceKm: Number(localStorage.getItem('last_checkout_distance') || 2.4),
+      distance_km: Number(localStorage.getItem('last_checkout_distance') || 2.4),
     }
     : ordersToDisplay.find((o) => o.rawStatus && o.rawStatus !== 'DELIVERED' && o.rawStatus !== 'CANCELLED') || null;
 
@@ -354,13 +374,31 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
       return { minutes: 0, timeStr: 'Delivered', arrivalClock: 'Completed', distanceKm: 0 };
     }
 
-    const dropCoords = order.deliveryCoordinates || [72.5815, 23.1118];
-    const riderCoords = order.rider?.coordinates;
-    const originCoords = (rawStatus === 'OUT_FOR_DELIVERY' && riderCoords)
-      ? riderCoords
-      : (order.clusterCoordinates || [72.5873, 23.0248]);
+    // 1. Authoritative Road Distance from stall/cluster to delivery location (preserves exact checkout distance)
+    let distanceKm = 0;
+    if (order.distanceKm && Number(order.distanceKm) > 0) {
+      distanceKm = Number(order.distanceKm);
+    } else if (order.distance_km && Number(order.distance_km) > 0) {
+      distanceKm = Number(order.distance_km);
+    } else {
+      const orderKey = order.realId || order.id || order.orderNumber;
+      const cached = localStorage.getItem(`order_distance_${orderKey}`) || localStorage.getItem('last_checkout_distance');
+      if (cached && Number(cached) > 0) {
+        distanceKm = Number(cached);
+      } else if (order.deliveryFee && Number(order.deliveryFee) > 0) {
+        const fee = Number(order.deliveryFee);
+        distanceKm = fee <= 22 ? 2.1 : Number((2.0 + (fee - 22) / 7).toFixed(1));
+      }
+    }
 
-    const distanceKm = calculateDistanceKm(originCoords, dropCoords);
+    // Fallback: stall cluster coordinates to customer drop coordinates
+    if (!distanceKm || distanceKm <= 0) {
+      const dropCoords = order.deliveryCoordinates || [72.5815, 23.1118];
+      const clusterCoords = order.clusterCoordinates || [72.5074, 23.0338];
+      distanceKm = calculateDistanceKm(clusterCoords, dropCoords);
+    }
+
+    distanceKm = Number(distanceKm.toFixed(1));
 
     const travelMins = Math.max(3, Math.round(distanceKm * 2.7));
     let totalMins = travelMins;
@@ -530,10 +568,12 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                           <span>Payment Method:</span>
                           <span className="font-bold text-[#1C1917]">{order.payment}</span>
                         </div>
-                        {order.rawStatus === 'CANCELLED' && order.refundedAmount > 0 && (
-                          <div className="flex justify-between text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-xs">
+                        {order.rawStatus === 'CANCELLED' && order.payment !== 'COD' && (
+                          <div className="flex justify-between items-center text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-xs">
                             <span className="font-semibold">Refund Status:</span>
-                            <span className="font-bold">₹{order.refundedAmount} Refunded to Wallet</span>
+                            <span className="font-bold">
+                              ₹{order.refundedAmount || order.total || 0} {order.refundStatus === 'COMPLETED' || order.paymentStatus === 'REFUNDED' ? 'Refunded to UPI' : 'Processing (1-2 days via UPI)'}
+                            </span>
                           </div>
                         )}
                         <div className="flex justify-between items-start text-[#4B5563] gap-2">
@@ -1601,7 +1641,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Full Refund:</strong> ₹{cancellingOrder.total} will be instantly refunded to your StreetBites wallet.
+                  <strong>Full Refund:</strong> ₹{cancellingOrder.total} will be processed to your source UPI/bank account in 1-2 business days.
                 </span>
               </div>
             )}

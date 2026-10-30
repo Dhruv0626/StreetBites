@@ -16,6 +16,7 @@ import {
   Store,
   MapPin,
   Info,
+  ShieldCheck,
 } from 'lucide-react';
 import { onboardingService } from '../../services/onboardingService';
 import { adminService } from '../../services/adminService';
@@ -24,8 +25,8 @@ import { QueueItemSkeleton } from '../../components/Skeleton';
 
 export const AdminVerification: React.FC = () => {
   const { showAlert, showConfirm, toast } = useAlert();
-  // Top-level Section Switcher: 'kyc' | 'foodItems'
-  const [activeSection, setActiveSection] = useState<'kyc' | 'foodItems'>('foodItems');
+  // Top-level Section Switcher: 'kyc' | 'foodItems' | 'audit'
+  const [activeSection, setActiveSection] = useState<'kyc' | 'foodItems' | 'audit'>('foodItems');
 
   // --- KYC Applications State ---
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -36,6 +37,15 @@ export const AdminVerification: React.FC = () => {
   const [isLoadingKyc, setIsLoadingKyc] = useState<boolean>(true);
   const [kycError, setKycError] = useState<string | null>(null);
   const [isProcessingKyc, setIsProcessingKyc] = useState<boolean>(false);
+
+  // --- On-Demand KYC Document Inspection Cache (Threat 3 Defense) ---
+  const [inspectedAppCache, setInspectedAppCache] = useState<Record<string, any>>({});
+  const [isLoadingSingleDoc, setIsLoadingSingleDoc] = useState<boolean>(false);
+
+  // --- KYC Security Audit Trail State ---
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   // --- Food Items Approvals State ---
   const [foodTab, setFoodTab] = useState<'all' | 'Review_pending' | 'Approved' | 'Rejected'>('Review_pending');
@@ -110,11 +120,72 @@ export const AdminVerification: React.FC = () => {
     fetchFoodItems();
   }, []);
 
+  // Fetch KYC Security Audit Trail
+  const fetchAuditLogs = async () => {
+    setIsLoadingAudit(true);
+    setAuditError(null);
+    try {
+      const res = await onboardingService.getKycAuditLogs();
+      if (res.success && res.data) {
+        setAuditLogs(Array.isArray(res.data) ? res.data : []);
+      } else {
+        setAuditError(res.message || 'Failed to fetch audit logs');
+      }
+    } catch (err: any) {
+      setAuditError(err?.message || 'Error connecting to audit service');
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'audit') {
+      fetchAuditLogs();
+    }
+  }, [activeSection]);
+
+  // On-demand KYC document inspection with security audit logging
+  useEffect(() => {
+    if (!selectedAppId) {
+      setIsLoadingSingleDoc(false);
+      return;
+    }
+    if (inspectedAppCache[selectedAppId]) {
+      setIsLoadingSingleDoc(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingSingleDoc(true);
+    const fetchApplicantKyc = async () => {
+      try {
+        const res = await onboardingService.getVerificationById(selectedAppId);
+        if (isMounted && res.success && res.data) {
+          setInspectedAppCache(prev => ({
+            ...prev,
+            [selectedAppId]: res.data,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to load inspected applicant documents:', err);
+      } finally {
+        if (isMounted) setIsLoadingSingleDoc(false);
+      }
+    };
+
+    fetchApplicantKyc();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedAppId, inspectedAppCache]);
+
   const handleRefresh = () => {
     if (activeSection === 'kyc') {
       fetchApplications();
-    } else {
+    } else if (activeSection === 'foodItems') {
       fetchFoodItems();
+    } else {
+      fetchAuditLogs();
     }
   };
 
@@ -134,6 +205,11 @@ export const AdminVerification: React.FC = () => {
       const res = await onboardingService.updateVerificationStatus(id, newStatus);
       if (res.success) {
         setApplications(prev => prev.filter(a => a.id !== id));
+        setInspectedAppCache(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
         setSelectedAppId(null);
         setCurrentDocIndex(0);
         toast.success(`Application successfully ${newStatus}!`);
@@ -187,8 +263,9 @@ export const AdminVerification: React.FC = () => {
     }
   };
 
-  // Current selected KYC app
-  const currentApplication = applications.find(a => a.id === selectedAppId);
+  // Current selected KYC app (uses inspected cache with full documents, falls back to summary)
+  const currentApplication =
+    inspectedAppCache[selectedAppId || ''] || applications.find(a => a.id === selectedAppId);
   const currentDocs = currentApplication?.documents || [];
   const currentDoc = currentDocs[currentDocIndex];
 
@@ -283,6 +360,18 @@ export const AdminVerification: React.FC = () => {
           <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-slate-200 text-slate-700 font-bold">
             {applications.length}
           </span>
+        </button>
+
+        <button
+          onClick={() => setActiveSection('audit')}
+          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            activeSection === 'audit'
+              ? 'bg-white text-slate-900 shadow-xs font-bold'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Security Audit Trail</span>
         </button>
       </div>
 
@@ -843,7 +932,12 @@ export const AdminVerification: React.FC = () => {
                       {currentApplication.details?.bankName && (
                         <div>
                           <span className="text-slate-400 font-semibold">Bank: </span>
-                          <span className="text-slate-700">{currentApplication.details.bankName}</span>
+                          <span className="text-slate-700">
+                            {currentApplication.details.bankName}{' '}
+                            <span className="font-mono text-[11px] text-slate-500">
+                              ({currentApplication.details.accountNumber || currentApplication.details.maskedAccountNumber || '••••'})
+                            </span>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -854,10 +948,17 @@ export const AdminVerification: React.FC = () => {
 
                   {/* Document Display Canvas */}
                   <div className="flex-1 bg-slate-50 rounded-2xl border border-slate-200/80 p-4 flex flex-col items-center justify-center relative group overflow-hidden">
-                    {currentDoc ? (
+                    {isLoadingSingleDoc ? (
+                      <div className="flex flex-col items-center justify-center gap-2 text-slate-500 py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#D94A38]" />
+                        <span className="text-xs font-semibold">Loading verified KYC documents...</span>
+                        <span className="text-[11px] text-slate-400">Audited document inspection in progress</span>
+                      </div>
+                    ) : currentDoc ? (
                       <>
-                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-700 z-10">
-                          {currentDoc.name}
+                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold text-slate-700 z-10 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{currentDoc.name}</span>
                         </div>
                         <button
                           onClick={() => setIsExpanded(true)}
@@ -943,6 +1044,106 @@ export const AdminVerification: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SECTION 3: KYC SECURITY AUDIT TRAIL                       */}
+      {/* ========================================================= */}
+      {activeSection === 'audit' && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  <h2 className="text-lg font-bold text-slate-900">
+                    KYC & Document Access Audit Log
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Immutable DPDP-compliant trail monitoring administrator access to citizen documents and bank credentials.
+                </p>
+              </div>
+              <button
+                onClick={fetchAuditLogs}
+                disabled={isLoadingAudit}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAudit ? 'animate-spin' : ''}`} />
+                <span>Refresh Audit Log</span>
+              </button>
+            </div>
+
+            {auditError && (
+              <div className="p-4 mb-4 bg-slate-100 border border-slate-300 text-slate-900 text-xs rounded-2xl flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#D94A38]" />
+                <span>{auditError}</span>
+              </div>
+            )}
+
+            {isLoadingAudit ? (
+              <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-[#D94A38]" />
+                <span className="text-xs font-semibold">Loading security audit records...</span>
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 text-xs font-medium">
+                No KYC access audit logs recorded yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="pb-3 px-3">Timestamp</th>
+                      <th className="pb-3 px-3">Admin Account</th>
+                      <th className="pb-3 px-3">Action</th>
+                      <th className="pb-3 px-3">Target Applicant</th>
+                      <th className="pb-3 px-3">Client IP</th>
+                      <th className="pb-3 px-3">User Agent</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {auditLogs.map((log: any) => (
+                      <tr key={log._id || log.id} className="hover:bg-slate-50/80 transition-colors font-mono text-[11px]">
+                        <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                          {log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN') : 'Recent'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-900 font-sans font-semibold">
+                          {log.admin_email}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-sans ${
+                              log.action === 'APPROVE_KYC'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : log.action === 'REJECT_KYC'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : log.action === 'INSPECT_APPLICANT'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-800 font-sans">
+                          {log.target_name ? `${log.target_name} (${log.target_role || 'USER'})` : '—'}
+                        </td>
+                        <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                          {log.ip_address}
+                        </td>
+                        <td className="py-3 px-3 text-slate-400 font-sans text-[10px] max-w-[200px] truncate" title={log.user_agent}>
+                          {log.user_agent || 'Unknown'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

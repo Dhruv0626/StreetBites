@@ -27,11 +27,15 @@ export interface RiderStats {
   };
   codTransactions: {
     id: string;
-    type: "collection" | "settlement";
+    type: "collection" | "settlement" | "debt" | "credit" | "withdrawal";
+    category?: "cod_debt" | "rider_fund";
+    title?: string;
     amount: string;
+    rawAmount?: number;
     order?: string;
     time: string;
     status: "pending" | "completed";
+    note?: string;
   }[];
   recentTrips: {
     id: string;
@@ -65,7 +69,7 @@ export interface ActiveRouteData {
   orderId: string;
   rawId: string;
   status: string;
-  deliveryOtp: string;
+  deliveryOtp?: string;
   paymentMethod: string;
   totalAmount: number;
   riderEarnedFee: number;

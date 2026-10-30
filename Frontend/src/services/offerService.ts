@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiRequest, type ApiResponse } from "./api";
 
 export interface OfferData {
   _id?: string;
@@ -16,18 +16,41 @@ export interface OfferData {
   updatedAt?: string;
 }
 
+const offersCache = new Map<string, { data: ApiResponse<OfferData[]>; timestamp: number }>();
+const OFFERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const offerService = {
-  // Get all offers (with optional query filters)
-  getOffers: async (params?: { audience?: string; active?: boolean | string; search?: string }) => {
+  clearCache: () => {
+    offersCache.clear();
+  },
+
+  // Get all offers (with optional query filters and 5-minute RAM cache)
+  getOffers: async (params?: { audience?: string; active?: boolean | string; search?: string; fresh?: boolean }) => {
     const query = new URLSearchParams();
     if (params?.audience && params.audience !== "All") query.append("audience", params.audience);
     if (params?.active !== undefined) query.append("active", String(params.active));
     if (params?.search) query.append("search", params.search);
 
     const queryString = query.toString() ? `?${query.toString()}` : "";
-    return apiRequest<OfferData[]>(`/offers${queryString}`, {
+    const cacheKey = queryString || "default";
+    const now = Date.now();
+
+    if (!params?.fresh) {
+      const cached = offersCache.get(cacheKey);
+      if (cached && now - cached.timestamp < OFFERS_CACHE_TTL) {
+        return cached.data;
+      }
+    }
+
+    const res = await apiRequest<OfferData[]>(`/offers${queryString}`, {
       method: "GET",
     });
+
+    if (res.success) {
+      offersCache.set(cacheKey, { data: res, timestamp: now });
+    }
+
+    return res;
   },
 
   // Get offer by ID
@@ -39,6 +62,7 @@ export const offerService = {
 
   // Create new offer
   createOffer: async (data: Partial<OfferData>) => {
+    offersCache.clear();
     return apiRequest<OfferData>("/offers", {
       method: "POST",
       body: JSON.stringify(data),
@@ -47,6 +71,7 @@ export const offerService = {
 
   // Update offer
   updateOffer: async (id: string, data: Partial<OfferData>) => {
+    offersCache.clear();
     return apiRequest<OfferData>(`/offers/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -55,6 +80,7 @@ export const offerService = {
 
   // Toggle active status
   toggleOfferStatus: async (id: string) => {
+    offersCache.clear();
     return apiRequest<OfferData>(`/offers/${id}/toggle`, {
       method: "PUT",
     });
@@ -62,10 +88,9 @@ export const offerService = {
 
   // Delete offer
   deleteOffer: async (id: string) => {
+    offersCache.clear();
     return apiRequest<{ id: string }>(`/offers/${id}`, {
       method: "DELETE",
     });
   },
 };
-
-export default offerService;

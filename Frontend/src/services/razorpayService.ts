@@ -55,6 +55,7 @@ export interface PlaceOrderPayload {
   delivery_address: string;
   delivery_coordinates?: [number, number];
   delivery_notes?: string;
+  distance_km?: number;
 }
 
 export const razorpayService = {
@@ -77,6 +78,7 @@ export const razorpayService = {
     delivery_address: string;
     delivery_coordinates?: [number, number];
     delivery_notes?: string;
+    distance_km?: number;
   }) => {
     return apiRequest<{
       orderId: string;

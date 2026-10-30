@@ -20,6 +20,8 @@ import {
   updateRiderBankDetails,
 } from "../controllers/riderController.ts";
 
+import { protect, authorize } from "../middlewares/authMiddleware.ts";
+
 const router = Router();
 
 const AVATAR_SOURCE = "C:\\Users\\HP\\.gemini\\antigravity-ide\\brain\\ca5371d6-d7d4-4c69-ae10-975c2786ff28\\rider_avatar_cap_1790003033907.jpg";
@@ -46,6 +48,9 @@ router.get("/default-avatar", (_req: Request, res: Response) => {
     res.status(404).send("Avatar not found");
   }
 });
+
+// Rider Protected Operations (Strictly restricted to active Riders and Admins)
+router.use(protect, authorize("RIDER", "ADMIN"));
 
 // Dashboard Stats & Duty / Settings
 router.get("/stats", getRiderStats);

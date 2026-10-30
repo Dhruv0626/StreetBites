@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle, Banknote, Wallet } from 'lucide-react';
+import { Search, FileDown, CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle, Banknote, Store, Bike, IndianRupee } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { TableRowsSkeleton } from '../../components/Skeleton';
 
 export const AdminTransactions: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'payouts' | 'refunds' | 'withdrawals'>('payouts');
+  const [activeTab, setActiveTab] = useState<'payouts' | 'cod_debt' | 'withdrawals' | 'refunds'>('payouts');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [refunds, setRefunds] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [floatingCodCash, setFloatingCodCash] = useState<number>(0);
-  const [totalWithdrawn, setTotalWithdrawn] = useState<number>(0);
+  const [pendingCodRiders, setPendingCodRiders] = useState<any[]>([]);
+  const [platformRevenue, setPlatformRevenue] = useState<number>(0);
+  const [clearedCodDebt, setClearedCodDebt] = useState<number>(0);
+  const [pendingCodCollection, setPendingCodCollection] = useState<number>(0);
+  const [vendorPayouts, setVendorPayouts] = useState<{ total: number; pending: number; settled: number }>({
+    total: 0,
+    pending: 0,
+    settled: 0,
+  });
+  const [riderPayouts, setRiderPayouts] = useState<{ total: number; pending: number; settled: number }>({
+    total: 0,
+    pending: 0,
+    settled: 0,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -24,8 +36,12 @@ export const AdminTransactions: React.FC = () => {
         setPayouts(res.data.payouts || []);
         setRefunds(res.data.refunds || []);
         setWithdrawals(res.data.withdrawals || []);
-        setFloatingCodCash(res.data.floatingCodCash || 0);
-        setTotalWithdrawn(res.data.totalWithdrawn || 0);
+        setPendingCodRiders(res.data.pendingCodRiders || []);
+        setPlatformRevenue(Number(res.data.platformRevenue ?? res.data.totalPlatformRevenue ?? 0));
+        setClearedCodDebt(Number(res.data.clearedCodDebt || 0));
+        setPendingCodCollection(Number(res.data.pendingCodCollection ?? res.data.floatingCodCash ?? 0));
+        if (res.data.vendorPayouts) setVendorPayouts(res.data.vendorPayouts);
+        if (res.data.riderPayouts) setRiderPayouts(res.data.riderPayouts);
       } else {
         setErrorMessage(res.message || 'Failed to fetch transactions');
       }
@@ -64,15 +80,11 @@ export const AdminTransactions: React.FC = () => {
     w.note?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalNetRevenue = payouts
-    .reduce((acc, p) => acc + (Number(p.platformGain) || 0), 0);
-
-  const pendingPayoutTotal = payouts
-    .filter(p => p.status === 'pending')
-    .reduce((acc, p) => acc + (Number(p.vendorGain) || 0) + (Number(p.riderGain) || 0), 0);
-
-  const totalRefundsProcessed = refunds
-    .reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
+  const filteredCodRiders = pendingCodRiders.filter(r =>
+    r.riderName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.riderPhone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.orderIds?.some((oId: string) => oId?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const handleProcessAllPending = async () => {
     const pendingList = payouts.filter(p => p.status === 'pending');
@@ -116,6 +128,45 @@ export const AdminTransactions: React.FC = () => {
     }
   };
 
+  const handleConfirmRiderCod = async (riderId: string, riderName: string, amount: number) => {
+    if (!window.confirm(`Confirm collection of ₹${amount} COD cash from ${riderName}? This will clear the rider's debt and add ₹${amount} to Platform Revenue.`)) return;
+    setIsProcessing(true);
+    try {
+      const res = await adminService.settleRiderCod(riderId);
+      if (res.success) {
+        alert(res.message || `Successfully cleared COD debt of ₹${amount} and added to Platform Revenue!`);
+        fetchTransactions();
+      } else {
+        alert(res.message || "Failed to confirm COD deposit.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Error confirming COD deposit.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePayRefund = async (orderDbId: string, orderId: string, amount: number) => {
+    if (!window.confirm(`Process ₹${amount} refund for Order ${orderId}? This will confirm payout to the customer's UPI ID and send them an instant confirmation notification.`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await adminService.processRefund(orderDbId);
+      if (res.success) {
+        alert(res.message || `₹${amount} refund successfully processed for Order ${orderId}! Notification sent to customer.`);
+        fetchTransactions();
+      } else {
+        alert(res.message || "Failed to process refund.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Error processing refund.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleExportCSV = () => {
     let rows: any[];
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -126,6 +177,13 @@ export const AdminTransactions: React.FC = () => {
       csvContent += "Transaction ID,Order ID,User,Role,Vendor Earning,Rider Earning,Platform Fee,Total,Status,Date\n";
       rows.forEach(r => {
         csvContent += `"${r.id}","${r.orderId}","${r.user?.name || ''}","${r.user?.role || ''}","${r.vendorGain}","${r.riderGain}","${r.platformGain}","${r.total}","${r.status}","${r.date}"\n`;
+      });
+    } else if (activeTab === 'cod_debt') {
+      rows = filteredCodRiders;
+      if (rows.length === 0) { alert("No data available to export."); return; }
+      csvContent += "Rider Name,Phone,COD Orders Count,Order IDs,Total Cash Debt,Status\n";
+      rows.forEach(r => {
+        csvContent += `"${r.riderName}","${r.riderPhone}","${r.ordersCount}","${r.orderIds?.join(';') || ''}","${r.totalDebt}","Pending Deposit"\n`;
       });
     } else if (activeTab === 'withdrawals') {
       rows = filteredWithdrawals;
@@ -190,86 +248,72 @@ export const AdminTransactions: React.FC = () => {
         </div>
       )}
 
-      {/* Financial Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Net Platform Revenue */}
+      {/* Financial Overview Cards - Full Platform Command & Liabilities */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 1. Platform Net Revenue */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Platform Commission</span>
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
-              <ArrowUpRight className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Platform Revenue</span>
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/80">
+              <IndianRupee className="w-4 h-4" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
-            {isLoading ? '...' : `₹${totalNetRevenue.toLocaleString('en-IN')}`}
+            {isLoading ? '...' : `₹${platformRevenue.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-[11px] text-slate-500 mt-1">Net platform earnings retained</p>
+          <p className="text-[11px] text-slate-500 mt-1">Online inflow (- payouts) + ₹{clearedCodDebt.toLocaleString('en-IN')} cleared COD (- COD vendor payouts)</p>
         </div>
 
-        {/* Floating Cash */}
+        {/* 2. Floating COD Cash Debt Held by Riders */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Floating Cash (COD)</span>
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pending COD Collection</span>
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/80">
               <Banknote className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
-            {isLoading ? '...' : `₹${floatingCodCash.toLocaleString('en-IN')}`}
+          <h3 className="text-2xl font-bold text-amber-600 font-mono tracking-tight mt-1">
+            {isLoading ? '...' : `₹${pendingCodCollection.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-[11px] text-slate-500 mt-1">Cash held by delivery riders</p>
+          <p className="text-[11px] text-slate-500 mt-1">Floating cash held by {pendingCodRiders.length} riders awaiting deposit</p>
         </div>
 
-        {/* Pending Settlements */}
+        {/* 3. Vendor Payouts */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pending Settlements</span>
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
-              <Clock className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vendor Payouts</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80">
+              <Store className="w-4 h-4" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
-            {isLoading ? '...' : `₹${pendingPayoutTotal.toLocaleString('en-IN')}`}
+            {isLoading ? '...' : `₹${vendorPayouts.total.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-[11px] text-slate-500 mt-1">{payouts.filter(p => p.status === 'pending').length} payouts awaiting settlement</p>
+          <p className="text-[11px] text-slate-500 mt-1">₹{vendorPayouts.settled.toLocaleString('en-IN')} settled · ₹{vendorPayouts.pending.toLocaleString('en-IN')} pending</p>
         </div>
 
-        {/* Total Withdrawn */}
+        {/* 4. Rider Payouts */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Withdrawn</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/80">
-              <Wallet className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rider Payouts</span>
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80">
+              <Bike className="w-4 h-4" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
-            {isLoading ? '...' : `₹${totalWithdrawn.toLocaleString('en-IN')}`}
+            {isLoading ? '...' : `₹${riderPayouts.total.toLocaleString('en-IN')}`}
           </h3>
-          <p className="text-[11px] text-slate-500 mt-1">{withdrawals.length} vendor & rider payouts</p>
-        </div>
-
-        {/* Refunds Processed */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Refunds</span>
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200/80">
-              <ArrowDownRight className="w-4 h-4" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-slate-950 font-mono tracking-tight mt-1">
-            {isLoading ? '...' : `₹${totalRefundsProcessed.toLocaleString('en-IN')}`}
-          </h3>
-          <p className="text-[11px] text-slate-500 mt-1">{refunds.length} customer refunds processed</p>
+          <p className="text-[11px] text-slate-500 mt-1">₹{riderPayouts.settled.toLocaleString('en-IN')} paid · ₹{riderPayouts.pending.toLocaleString('en-IN')} in transit</p>
         </div>
       </div>
 
       {/* Main Table Section */}
       <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs flex flex-col">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/40">
-          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/60 overflow-x-auto max-w-full">
             <button
               onClick={() => setActiveTab('payouts')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'payouts'
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeTab === 'payouts'
                   ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
                 }`}
@@ -277,8 +321,17 @@ export const AdminTransactions: React.FC = () => {
               Order Settlements ({payouts.length})
             </button>
             <button
+              onClick={() => setActiveTab('cod_debt')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeTab === 'cod_debt'
+                  ? 'bg-white shadow-xs text-amber-700 font-bold'
+                  : 'text-slate-600 hover:text-slate-900 font-semibold'
+                }`}
+            >
+              Floating COD Debt ({pendingCodRiders.length})
+            </button>
+            <button
               onClick={() => setActiveTab('withdrawals')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'withdrawals'
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeTab === 'withdrawals'
                   ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
                 }`}
@@ -287,7 +340,7 @@ export const AdminTransactions: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('refunds')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer ${activeTab === 'refunds'
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeTab === 'refunds'
                   ? 'bg-white shadow-xs text-slate-900 font-bold'
                   : 'text-slate-600 hover:text-slate-900 font-semibold'
                 }`}
@@ -330,6 +383,14 @@ export const AdminTransactions: React.FC = () => {
                   <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Rider Earning</th>
                   <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Platform Fee</th>
                   <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Total Value</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Settlement Status</th>
+                </tr>
+              ) : activeTab === 'cod_debt' ? (
+                <tr>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Rider Partner</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Floating COD Orders</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Cash Debt Held</th>
+                  <th className="px-5 py-3.5 uppercase tracking-wider text-[11px]">Last Delivery</th>
                   <th className="px-5 py-3.5 uppercase tracking-wider text-[11px] text-right">Settlement Status</th>
                 </tr>
               ) : activeTab === 'withdrawals' ? (
@@ -407,6 +468,52 @@ export const AdminTransactions: React.FC = () => {
                     </tr>
                   )}
                 </>
+              ) : activeTab === 'cod_debt' ? (
+                <>
+                  {filteredCodRiders.map((r: any, idx: number) => (
+                    <tr key={r.riderId || idx} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <Bike className="w-4 h-4 text-slate-500" />
+                          <span>{r.riderName}</span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-500 mt-0.5">{r.riderPhone}</div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold border border-amber-200">
+                          {r.ordersCount} COD {r.ordersCount === 1 ? 'order' : 'orders'}
+                        </span>
+                        <div className="text-[10px] font-mono text-slate-400 mt-1 max-w-xs truncate" title={r.orderIds?.join(', ')}>
+                          {r.orderIds?.join(', ')}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 font-black font-mono text-amber-700 text-sm">
+                        ₹{Number(r.totalDebt || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-5 py-3.5 text-[11px] text-slate-500">
+                        {r.lastDeliveredAt ? new Date(r.lastDeliveredAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          disabled={isProcessing}
+                          onClick={() => handleConfirmRiderCod(r.riderId, r.riderName, r.totalDebt)}
+                          className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                          title="Confirm cash deposit from rider and credit to platform revenue"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Confirm Deposit</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredCodRiders.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-xs font-medium">
+                        All COD collections are fully deposited! No outstanding floating cash debt in the field.
+                      </td>
+                    </tr>
+                  )}
+                </>
               ) : activeTab === 'withdrawals' ? (
                 <>
                   {filteredWithdrawals.map(w => (
@@ -457,14 +564,28 @@ export const AdminTransactions: React.FC = () => {
                         <div className="font-mono font-bold text-slate-900">{ref.orderId}</div>
                         <div className="text-[11px] text-slate-400 mt-0.5">{ref.id}</div>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-800 font-semibold">{ref.customerName}</td>
-                      <td className="px-5 py-3.5 text-slate-600">{ref.reason}</td>
+                      <td className="px-5 py-3.5 text-slate-800 font-semibold">
+                        <div>{ref.customerName}</div>
+                        {ref.upiId && <div className="text-[10px] text-slate-400 font-mono">{ref.upiId}</div>}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 text-xs">{ref.reason}</td>
                       <td className="px-5 py-3.5 font-bold font-mono text-slate-900">₹{ref.amount}</td>
-                      <td className="px-5 py-3.5 text-slate-400">{ref.date}</td>
+                      <td className="px-5 py-3.5 text-slate-400 text-xs">{ref.date}</td>
                       <td className="px-5 py-3.5 text-right">
-                        <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase">
-                          {ref.status || 'Refunded'}
-                        </span>
+                        {ref.status === 'Pending' ? (
+                          <button
+                            onClick={() => handlePayRefund(ref.orderDbId || ref.id, ref.orderId, ref.amount)}
+                            disabled={isProcessing}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+                          >
+                            <IndianRupee className="w-3.5 h-3.5" />
+                            <span>Pay ₹{ref.amount}</span>
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase">
+                            <CheckCircle2 className="w-3 h-3" /> Refunded
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

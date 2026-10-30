@@ -10,19 +10,22 @@ interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Helper to resolve customer ID from token, headers, query, or body
+ * Helper to securely resolve customer ID from authenticated session/token.
+ * Strictly prevents IDOR by binding to req.user.id.
+ * Only ADMIN users can inspect a specific customer's addresses via query param.
  */
 const getCustomerId = (req: AuthenticatedRequest): string | null => {
-  const id =
-    req.user?.id ||
-    (req.headers["x-user-id"] as string) ||
-    (req.headers["x-customer-id"] as string) ||
-    (req.query.userId as string) ||
-    (req.body?.userId as string) ||
-    (req.cookies?.customerId as string) ||
-    null;
+  if (!req.user?.id) {
+    return null;
+  }
 
-  return id && String(id).trim() ? String(id).trim() : null;
+  // Admins may query another customer's addresses
+  if (req.user.role === "ADMIN" && req.query.userId && typeof req.query.userId === "string") {
+    const queryId = req.query.userId.trim();
+    if (queryId) return queryId;
+  }
+
+  return req.user.id;
 };
 
 /**
@@ -33,18 +36,24 @@ export const getAddresses = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     const customerId = getCustomerId(req);
     if (!customerId) {
-      res.status(400).json({
+      res.status(401).json({
         success: false,
-        message: "Customer ID is required.",
+        message: "Authentication required to view saved addresses.",
       });
       return;
     }
 
-    // If customerId is a valid Mongo ObjectId, populate User details
-    let query = Address.find({ customer_id: customerId }).sort({ is_primary: -1, createdAt: -1 });
-    if (mongoose.Types.ObjectId.isValid(customerId)) {
-      query = query.populate("customer_id", "name phone_number email") as any;
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format.",
+      });
+      return;
     }
+
+    // Customer can only view their own addresses; Admins can view customer addresses if queried
+    let query = Address.find({ customer_id: customerId }).sort({ is_primary: -1, createdAt: -1 });
+    query = query.populate("customer_id", "name phone_number email") as any;
     const addresses = await query.lean();
 
     const formatted = addresses.map((addr: any) => {
@@ -251,13 +260,21 @@ export const geocodeAddressBackend = async (options: {
  */
 export const createAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const customerId = getCustomerId(req);
+    const customerId = req.user?.id;
     const { label, detail, house_no, area, city, pincode, landmark, lat, lng, is_primary = false } = req.body;
 
     if (!customerId) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required to save addresses.",
+      });
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
       res.status(400).json({
         success: false,
-        message: "Customer ID is required.",
+        message: "Invalid customer ID format.",
       });
       return;
     }
@@ -376,23 +393,33 @@ export const createAddress = async (req: AuthenticatedRequest, res: Response): P
  */
 export const updateAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const customerId = getCustomerId(req);
+    const customerId = req.user?.id;
     const { id } = req.params;
     const { label, detail, house_no, area, city, pincode, landmark, lat, lng, is_primary } = req.body;
 
     if (!customerId) {
-      res.status(400).json({
+      res.status(401).json({
         success: false,
-        message: "Customer ID is required.",
+        message: "Authentication required.",
       });
       return;
     }
 
-    const address = await Address.findOne({ _id: id, customer_id: customerId });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid address ID.",
+      });
+      return;
+    }
+
+    // IDOR Protection: Admins can update any address, normal users can only update their own
+    const filter = req.user?.role === "ADMIN" ? { _id: id } : { _id: id, customer_id: customerId };
+    const address = await Address.findOne(filter);
     if (!address) {
       res.status(404).json({
         success: false,
-        message: "Address not found.",
+        message: "Address not found or unauthorized.",
       });
       return;
     }
@@ -428,7 +455,7 @@ export const updateAddress = async (req: AuthenticatedRequest, res: Response): P
 
     if (is_primary === true) {
       await Address.updateMany(
-        { customer_id: customerId, _id: { $ne: id } },
+        { customer_id: address.customer_id, _id: { $ne: id } },
         { $set: { is_primary: false } }
       );
       address.is_primary = true;
@@ -470,29 +497,39 @@ export const updateAddress = async (req: AuthenticatedRequest, res: Response): P
  */
 export const deleteAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const customerId = getCustomerId(req);
+    const customerId = req.user?.id;
     const { id } = req.params;
 
     if (!customerId) {
-      res.status(400).json({
+      res.status(401).json({
         success: false,
-        message: "Customer ID is required.",
+        message: "Authentication required.",
       });
       return;
     }
 
-    const deleted = await Address.findOneAndDelete({ _id: id, customer_id: customerId });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid address ID.",
+      });
+      return;
+    }
+
+    // IDOR Protection: Admins can delete any address, normal users can only delete their own
+    const filter = req.user?.role === "ADMIN" ? { _id: id } : { _id: id, customer_id: customerId };
+    const deleted = await Address.findOneAndDelete(filter);
     if (!deleted) {
       res.status(404).json({
         success: false,
-        message: "Address not found.",
+        message: "Address not found or unauthorized.",
       });
       return;
     }
 
     // If deleted address was primary, make the next one primary
     if (deleted.is_primary) {
-      const nextAddress = await Address.findOne({ customer_id: customerId }).sort({ createdAt: -1 });
+      const nextAddress = await Address.findOne({ customer_id: deleted.customer_id }).sort({ createdAt: -1 });
       if (nextAddress) {
         nextAddress.is_primary = true;
         await nextAddress.save();

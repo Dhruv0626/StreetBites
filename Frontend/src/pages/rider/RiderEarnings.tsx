@@ -558,6 +558,11 @@ export const RiderEarningsPage: React.FC = () => {
                   onChange={(e) => setBankFormData({ ...bankFormData, bankAccountNo: e.target.value })}
                   className="w-full bg-stone-50 border border-[#EFEBE4] rounded-xl px-4 py-3 text-sm text-stone-800 focus:outline-none focus:border-[#D94A38] focus:bg-white transition-colors font-mono"
                 />
+                {bankFormData.bankAccountNo.includes('•') && (
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    Existing account is securely encrypted. Leave unchanged or type a new number to update.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

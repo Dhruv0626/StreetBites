@@ -133,3 +133,13 @@ export const sensitiveActionLimiter = createRateLimiter({
   maxRequests: 250,
   message: "Too many sensitive actions submitted from this IP. Please wait before retrying.",
 });
+
+/**
+ * 4. Strict KYC Scraping Protection Limiter:
+ * 60 requests per 10 minutes per IP for KYC documents access to prevent bulk exfiltration
+ */
+export const kycRateLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  maxRequests: 60,
+  message: "KYC access threshold reached. Bulk identity inspection is rate-limited to protect sensitive citizen documents.",
+});

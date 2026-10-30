@@ -55,7 +55,11 @@ export const SignIn: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const res = await login({ email: email.trim(), password });
+      const res = await login({
+        email: email.trim(),
+        password,
+        role: role.toUpperCase(),
+      });
 
       if (res.success) {
         const destination = getRoleHomePath(res.user || { role: res.role || role });

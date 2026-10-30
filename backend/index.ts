@@ -20,12 +20,16 @@ import paymentRoutes from "./src/routes/paymentRoutes.ts";
 import vendorOrderRoutes from "./src/routes/vendorOrderRoutes.ts";
 import notificationRoutes from "./src/routes/notificationRoutes.ts";
 import reviewRoutes from "./src/routes/reviewRoutes.ts";
-
 import { globalRateLimiter } from "./src/middlewares/rateLimiter.ts";
+import { applySecurityHeaders } from "./src/middlewares/helmetSecurity.ts";
 
 // Initialize Express
 const app = express();
 const PORT = process.env.PORT || "";
+
+// Security: Disable X-Powered-By fingerprinting and apply Helmet security headers
+app.disable("x-powered-by");
+app.use(applySecurityHeaders);
 
 // Enable Trust Proxy for accurate client IP resolution behind load balancers/proxies
 app.set("trust proxy", 1);
@@ -63,11 +67,26 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-customer-id", "x-user-id", "x-fresh", "x-cluster-id", "x-stall-id", "x-order-id", "x-requested-with", "Accept"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-auth-token",
+      "x-refresh-token",
+      "x-access-token",
+      "x-customer-id",
+      "x-user-id",
+      "x-fresh",
+      "x-cluster-id",
+      "x-stall-id",
+      "x-order-id",
+      "x-requested-with",
+      "Accept",
+    ],
+    exposedHeaders: ["x-access-token", "x-refresh-token", "Authorization"],
   })
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "50mb" })); 
+app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // DDoS & Spam Protection: Apply Global Rate Limiting to all /api routes

@@ -1,4 +1,5 @@
 import mongoose, { type Model } from "mongoose";
+import { encryptPii } from "../utils/securityPii.ts";
 
 export type UserRole = "CUSTOMER" | "VENDOR" | "RIDER" | "ADMIN";
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
@@ -219,6 +220,16 @@ const UserSchema = new mongoose.Schema<IUser>(
 
 // GeoJSON 2dsphere index for location queries (sparse so missing coordinates don't fail)
 UserSchema.index({ current_coordinates: "2dsphere" }, { sparse: true });
+
+// Pre-save hook: Encrypt bank account number at rest if modified
+UserSchema.pre("save", async function (this: any) {
+  if (this.isModified("bank_account_no") && this.bank_account_no) {
+    const val = String(this.bank_account_no).trim();
+    if (!val.startsWith("enc:v1:") && !val.includes("•") && !val.includes("*")) {
+      this.bank_account_no = encryptPii(val);
+    }
+  }
+});
 
 export const User: Model<IUser> = mongoose.model<IUser>("User", UserSchema);
 export default User;

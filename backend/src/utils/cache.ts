@@ -1,6 +1,7 @@
 /**
  * High-Performance In-Memory RAM Cache Utility
  * Zero external dependencies, sub-millisecond lookups with TTL expiration.
+ * Auto-sweeping cleanup prevents memory leaks on long-running processes.
  */
 
 interface CacheEntry<T = any> {
@@ -10,11 +11,24 @@ interface CacheEntry<T = any> {
 
 class MemoryCache {
   private store = new Map<string, CacheEntry>();
+  private sweepTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    // Periodically sweep expired keys every 60 seconds
+    if (typeof setInterval !== "undefined") {
+      this.sweepTimer = setInterval(() => {
+        this.sweep();
+      }, 60000);
+      if (this.sweepTimer.unref) {
+        this.sweepTimer.unref();
+      }
+    }
+  }
 
   /**
-   * Set a value in cache with TTL (in seconds). Default TTL = 120 seconds (2 mins)
+   * Set a value in cache with TTL (in seconds). Default TTL = 600 seconds (10 mins)
    */
-  set<T = any>(key: string, data: T, ttlSeconds: number = 120): void {
+  set<T = any>(key: string, data: T, ttlSeconds: number = 600): void {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.store.set(key, { data, expiresAt });
   }
@@ -32,6 +46,13 @@ class MemoryCache {
     }
 
     return entry.data as T;
+  }
+
+  /**
+   * Check if a key exists and is not expired
+   */
+  has(key: string): boolean {
+    return this.get(key) !== null;
   }
 
   /**
@@ -60,12 +81,39 @@ class MemoryCache {
   }
 
   /**
+   * Remove all expired entries to keep memory footprint minimal
+   */
+  sweep(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.store.entries()) {
+      if (now > entry.expiresAt) {
+        this.store.delete(key);
+      }
+    }
+  }
+
+  /**
    * Helper to invalidate cluster and stall related caches
    */
   invalidateClusters(): void {
-    this.del('all_clusters');
-    this.delPrefix('cluster_');
-    this.delPrefix('stall_');
+    this.del("all_clusters");
+    this.delPrefix("cluster_");
+    this.delPrefix("stall_");
+  }
+
+  /**
+   * Helper to invalidate offers caches
+   */
+  invalidateOffers(): void {
+    this.delPrefix("offers_");
+  }
+
+  /**
+   * Helper to invalidate admin overview and transaction caches
+   */
+  invalidateAdminStats(): void {
+    this.del("admin_overview_stats");
+    this.del("admin_transactions");
   }
 }
 

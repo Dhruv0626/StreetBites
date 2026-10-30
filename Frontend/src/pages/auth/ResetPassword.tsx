@@ -27,6 +27,10 @@ export const ResetPassword: React.FC = () => {
       showAlert('Please provide your registered email address.', 'error');
       return;
     }
+    if (!resetCode.trim()) {
+      showAlert('Please enter the 6-digit verification code sent to your email.', 'error');
+      return;
+    }
     if (password.length < 6) {
       showAlert('Password must be at least 6 characters long.', 'error');
       return;
@@ -40,7 +44,7 @@ export const ResetPassword: React.FC = () => {
     try {
       const res = await authService.resetPassword({
         email: email.trim(),
-        token: resetCode.trim() || undefined,
+        token: resetCode.trim(),
         newPassword: password,
       });
 
@@ -134,14 +138,16 @@ export const ResetPassword: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-medium text-stone-600 mb-1">
-                    Reset Code (if received)
+                    Reset Code (6-Digit OTP)
                   </label>
                   <input
                     type="text"
+                    required
+                    maxLength={6}
                     value={resetCode}
                     onChange={(e) => setResetCode(e.target.value)}
-                    className="w-full text-xs py-3 px-4 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20 focus:border-[#E54B3C] transition-all"
-                    placeholder="e.g. 123456"
+                    className="w-full text-xs py-3 px-4 rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#E54B3C]/20 focus:border-[#E54B3C] transition-all tracking-widest font-mono"
+                    placeholder="123456"
                   />
                 </div>
 

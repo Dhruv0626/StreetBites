@@ -12,6 +12,7 @@ export const escapePdfText = (str: string | null | undefined): string => {
     .replace(/\(/g, '\\(')
     .replace(/\)/g, '\\)')
     .replace(/₹/g, 'Rs. ')
+    .replace(/[\u2022\u25CF\u2023]/g, '*')
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/\u2013|\u2014/g, '-')

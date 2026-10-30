@@ -9,7 +9,7 @@ import {
   getCustomerOrders,
   cancelCustomerOrder,
 } from "../controllers/paymentController.ts";
-import { protect } from "../middlewares/authMiddleware.ts";
+import { protect, authorize } from "../middlewares/authMiddleware.ts";
 
 const router = Router();
 
@@ -25,10 +25,10 @@ router.get("/my-orders", protect, getCustomerOrders);
 router.post("/orders/:orderId/cancel", protect, cancelCustomerOrder);
 
 // Rider Debt Repayment via Razorpay Online Payment
-router.post("/rider/repay-debt/create-order", protect, createRiderRepayOrder);
-router.post("/rider/repay-debt/verify", protect, verifyRiderRepay);
+router.post("/rider/repay-debt/create-order", protect, authorize("RIDER", "ADMIN"), createRiderRepayOrder);
+router.post("/rider/repay-debt/verify", protect, authorize("RIDER", "ADMIN"), verifyRiderRepay);
 
 // Global Admin Financial Ledger & Revenue Overview
-router.get("/admin/overview", protect, getAdminFinancialOverview);
+router.get("/admin/overview", protect, authorize("ADMIN"), getAdminFinancialOverview);
 
 export default router;

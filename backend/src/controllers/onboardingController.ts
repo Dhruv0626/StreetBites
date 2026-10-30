@@ -1,10 +1,14 @@
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { User } from "../models/User.ts";
 import { Stall } from "../models/Stall.ts";
 import { Cluster } from "../models/Cluster.ts";
+import KycAuditLog from "../models/KycAuditLog.ts";
+import { logKycAccess } from "../utils/auditLogger.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
+import { maskBankAccount, maskUpiId, encryptPii, decryptPii } from "../utils/securityPii.ts";
 
 /**
  * @desc    Rider Onboarding (Uploads documents to Cloudinary & saves URLs in User profile)
@@ -97,9 +101,19 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
     if (rcImageUrl) user.rc_image_url = rcImageUrl;
     if (insuranceImageUrl) user.insurance_image_url = insuranceImageUrl;
     if (bankName) user.bank_name = bankName.trim();
-    if (accountNumber) user.bank_account_no = accountNumber.trim();
+    if (accountNumber) {
+      const cleanAcct = String(accountNumber).trim();
+      if (!cleanAcct.includes("•") && !cleanAcct.includes("*")) {
+        user.bank_account_no = encryptPii(cleanAcct);
+      }
+    }
     if (ifscCode) user.bank_ifsc = ifscCode.trim();
-    if (upiId) user.upi_id = upiId.trim();
+    if (upiId) {
+      const cleanUpi = String(upiId).trim();
+      if (!cleanUpi.includes("•") && !cleanUpi.includes("*")) {
+        user.upi_id = cleanUpi;
+      }
+    }
 
     user.role = "RIDER";
     user.verification_status = "PENDING";
@@ -138,9 +152,17 @@ export const registerRiderDetails = async (req: Request, res: Response): Promise
   }
 };
 
-// Helper to extract authenticated user ID from req.user, cookies, or Authorization header
+// Helper to safely extract authenticated user ID strictly from session
 const getAuthUserId = (req: Request): string | null => {
-  if ((req as any).user?.id) return (req as any).user.id;
+  const authUser = (req as any).user;
+  if (authUser?.id) {
+    if (authUser.role === "ADMIN" && req.query?.userId && typeof req.query.userId === "string") {
+      const q = req.query.userId.trim();
+      if (q) return q;
+    }
+    return authUser.id;
+  }
+
   const token =
     (req as any).cookies?.accessToken ||
     (typeof req.headers?.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
@@ -154,16 +176,17 @@ const getAuthUserId = (req: Request): string | null => {
         process.env.JWT_SECRET ||
         "";
       const decoded = jwt.verify(token, accessSecret) as any;
-      if (decoded?.id) return decoded.id;
+      if (decoded?.id) {
+        if (decoded.role === "ADMIN" && req.query?.userId && typeof req.query.userId === "string") {
+          const q = req.query.userId.trim();
+          if (q) return q;
+        }
+        return decoded.id;
+      }
     } catch {
       // Token invalid or expired
     }
   }
-
-  // Fallback headers & query
-  const headerId = (req.headers["x-user-id"] as string) || (req.headers["x-customer-id"] as string);
-  if (headerId && typeof headerId === "string" && headerId.length >= 12) return headerId;
-  if (req.query?.userId && typeof req.query.userId === "string") return req.query.userId;
 
   return null;
 };
@@ -282,9 +305,19 @@ export const registerVendorDetails = async (req: Request, res: Response): Promis
     }
     if (aadhaarImageUrl) user.aadhaar_image_url = aadhaarImageUrl;
     if (bankName && typeof bankName === "string") user.bank_name = bankName.trim();
-    if (accountNumber && typeof accountNumber === "string") user.bank_account_no = accountNumber.trim();
+    if (accountNumber && typeof accountNumber === "string") {
+      const cleanAcct = accountNumber.trim();
+      if (!cleanAcct.includes("•") && !cleanAcct.includes("*")) {
+        user.bank_account_no = encryptPii(cleanAcct);
+      }
+    }
     if (ifscCode && typeof ifscCode === "string") user.bank_ifsc = ifscCode.trim();
-    if (upiId && typeof upiId === "string") user.upi_id = upiId.trim();
+    if (upiId && typeof upiId === "string") {
+      const cleanUpi = upiId.trim();
+      if (!cleanUpi.includes("•") && !cleanUpi.includes("*")) {
+        user.upi_id = cleanUpi;
+      }
+    }
 
     user.role = "VENDOR";
     user.verification_status = "PENDING";
@@ -352,9 +385,9 @@ export const registerVendorDetails = async (req: Request, res: Response): Promis
           verification_status: user.verification_status,
           aadhaar_image_url: user.aadhaar_image_url,
           bank_name: user.bank_name,
-          bank_account_no: user.bank_account_no,
+          bank_account_no: maskBankAccount(user.bank_account_no),
           bank_ifsc: user.bank_ifsc,
-          upi_id: user.upi_id,
+          upi_id: maskUpiId(user.upi_id),
         },
         stall: {
           id: stall._id,
@@ -403,19 +436,14 @@ export const registerVendorDetails = async (req: Request, res: Response): Promis
  */
 export const getRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthUserId(req) || (req as any).user?.id || req.query.userId;
-    const email = req.query.email as string;
+    const userId = getAuthUserId(req);
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    } else if (email) {
-      user = await User.findOne({ email: email.toLowerCase() });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required." });
+      return;
     }
 
-    if (!user) {
-      user = await User.findOne({ role: "RIDER" });
-    }
+    const user = await User.findById(userId);
 
     if (!user) {
       res.status(404).json({ success: false, message: "Rider account not found." });
@@ -439,9 +467,9 @@ export const getRiderDetails = async (req: Request, res: Response): Promise<void
         rc_image_url: user.rc_image_url,
         insurance_image_url: user.insurance_image_url,
         bank_name: user.bank_name,
-        bank_account_no: user.bank_account_no,
+        bank_account_no: maskBankAccount(user.bank_account_no),
         bank_ifsc: user.bank_ifsc,
-        upi_id: user.upi_id,
+        upi_id: maskUpiId(user.upi_id),
       },
     });
   } catch (error: any) {
@@ -467,15 +495,14 @@ export const updateRiderDetails = async (req: Request, res: Response): Promise<v
  */
 export const deleteRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || req.query.userId;
-    const email = req.query.email as string;
+    const userId = getAuthUserId(req);
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    } else if (email) {
-      user = await User.findOne({ email: email.toLowerCase() });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required." });
+      return;
     }
+
+    const user = await User.findById(userId);
 
     if (!user) {
       res.status(404).json({ success: false, message: "Rider account not found." });
@@ -517,20 +544,14 @@ export const deleteRiderDetails = async (req: Request, res: Response): Promise<v
  */
 export const getVendorDetails = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = getAuthUserId(req) || req.query.userId;
-    const email = req.query.email as string;
+    const userId = getAuthUserId(req);
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    }
-    if (!user && email && typeof email === "string" && email.trim()) {
-      user = await User.findOne({ email: email.trim().toLowerCase() });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required." });
+      return;
     }
 
-    if (!user) {
-      user = await User.findOne({ role: "VENDOR" });
-    }
+    const user = await User.findById(userId);
 
     if (!user) {
       res.status(404).json({ success: false, message: "Vendor account not found." });
@@ -551,9 +572,9 @@ export const getVendorDetails = async (req: Request, res: Response): Promise<voi
           verification_status: user.verification_status,
           aadhaar_image_url: user.aadhaar_image_url,
           bank_name: user.bank_name,
-          bank_account_no: user.bank_account_no,
+          bank_account_no: maskBankAccount(user.bank_account_no),
           bank_ifsc: user.bank_ifsc,
-          upi_id: user.upi_id,
+          upi_id: maskUpiId(user.upi_id),
         },
         stall,
       },
@@ -641,15 +662,14 @@ export const toggleVendorOnlineStatus = async (req: Request, res: Response): Pro
  */
 export const deleteVendorDetails = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || req.query.userId;
-    const email = req.query.email as string;
+    const userId = getAuthUserId(req);
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    } else if (email) {
-      user = await User.findOne({ email: email.toLowerCase() });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required." });
+      return;
     }
+
+    const user = await User.findById(userId);
 
     if (!user) {
       res.status(404).json({ success: false, message: "Vendor account not found." });
@@ -686,15 +706,14 @@ export const deleteVendorDetails = async (req: Request, res: Response): Promise<
  */
 export const getOnboardingStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user?.id || req.query.userId;
-    const email = req.query.email as string;
+    const userId = getAuthUserId(req);
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    } else if (email) {
-      user = await User.findOne({ email: email.toLowerCase() });
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required." });
+      return;
     }
+
+    const user = await User.findById(userId);
 
     if (!user) {
       res.status(404).json({ success: false, message: "User not found." });
@@ -719,7 +738,7 @@ export const getOnboardingStatus = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @desc    Get All Verification Applications (Admin KYC review)
+ * @desc    Get All Verification Applications (Admin KYC review - Metadata summary without bulk document leakage)
  * @route   GET /api/onboarding/verifications
  */
 export const getVerifications = async (req: Request, res: Response): Promise<void> => {
@@ -728,7 +747,6 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
 
     const filter: any = {
       role: { $in: ["VENDOR", "RIDER"] },
-      verification_status: { $exists: true },
     };
 
     if (type && type !== "all") {
@@ -738,7 +756,7 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
     if (status && status !== "all") {
       if (status === "approved") filter.verification_status = "VERIFIED";
       else if (status === "rejected") filter.verification_status = "REJECTED";
-      else if (status === "pending") filter.verification_status = "PENDING";
+      else if (status === "pending") filter.verification_status = { $in: ["PENDING", null, undefined] };
     }
 
     const users = await User.find(filter).sort({ updatedAt: -1 });
@@ -758,76 +776,20 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
               ? "rejected"
               : "pending";
 
-        // Build list of document attachments
-        const documents: any[] = [];
+        // Count attached documents without dumping sensitive raw URLs in bulk list
+        let docsCount = 0;
         if (isVendor) {
-          if (stall?.image_url) {
-            documents.push({ name: "Stall Front Photo", url: stall.image_url, type: "image" });
-          }
-          if (stall?.pan_image_url) {
-            documents.push({
-              name: "PAN Card Document",
-              url: stall.pan_image_url,
-              type: "image",
-            });
-          }
-          if (stall?.fssai_image_url) {
-            documents.push({
-              name: "FSSAI Certificate Document",
-              url: stall.fssai_image_url,
-              type: "image",
-            });
-          }
-          if (u.aadhaar_image_url || stall?.aadhar_image_url) {
-            documents.push({
-              name: "Aadhaar Card Document",
-              url: u.aadhaar_image_url || stall?.aadhar_image_url,
-              type: "image",
-            });
-          }
+          if (stall?.image_url) docsCount++;
+          if (stall?.pan_image_url) docsCount++;
+          if (stall?.fssai_image_url) docsCount++;
+          if (u.aadhaar_image_url || stall?.aadhar_image_url) docsCount++;
         } else {
-          if (u.dl_image_url) {
-            documents.push({
-              name: "Driving License Document",
-              url: u.dl_image_url,
-              type: "image",
-            });
-          }
-          if (u.aadhaar_image_url) {
-            documents.push({
-              name: "Aadhaar Card Document",
-              url: u.aadhaar_image_url,
-              type: "image",
-            });
-          }
-          if (u.vehicle_photo_url) {
-            documents.push({
-              name: `Vehicle Photo (${u.vehicle_model || "Vehicle"})`,
-              url: u.vehicle_photo_url,
-              type: "image",
-            });
-          }
-          if (u.vehicle_number_plate_image) {
-            documents.push({
-              name: "Vehicle Number Plate Photo",
-              url: u.vehicle_number_plate_image,
-              type: "image",
-            });
-          }
-          if (u.rc_image_url) {
-            documents.push({
-              name: "Vehicle Registration Certificate (RC Book)",
-              url: u.rc_image_url,
-              type: "image",
-            });
-          }
-          if (u.insurance_image_url) {
-            documents.push({
-              name: "Vehicle Insurance Certificate",
-              url: u.insurance_image_url,
-              type: "image",
-            });
-          }
+          if (u.dl_image_url) docsCount++;
+          if (u.aadhaar_image_url) docsCount++;
+          if (u.vehicle_photo_url) docsCount++;
+          if (u.vehicle_number_plate_image) docsCount++;
+          if (u.rc_image_url) docsCount++;
+          if (u.insurance_image_url) docsCount++;
         }
 
         return {
@@ -839,13 +801,13 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
           phone: u.phone_number || "N/A",
           date: u.createdAt ? new Date(u.createdAt).toISOString().split("T")[0] : "Recent",
           status: normalizedStatus,
-          docs: documents.length,
-          documents,
+          docs: docsCount,
+          documents: [], // Sensitive KYC documents delivered on-demand via GET /verifications/:id with audit logging
           details: {
             bankName: u.bank_name,
-            accountNumber: u.bank_account_no,
+            maskedAccountNumber: maskBankAccount(u.bank_account_no),
             ifsc: u.bank_ifsc,
-            upiId: u.upi_id,
+            upiId: maskUpiId(u.upi_id),
             vehicleModel: u.vehicle_model,
             cluster: (stall?.cluster_id as any)?.name || "Default Cluster",
             stallCategory: stall?.stall_category || "Fast Food & Dosa",
@@ -856,6 +818,17 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
         };
       })
     );
+
+    // Audit Log: Record admin verification list query
+    await logKycAccess({
+      req,
+      action: "LIST_VERIFICATIONS",
+      details: {
+        filterStatus: status || "all",
+        filterType: type || "all",
+        recordsReturned: applications.length,
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -872,7 +845,185 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
 };
 
 /**
- * @desc    Update Application Verification Status (Approve / Reject)
+ * @desc    Get Single Verification Application with Full KYC Documents (Audited on-demand inspection)
+ * @route   GET /api/onboarding/verifications/:id
+ */
+export const getVerificationById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: "Valid applicant ID required." });
+      return;
+    }
+
+    const u = await User.findById(id);
+    if (!u) {
+      res.status(404).json({ success: false, message: "Applicant not found." });
+      return;
+    }
+
+    const isVendor = u.role === "VENDOR";
+    let stall = null;
+    if (isVendor) {
+      stall = await Stall.findOne({ vendor_id: u._id }).populate("cluster_id");
+    }
+
+    const normalizedStatus =
+      u.verification_status === "VERIFIED"
+        ? "approved"
+        : u.verification_status === "REJECTED"
+          ? "rejected"
+          : "pending";
+
+    // Build list of document attachments for verified admin review
+    const documents: any[] = [];
+    if (isVendor) {
+      if (stall?.image_url) {
+        documents.push({ name: "Stall Front Photo", url: stall.image_url, type: "image" });
+      }
+      if (stall?.pan_image_url) {
+        documents.push({
+          name: "PAN Card Document",
+          url: stall.pan_image_url,
+          type: "image",
+        });
+      }
+      if (stall?.fssai_image_url) {
+        documents.push({
+          name: "FSSAI Certificate Document",
+          url: stall.fssai_image_url,
+          type: "image",
+        });
+      }
+      if (u.aadhaar_image_url || stall?.aadhar_image_url) {
+        documents.push({
+          name: "Aadhaar Card Document",
+          url: u.aadhaar_image_url || stall?.aadhar_image_url,
+          type: "image",
+        });
+      }
+    } else {
+      if (u.dl_image_url) {
+        documents.push({
+          name: "Driving License Document",
+          url: u.dl_image_url,
+          type: "image",
+        });
+      }
+      if (u.aadhaar_image_url) {
+        documents.push({
+          name: "Aadhaar Card Document",
+          url: u.aadhaar_image_url,
+          type: "image",
+        });
+      }
+      if (u.vehicle_photo_url) {
+        documents.push({
+          name: `Vehicle Photo (${u.vehicle_model || "Vehicle"})`,
+          url: u.vehicle_photo_url,
+          type: "image",
+        });
+      }
+      if (u.vehicle_number_plate_image) {
+        documents.push({
+          name: "Vehicle Number Plate Photo",
+          url: u.vehicle_number_plate_image,
+          type: "image",
+        });
+      }
+      if (u.rc_image_url) {
+        documents.push({
+          name: "Vehicle Registration Certificate (RC Book)",
+          url: u.rc_image_url,
+          type: "image",
+        });
+      }
+      if (u.insurance_image_url) {
+        documents.push({
+          name: "Vehicle Insurance Certificate",
+          url: u.insurance_image_url,
+          type: "image",
+        });
+      }
+    }
+
+    // Security Audit Log: Record that this admin inspected this sensitive applicant KYC file
+    await logKycAccess({
+      req,
+      action: "INSPECT_APPLICANT",
+      targetUserId: u._id,
+      targetName: u.name,
+      targetRole: u.role,
+      details: {
+        documentsCount: documents.length,
+        status: normalizedStatus,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: u._id,
+        type: isVendor ? "vendor" : "rider",
+        name: isVendor ? stall?.name || `${u.name}'s Stall` : `${u.name} (Rider)`,
+        applicant: u.name,
+        email: u.email,
+        phone: u.phone_number || "N/A",
+        date: u.createdAt ? new Date(u.createdAt).toISOString().split("T")[0] : "Recent",
+        status: normalizedStatus,
+        docs: documents.length,
+        documents,
+        details: {
+          bankName: u.bank_name,
+          accountNumber: decryptPii(u.bank_account_no),
+          maskedAccountNumber: maskBankAccount(u.bank_account_no),
+          ifsc: u.bank_ifsc,
+          upiId: maskUpiId(u.upi_id),
+          vehicleModel: u.vehicle_model,
+          cluster: (stall?.cluster_id as any)?.name || "Default Cluster",
+          stallCategory: stall?.stall_category || "Fast Food & Dosa",
+          since: stall?.since || "",
+          openTill: stall?.open_till || "",
+          stallDescription: stall?.description || "",
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("Get Single Verification Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to fetch applicant verification details.",
+    });
+  }
+};
+
+/**
+ * @desc    Get KYC Security Audit Logs (DPDP Compliance & Anti-Scraping Monitoring)
+ * @route   GET /api/onboarding/verifications-audit
+ */
+export const getKycAuditLogs = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const logs = await KycAuditLog.find()
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: logs.length,
+      data: logs,
+    });
+  } catch (error: any) {
+    console.error("Get KYC Audit Logs Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to fetch KYC audit logs.",
+    });
+  }
+};
+
+/**
+ * @desc    Update Application Verification Status (Approve / Reject) with Audit Trail
  * @route   PUT /api/onboarding/verify/:id
  */
 export const updateVerificationStatus = async (req: Request, res: Response): Promise<void> => {
@@ -903,6 +1054,16 @@ export const updateVerificationStatus = async (req: Request, res: Response): Pro
         await stall.save();
       }
     }
+
+    // Security Audit Log: Record approval or rejection with Admin identity & IP
+    await logKycAccess({
+      req,
+      action: newStatus === "VERIFIED" ? "APPROVE_KYC" : newStatus === "REJECTED" ? "REJECT_KYC" : "RESET_KYC",
+      targetUserId: user._id,
+      targetName: user.name,
+      targetRole: user.role,
+      details: { newStatus },
+    });
 
     res.status(200).json({
       success: true,

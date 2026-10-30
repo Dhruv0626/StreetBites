@@ -50,6 +50,8 @@ export interface ClusterData {
 let cachedClustersData: { success: boolean; data?: ClusterData[]; message?: string } | null = null;
 let lastClustersFetchTime = 0;
 let ongoingRevalidation: Promise<{ success: boolean; data?: ClusterData[]; message?: string }> | null = null;
+const cachedClusterDetailMap = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache memory
 
 // SWR Event Subscribers (active components listen for live cache updates)
 const listeners = new Set<(data: ClusterData[]) => void>();
@@ -85,6 +87,7 @@ export const clusterService = {
   clearCache: () => {
     cachedClustersData = null;
     lastClustersFetchTime = 0;
+    cachedClusterDetailMap.clear();
   },
 
   // Silent background revalidation: fetches fresh data from MongoDB and broadcasts to subscribers
@@ -126,8 +129,8 @@ export const clusterService = {
 
     // If cache is available and forceRefresh is false
     if (!forceRefresh && cachedClustersData && cachedClustersData.data) {
-      // If cache is older than 5 seconds, trigger silent background revalidation
-      if (now - lastClustersFetchTime > 5000) {
+      // Revalidate in background only if cache is older than 5 minutes
+      if (now - lastClustersFetchTime > CACHE_TTL_MS) {
         clusterService.revalidate();
       }
       return cachedClustersData;
@@ -137,13 +140,27 @@ export const clusterService = {
     return clusterService.revalidate();
   },
 
-  // Fetch single cluster by ID
+  // Fetch single cluster by ID with 5-minute memory cache
   getClusterById: async (id: string, fresh = false) => {
+    const now = Date.now();
+    if (!fresh) {
+      const cached = cachedClusterDetailMap.get(id);
+      if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+    }
+
     const url = fresh ? `/clusters/${id}?fresh=true` : `/clusters/${id}`;
-    return apiRequest<ClusterData>(url, {
+    const res = await apiRequest<ClusterData>(url, {
       method: "GET",
       requiresAuth: false,
     });
+
+    if (res.success && res.data) {
+      cachedClusterDetailMap.set(id, { data: res, timestamp: now });
+    }
+
+    return res;
   },
 
   // Create new cluster in MongoDB

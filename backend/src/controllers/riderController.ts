@@ -11,53 +11,35 @@ import Address from "../models/Address.ts";
 import Feedback from "../models/Feedback.ts";
 import { geocodeAddressBackend } from "./addressController.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
+import { maskBankAccount, maskUpiId, encryptPii } from "../utils/securityPii.ts";
+import { memoryCache } from "../utils/cache.ts";
 
 /**
- * Helper to resolve rider user document from auth, cookies, or query params
+ * Helper to safely resolve rider user document from authenticated session.
+ * Strictly prevents silent fallback and data leakage.
  */
 const resolveRider = async (req: Request) => {
-  let userId =
-    (req as any).user?.id ||
-    (req as any).user?._id ||
-    req.query.riderId ||
-    req.query.userId ||
-    req.headers["x-user-id"] ||
-    req.headers["x-rider-id"];
-  const email = (req.query.email as string) || (req.headers["x-user-email"] as string);
+  const authUser = (req as any).user;
+  if (!authUser?.id) {
+    return null;
+  }
 
-  if (!userId && req.cookies?.accessToken) {
-    try {
-      const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "";
-      const decoded = jwt.verify(req.cookies.accessToken, accessSecret) as any;
-      if (decoded?.id) userId = decoded.id;
-    } catch (e) {
-      // ignore token parse error
+  let targetId = authUser.id;
+
+  // Admins may inspect a specific rider via query parameter
+  if (authUser.role === "ADMIN" && (req.query.riderId || req.query.userId)) {
+    const queryId = (req.query.riderId || req.query.userId) as string;
+    if (mongoose.Types.ObjectId.isValid(queryId)) {
+      targetId = queryId;
     }
   }
 
-  const authHeader = req.headers?.authorization;
-  if (!userId && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-    try {
-      const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "";
-      const decoded = jwt.verify(authHeader.split(" ")[1], accessSecret) as any;
-      if (decoded?.id) userId = decoded.id;
-    } catch (e) {
-      // ignore token parse error
-    }
+  if (!mongoose.Types.ObjectId.isValid(targetId)) {
+    return null;
   }
 
-  if (userId && mongoose.Types.ObjectId.isValid(userId as string)) {
-    const u = await User.findById(userId);
-    if (u) return u;
-  }
-  if (email) {
-    const u = await User.findOne({ email: email.toLowerCase() });
-    if (u) return u;
-  }
-
-  // Fallback to first active rider
-  const fallbackRider = await User.findOne({ role: "RIDER" });
-  return fallbackRider;
+  const rider = await User.findOne({ _id: targetId, role: "RIDER" });
+  return rider;
 };
 
 // Helper to calculate exact net COD debt held by rider (Order Total - Rider Delivery Earnings)
@@ -139,37 +121,192 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
       pendingCodOrders.reduce((sum, o) => sum + getOrderNetCodDebt(o), 0) * 100
     ) / 100;
 
-    // COD Transactions list (from pending and settled orders)
-    const allCodOrders = await Order.find({
-      rider_id: rider._id,
-      payment_method: "COD",
-      status: "DELIVERED",
-    })
-      .sort({ delivered_at: -1, createdAt: -1 })
-      .limit(10);
+    // 3. Authoritative Rider Fund & Debt Ledger (Credits, COD Debts, Settlements & Withdrawals)
+    const ledgerTransactions: any[] = [];
 
-    const codTransactions: any[] = [];
-    allCodOrders.forEach((o) => {
-      codTransactions.push({
-        id: `TX-${o._id.toString().slice(-6).toUpperCase()}`,
-        type: "collection" as const,
-        amount: `₹${getOrderNetCodDebt(o)}`,
-        order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
-        time: o.delivered_at ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
-        status: o.cod_deposit_status === "PENDING_DEPOSIT" ? "pending" : "completed",
-      });
-
-      if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
-        codTransactions.push({
-          id: `STL-${o._id.toString().slice(-6).toUpperCase()}`,
-          type: "settlement" as const,
-          amount: `₹${getOrderNetCodDebt(o)}`,
-          order: `MO-${o._id.toString().slice(-5).toUpperCase()}`,
-          time: o.updatedAt ? new Date(o.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Settled",
-          status: "completed",
+    // A. Outstanding COD Debts (Cash held from customer needing settlement)
+    pendingCodOrders.forEach((o) => {
+      const netDebt = getOrderNetCodDebt(o);
+      if (netDebt > 0) {
+        const orderCode = `MO-${o._id.toString().slice(-5).toUpperCase()}`;
+        ledgerTransactions.push({
+          id: `DB-${o._id.toString().slice(-6).toUpperCase()}`,
+          type: "debt" as const,
+          category: "cod_debt" as const,
+          title: `Cash Debt (Order ${orderCode})`,
+          amount: `₹${netDebt}`,
+          rawAmount: netDebt,
+          order: orderCode,
+          time: o.delivered_at
+            ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "Today",
+          date: o.delivered_at || o.createdAt,
+          status: "pending" as const,
+          note: "Unsettled cash collected from customer",
         });
       }
     });
+
+    // B. Real Online/UPI Settlements from Transaction collection
+    const riderTransactions = await Transaction.find({
+      "rider_payout.rider_id": rider._id,
+    })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    const settlementTransactions = riderTransactions.filter((t: any) =>
+      t.order_number?.startsWith("STL-") || t.note?.includes("COD Cash Debt Settlement")
+    );
+
+    settlementTransactions.forEach((t: any) => {
+      const amt = Number(t.total_order_amount || t.rider_payout?.cod_cash_collected || 0);
+      ledgerTransactions.push({
+        id: `STL-${t._id.toString().slice(-6).toUpperCase()}`,
+        type: "settlement" as const,
+        category: "cod_debt" as const,
+        title: "Settlement via Online/UPI",
+        amount: `₹${amt}`,
+        rawAmount: -amt,
+        order: t.order_number,
+        time: t.createdAt
+          ? new Date(t.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "Settled",
+        date: t.createdAt,
+        status: "completed" as const,
+        note: "Cash debt cleared and deposited to platform",
+      });
+    });
+
+    // If no Transaction documents exist for older settled orders, include them cleanly once (no fake duplication)
+    if (settlementTransactions.length === 0) {
+      const pastSettledOrders = await Order.find({
+        rider_id: rider._id,
+        payment_method: "COD",
+        cod_deposit_status: "DEPOSITED_TO_ADMIN",
+        status: "DELIVERED",
+      })
+        .sort({ updatedAt: -1 })
+        .limit(10)
+        .lean();
+
+      pastSettledOrders.forEach((o: any) => {
+        const netDebt = getOrderNetCodDebt(o);
+        const orderCode = `MO-${o._id.toString().slice(-5).toUpperCase()}`;
+        ledgerTransactions.push({
+          id: `STL-${o._id.toString().slice(-6).toUpperCase()}`,
+          type: "settlement" as const,
+          category: "cod_debt" as const,
+          title: `Settlement via Online/UPI`,
+          amount: `₹${netDebt}`,
+          rawAmount: -netDebt,
+          order: orderCode,
+          time: o.updatedAt
+            ? new Date(o.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "Settled",
+          date: o.updatedAt || o.delivered_at,
+          status: "completed" as const,
+          note: `COD Debt settled for ${orderCode}`,
+        });
+      });
+    }
+
+    // C. Rider Fund Credits: Delivery Fee Earnings from Completed Orders
+    const completedDeliveries = await Order.find({
+      rider_id: rider._id,
+      status: "DELIVERED",
+    })
+      .sort({ delivered_at: -1, createdAt: -1 })
+      .limit(15)
+      .lean();
+
+    completedDeliveries.forEach((o: any) => {
+      const earned = Number(o.rider_earned_fee || o.delivery_fee || 50);
+      const orderCode = `MO-${o._id.toString().slice(-5).toUpperCase()}`;
+      ledgerTransactions.push({
+        id: `CR-${o._id.toString().slice(-6).toUpperCase()}`,
+        type: "credit" as const,
+        category: "rider_fund" as const,
+        title: `Delivery Earnings (Order ${orderCode})`,
+        amount: `₹${earned}`,
+        rawAmount: earned,
+        order: orderCode,
+        time: o.delivered_at
+          ? new Date(o.delivered_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "Delivered",
+        date: o.delivered_at || o.createdAt,
+        status: "completed" as const,
+        note: "Delivery fee credited to wallet fund",
+      });
+    });
+
+    // D. Rider Fund Credits: Approved Compensations
+    const approvedClaims = await Feedback.find({
+      user_id: rider._id,
+      feedback_type: "COMPLAINT",
+      status: "RESOLVED",
+    })
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .lean();
+
+    approvedClaims.forEach((f: any) => {
+      const amountMatch = f.comment?.match(/Amount:\s*₹?(\d+)/i) || f.comment?.match(/₹(\d+)/);
+      const cleanAmount = amountMatch ? parseInt(amountMatch[1], 10) : 30;
+      const typeMatch = f.comment?.match(/\[CLAIM:\s*([^\]]+)\]/i);
+      const claimType = typeMatch ? typeMatch[1] : "Wait time compensation";
+      const orderMatch = f.comment?.match(/Order:\s*([A-Za-z0-9_-]+)/i);
+      const orderCode = orderMatch ? orderMatch[1] : "N/A";
+
+      ledgerTransactions.push({
+        id: `CMP-${f._id.toString().slice(-6).toUpperCase()}`,
+        type: "credit" as const,
+        category: "rider_fund" as const,
+        title: `Compensation: ${claimType}`,
+        amount: `₹${cleanAmount}`,
+        rawAmount: cleanAmount,
+        order: orderCode,
+        time: f.updatedAt
+          ? new Date(f.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "Approved",
+        date: f.updatedAt || f.createdAt,
+        status: "completed" as const,
+        note: "Approved compensation credited to wallet fund",
+      });
+    });
+
+    // E. Rider Fund Debits: Bank Payout Withdrawals
+    const withdrawalTransactions = riderTransactions.filter((t: any) =>
+      t.order_number?.startsWith("WD-") || t.note?.includes("Rider Payout Settlement")
+    );
+
+    withdrawalTransactions.forEach((t: any) => {
+      const amt = Number(t.total_order_amount || t.rider_payout?.amount || 0);
+      ledgerTransactions.push({
+        id: `WD-${t._id.toString().slice(-6).toUpperCase()}`,
+        type: "withdrawal" as const,
+        category: "rider_fund" as const,
+        title: "Bank Payout Withdrawal",
+        amount: `₹${amt}`,
+        rawAmount: -amt,
+        order: t.order_number,
+        time: t.createdAt
+          ? new Date(t.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "Processed",
+        date: t.createdAt,
+        status: "completed" as const,
+        note: t.note || "Payout transferred to registered bank account",
+      });
+    });
+
+    // Sort all ledger transactions strictly by date descending (newest first)
+    ledgerTransactions.sort((a, b) => {
+      const timeA = new Date(a.date || 0).getTime();
+      const timeB = new Date(b.date || 0).getTime();
+      return timeB - timeA;
+    });
+
+    const codTransactions = ledgerTransactions;
 
     // 3. Weekly earnings chart (Mon - Sun of current week)
     const now = new Date();
@@ -247,9 +384,9 @@ export const getRiderStats = async (req: Request, res: Response): Promise<void> 
         todayEarnings,
         walletBalance: Number(rider.wallet_balance) || 0,
         bankName: rider.bank_name || null,
-        bankAccountNo: rider.bank_account_no || null,
+        bankAccountNo: maskBankAccount(rider.bank_account_no),
         bankIfsc: rider.bank_ifsc || null,
-        upiId: rider.upi_id || null,
+        upiId: maskUpiId(rider.upi_id),
         completedTripsCount,
         timeOnline: rider.is_online ? "Active Now" : "Offline",
         currentCodDebt,
@@ -703,10 +840,14 @@ export const acceptQueueOrder = async (req: Request, res: Response): Promise<voi
       orderId: order._id,
     });
 
+    // Sanitize order payload to prevent leaking customer's delivery OTP to rider
+    const sanitizedOrder = order.toObject ? order.toObject() : { ...order };
+    delete (sanitizedOrder as any).delivery_otp;
+
     res.status(200).json({
       success: true,
       message: "Order accepted successfully!",
-      data: order,
+      data: sanitizedOrder,
     });
   } catch (error: any) {
     console.error("Accept Order Error:", error);
@@ -932,7 +1073,6 @@ export const getActiveRoute = async (req: Request, res: Response): Promise<void>
         orderId: `MO-${order._id.toString().slice(-5).toUpperCase()}`,
         rawId: order._id,
         status: order.status,
-        deliveryOtp: order.delivery_otp,
         paymentMethod: order.payment_method,
         totalAmount: order.total_amount,
         riderEarnedFee: order.rider_earned_fee || order.delivery_fee || 50,
@@ -1238,9 +1378,12 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
     // 3. Update Consolidated Single Transaction Document (Ensure payment_status is PAID)
     try {
       const existingTxn = await Transaction.findOne({ order_id: order._id });
+      const settlementStatus = isCod ? "PARTIALLY_SETTLED" : "COMPLETED";
+      const platformRevStatus = isCod ? "PENDING" : "COMPLETED";
+
       if (existingTxn) {
         existingTxn.payment_status = "PAID";
-        existingTxn.settlement_status = "COMPLETED";
+        existingTxn.settlement_status = settlementStatus;
         if (existingTxn.rider_payout) {
           existingTxn.rider_payout.rider_id = rider._id;
           existingTxn.rider_payout.amount = riderEarned;
@@ -1250,8 +1393,8 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
           existingTxn.rider_payout.payout_at = new Date();
         }
         if (existingTxn.platform_revenue) {
-          existingTxn.platform_revenue.status = "COMPLETED";
-          existingTxn.platform_revenue.realized_at = new Date();
+          existingTxn.platform_revenue.status = platformRevStatus;
+          existingTxn.platform_revenue.realized_at = isCod ? null : new Date();
         }
         if (Array.isArray(existingTxn.vendor_payouts)) {
           existingTxn.vendor_payouts.forEach((vp: any) => {
@@ -1274,11 +1417,12 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
               "rider_payout.payout_at": new Date(),
               "vendor_payouts.$[].status": "COMPLETED",
               "vendor_payouts.$[].payout_at": new Date(),
-              "platform_revenue.status": "COMPLETED",
-              "platform_revenue.realized_at": new Date(),
-              settlement_status: "COMPLETED",
+              "platform_revenue.status": platformRevStatus,
+              "platform_revenue.realized_at": isCod ? null : new Date(),
+              settlement_status: settlementStatus,
             },
-          }
+          },
+          { upsert: true, new: true }
         );
       }
     } catch (txnErr) {
@@ -1320,6 +1464,13 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
       }
     } catch (vendorNotifErr) {
       console.warn("Vendor payout notification error:", vendorNotifErr);
+    }
+
+    // Invalidate Admin overview and transactions cache so live dashboard immediately reflects settled payouts
+    try {
+      memoryCache.invalidateAdminStats();
+    } catch (cacheErr) {
+      console.warn("Could not invalidate admin cache on delivery:", cacheErr);
     }
 
     res.status(200).json({
@@ -1386,6 +1537,8 @@ export const settleRiderDebt = async (req: Request, res: Response): Promise<void
           },
         }
       ).catch(() => { });
+
+      memoryCache.invalidateAdminStats();
     }
 
     res.status(200).json({
@@ -1626,9 +1779,19 @@ export const updateRiderBankDetails = async (req: Request, res: Response): Promi
     }
 
     if (bankName) rider.bank_name = String(bankName).trim();
-    if (bankAccountNo) rider.bank_account_no = String(bankAccountNo).trim();
+    if (bankAccountNo) {
+      const cleanAcct = String(bankAccountNo).trim();
+      if (!cleanAcct.includes("•") && !cleanAcct.includes("*")) {
+        rider.bank_account_no = encryptPii(cleanAcct);
+      }
+    }
     if (bankIfsc) rider.bank_ifsc = String(bankIfsc).trim().toUpperCase();
-    if (upiId) rider.upi_id = String(upiId).trim();
+    if (upiId) {
+      const cleanUpi = String(upiId).trim();
+      if (!cleanUpi.includes("•") && !cleanUpi.includes("*")) {
+        rider.upi_id = cleanUpi;
+      }
+    }
     await rider.save();
 
     res.status(200).json({
@@ -1636,9 +1799,9 @@ export const updateRiderBankDetails = async (req: Request, res: Response): Promi
       message: "Bank details saved successfully.",
       data: {
         bankName: rider.bank_name,
-        bankAccountNo: rider.bank_account_no,
+        bankAccountNo: maskBankAccount(rider.bank_account_no),
         bankIfsc: rider.bank_ifsc,
-        upiId: rider.upi_id,
+        upiId: maskUpiId(rider.upi_id),
       },
     });
   } catch (error: any) {

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { Offer } from "../models/Offer.ts";
+import { memoryCache } from "../utils/cache.ts";
 
 /**
  * @desc    Get All Offers / Promotions (with optional search and audience filtering)
@@ -7,7 +8,16 @@ import { Offer } from "../models/Offer.ts";
  */
 export const getOffers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { audience, active, search } = req.query;
+    const { audience, active, search, fresh } = req.query;
+
+    const cacheKey = `offers_${audience || "all"}_${active !== undefined ? active : "all"}_${search || ""}`;
+    if (fresh !== "true") {
+      const cached = memoryCache.get(cacheKey);
+      if (cached) {
+        res.status(200).json(cached);
+        return;
+      }
+    }
 
     const filter: any = {};
     const conditions: any[] = [];
@@ -36,11 +46,16 @@ export const getOffers = async (req: Request, res: Response): Promise<void> => {
 
     let offers = await Offer.find(filter).sort({ createdAt: -1 });
 
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       count: offers.length,
       data: offers,
-    });
+    };
+
+    // Cache in RAM for 5 minutes (300 seconds)
+    memoryCache.set(cacheKey, responsePayload, 300);
+
+    res.status(200).json(responsePayload);
   } catch (error: any) {
     console.error("Get Offers Error:", error);
     res.status(500).json({
@@ -105,6 +120,8 @@ export const createOffer = async (req: Request, res: Response): Promise<void> =>
       stall_id: stall_id || null,
     });
 
+    memoryCache.invalidateOffers();
+
     res.status(201).json({
       success: true,
       message: "Offer created successfully.",
@@ -156,6 +173,7 @@ export const updateOffer = async (req: Request, res: Response): Promise<void> =>
     if (stall_id !== undefined) offer.stall_id = stall_id || null;
 
     await offer.save();
+    memoryCache.invalidateOffers();
 
     res.status(200).json({
       success: true,
@@ -185,6 +203,7 @@ export const toggleOfferStatus = async (req: Request, res: Response): Promise<vo
 
     offer.is_active = !offer.is_active;
     await offer.save();
+    memoryCache.invalidateOffers();
 
     res.status(200).json({
       success: true,
@@ -208,6 +227,8 @@ export const deleteOffer = async (req: Request, res: Response): Promise<void> =>
       res.status(404).json({ success: false, message: "Offer not found." });
       return;
     }
+
+    memoryCache.invalidateOffers();
 
     res.status(200).json({
       success: true,

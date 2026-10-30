@@ -6,46 +6,38 @@ import {
   removeCartItem,
   clearCart,
 } from "../controllers/cartController.ts";
-import { protect } from "../middlewares/authMiddleware.ts";
+import { protectOptional } from "../middlewares/authMiddleware.ts";
 
 const router = Router();
-
-// Middleware that tries JWT protect first, but allows request through if userId is provided in headers/body/query
-const optionalAuth = (req: any, res: any, next: any) => {
-  if (req.cookies?.accessToken || req.headers?.authorization) {
-    return protect(req, res, next);
-  }
-  next();
-};
 
 /**
  * @route   GET /api/cart
  * @desc    Get user's current multi-stall cart (populated with Khau Galli and stall details)
  */
-router.get("/", optionalAuth, getCart);
+router.get("/", protectOptional, getCart);
 
 /**
  * @route   POST /api/cart/add
  * @desc    Add item to cart with single Khau Galli validation & conflict detection
  */
-router.post("/add", optionalAuth, addToCart);
+router.post("/add", protectOptional, addToCart);
 
 /**
  * @route   PUT /api/cart/item
  * @desc    Update quantity of an item in cart
  */
-router.put("/item", optionalAuth, updateCartItem);
+router.put("/item", protectOptional, updateCartItem);
 
 /**
  * @route   DELETE /api/cart/item/:stallId/:itemId
  * @desc    Remove or decrement an item from cart
  */
-router.delete("/item/:stallId/:itemId", optionalAuth, removeCartItem);
+router.delete("/item/:stallId/:itemId", protectOptional, removeCartItem);
 
 /**
  * @route   DELETE /api/cart/clear
  * @desc    Clear entire cart
  */
-router.delete("/clear", optionalAuth, clearCart);
+router.delete("/clear", protectOptional, clearCart);
 
 export default router;

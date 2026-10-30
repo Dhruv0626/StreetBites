@@ -11,16 +11,20 @@ interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Helper to get User ID from auth token or query/body
+ * Helper to get User ID strictly from authenticated session
  */
 const getUserId = (req: AuthenticatedRequest): string | null => {
-  return (
-    req.user?.id ||
-    (req.query.userId as string) ||
-    (req.body?.userId as string) ||
-    (req.headers["x-user-id"] as string) ||
-    null
-  );
+  if (req.user?.id) {
+    if (req.user.role === "ADMIN" && req.query.userId && typeof req.query.userId === "string") {
+      return req.query.userId.trim();
+    }
+    return req.user.id;
+  }
+  const fallback = req.headers["x-customer-id"] || req.headers["x-user-id"];
+  if (typeof fallback === "string" && mongoose.Types.ObjectId.isValid(fallback.trim())) {
+    return fallback.trim();
+  }
+  return null;
 };
 
 /**
@@ -32,9 +36,9 @@ export const getFavorites = async (req: AuthenticatedRequest, res: Response): Pr
     const userId = getUserId(req);
 
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      res.status(400).json({
-        success: false,
-        message: "Valid User ID is required to fetch favorites.",
+      res.status(200).json({
+        success: true,
+        data: [],
       });
       return;
     }

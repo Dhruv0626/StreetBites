@@ -55,7 +55,7 @@ export const onboardingService = {
     });
   },
 
-  // Get All Verification Applications (Admin)
+  // Get All Verification Applications (Admin Summary)
   getVerifications: async (params?: { status?: string; type?: string }) => {
     const query = new URLSearchParams();
     if (params?.status && params.status !== "all") query.append("status", params.status);
@@ -63,6 +63,20 @@ export const onboardingService = {
 
     const queryString = query.toString() ? `?${query.toString()}` : "";
     return apiRequest<any[]>(`/onboarding/verifications${queryString}`, {
+      method: "GET",
+    });
+  },
+
+  // Get Single Verification Application with Full KYC Documents (Audited on-demand inspection)
+  getVerificationById: async (id: string) => {
+    return apiRequest<any>(`/onboarding/verifications/${id}`, {
+      method: "GET",
+    });
+  },
+
+  // Get KYC Security Audit Logs (DPDP Compliance & Anti-Scraping Monitoring)
+  getKycAuditLogs: async () => {
+    return apiRequest<any[]>("/onboarding/verifications-audit", {
       method: "GET",
     });
   },

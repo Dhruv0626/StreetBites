@@ -7,15 +7,18 @@ import {
   toggleOfferStatus,
   deleteOffer,
 } from "../controllers/offerController.ts";
+import { protect, authorize } from "../middlewares/authMiddleware.ts";
 
 const router = Router();
 
-// Promotion & Offer Endpoints (GET, POST, PUT, DELETE)
+// Public Promotion & Offer Endpoints
 router.get("/", getOffers);
 router.get("/:id", getOfferById);
-router.post("/", createOffer);
-router.put("/:id", updateOffer);
-router.put("/:id/toggle", toggleOfferStatus);
-router.delete("/:id", deleteOffer);
+
+// Admin-Only Promotion Management Endpoints
+router.post("/", protect, authorize("ADMIN"), createOffer);
+router.put("/:id", protect, authorize("ADMIN"), updateOffer);
+router.put("/:id/toggle", protect, authorize("ADMIN"), toggleOfferStatus);
+router.delete("/:id", protect, authorize("ADMIN"), deleteOffer);
 
 export default router;

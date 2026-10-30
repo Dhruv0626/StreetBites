@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, AlertCircle, CheckCircle2, CreditCard, Loader2 } from 'lucide-react';
+import { IndianRupee, AlertCircle, CheckCircle2, CreditCard, Loader2, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import riderService from '../../services/riderService';
 import { razorpayService } from '../../services/razorpayService';
@@ -12,6 +12,7 @@ export const RiderDebtPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSettling, setIsSettling] = useState<boolean>(false);
   const [settleMessage, setSettleMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'debt' | 'credit' | 'settlement'>('all');
 
   const fetchDebtData = async () => {
     try {
@@ -172,53 +173,158 @@ export const RiderDebtPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Transactions List */}
+      {/* Rider Fund & Debt Ledger */}
       <div className="bg-white border border-[#EFEBE4] rounded-3xl p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-bold text-stone-900">Recent COD Collections & Settlements</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-lg font-bold text-stone-900">Rider Fund & Debt Ledger</h2>
+            <p className="text-xs text-stone-500 mt-0.5">Real-time ledger of delivery fee earnings credited, COD cash debt, and online settlements.</p>
+          </div>
+          
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-[#F5F2EB] rounded-2xl shrink-0 overflow-x-auto">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'debt', label: 'COD Debt' },
+              { id: 'credit', label: 'Fund Credits' },
+              { id: 'settlement', label: 'Settlements' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
         
         {isLoading ? (
           <div className="py-12 flex justify-center items-center">
             <Loader2 className="w-8 h-8 text-[#D94A38] animate-spin" />
           </div>
-        ) : transactions.length === 0 ? (
+        ) : transactions.filter(tx => {
+            if (activeTab === 'debt') return tx.type === 'debt' || tx.type === 'collection';
+            if (activeTab === 'credit') return tx.type === 'credit';
+            if (activeTab === 'settlement') return tx.type === 'settlement' || tx.type === 'withdrawal';
+            return true;
+          }).length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
               <CheckCircle2 className="w-7 h-7 text-emerald-600" />
             </div>
-            <h3 className="font-bold text-stone-900 text-base">No COD Transactions Yet</h3>
+            <h3 className="font-bold text-stone-900 text-base">No Records in Selected View</h3>
             <p className="text-xs text-stone-500 max-w-sm">
-              When you complete Cash on Delivery orders, recorded cash receipts and your settlements will be listed here.
+              {activeTab === 'debt'
+                ? 'You currently have no outstanding COD cash debt!'
+                : activeTab === 'credit'
+                ? 'Delivery earnings and compensation credits will appear here once trips are completed.'
+                : 'Settlements and payout withdrawals will be recorded here.'}
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {transactions.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-4 bg-white border border-[#EFEBE4] rounded-2xl">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                    tx.type === 'settlement' ? 'bg-emerald-50 text-emerald-600' : 'bg-[#FCE8E6] text-[#D94A38]'
-                  }`}>
-                    {tx.type === 'settlement' ? <CheckCircle2 className="w-5 h-5" /> : <IndianRupee className="w-5 h-5" />}
+          <div className="space-y-3">
+            {transactions
+              .filter(tx => {
+                if (activeTab === 'debt') return tx.type === 'debt' || tx.type === 'collection';
+                if (activeTab === 'credit') return tx.type === 'credit';
+                if (activeTab === 'settlement') return tx.type === 'settlement' || tx.type === 'withdrawal';
+                return true;
+              })
+              .map(tx => {
+                const isCredit = tx.type === 'credit';
+                const isDebt = tx.type === 'debt' || tx.type === 'collection';
+                const isSettlement = tx.type === 'settlement';
+                const isWithdrawal = tx.type === 'withdrawal';
+
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between p-4 bg-white border border-[#EFEBE4] rounded-2xl hover:border-stone-300 transition-colors"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                          isCredit
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : isDebt
+                            ? 'bg-amber-50 text-amber-600'
+                            : isSettlement
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-stone-100 text-stone-600'
+                        }`}
+                      >
+                        {isCredit ? (
+                          <TrendingUp className="w-5 h-5" />
+                        ) : isDebt ? (
+                          <IndianRupee className="w-5 h-5" />
+                        ) : isSettlement ? (
+                          <CheckCircle2 className="w-5 h-5" />
+                        ) : (
+                          <CreditCard className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-stone-900 truncate">
+                            {tx.title || (isSettlement ? 'Settlement via Online/UPI' : `Order ${tx.order || tx.id}`)}
+                          </h4>
+                          {tx.order && (
+                            <span className="text-[10px] font-mono font-bold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
+                              {tx.order}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-2">
+                          <span>{tx.time}</span>
+                          {tx.note && <span>· {tx.note}</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <span
+                        className={`text-base font-extrabold ${
+                          isCredit
+                            ? 'text-emerald-600'
+                            : isSettlement
+                            ? 'text-emerald-600'
+                            : isDebt
+                            ? 'text-stone-900'
+                            : 'text-stone-800'
+                        }`}
+                      >
+                        {isCredit ? '+' : isSettlement || isWithdrawal ? '-' : ''}
+                        {tx.amount.replace(/^[-+]/, '')}
+                      </span>
+                      {isDebt && tx.status === 'pending' && (
+                        <span className="block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 uppercase tracking-widest mt-0.5">
+                          Outstanding Debt
+                        </span>
+                      )}
+                      {isCredit && (
+                        <span className="block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-widest mt-0.5">
+                          Credited to Fund
+                        </span>
+                      )}
+                      {isSettlement && (
+                        <span className="block text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-widest mt-0.5">
+                          Debt Cleared
+                        </span>
+                      )}
+                      {isWithdrawal && (
+                        <span className="block text-[10px] font-bold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200 uppercase tracking-widest mt-0.5">
+                          Transferred
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-stone-900">
-                      {tx.type === 'settlement' ? 'Settlement via Online/UPI' : `Collected for Order ${tx.order || tx.id}`}
-                    </h4>
-                    <span className="text-xs text-stone-500">{tx.time}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className={`text-base font-bold ${tx.type === 'settlement' ? 'text-emerald-600' : 'text-stone-900'}`}>
-                    {tx.type === 'settlement' ? '-' : '+'}{tx.amount}
-                  </span>
-                  {tx.status === 'pending' && (
-                    <span className="block text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Unsettled</span>
-                  )}
-                </div>
-              </div>
-            ))}
+                );
+              })}
           </div>
         )}
       </div>

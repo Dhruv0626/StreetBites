@@ -8,12 +8,54 @@ export interface ApiResponse<T = any> {
 
 export const adminService = {
   // Transactions & Financials
-  getTransactions: async (): Promise<ApiResponse<{ all: any[]; payouts: any[]; refunds: any[]; withdrawals?: any[]; totalWithdrawn?: number; floatingCodCash?: number }>> => {
+  getTransactions: async (): Promise<ApiResponse<{
+    all: any[];
+    payouts: any[];
+    refunds: any[];
+    withdrawals?: any[];
+    totalWithdrawn?: number;
+    floatingCodCash?: number;
+    pendingCodCollection?: number;
+    pendingCodRiders?: {
+      riderId: string;
+      riderName: string;
+      riderPhone: string;
+      ordersCount: number;
+      orderIds: string[];
+      totalDebt: number;
+      lastDeliveredAt: string;
+    }[];
+    totalPlatformRevenue?: number;
+    platformRevenue?: number;
+    clearedCodDebt?: number;
+    onlineGrossInflow?: number;
+    onlineSettledVendorPayouts?: number;
+    onlineSettledRiderPayouts?: number;
+    codSettledVendorPayouts?: number;
+    vendorPayouts?: {
+      total: number;
+      pending: number;
+      settled: number;
+    };
+    riderPayouts?: {
+      total: number;
+      pending: number;
+      settled: number;
+    };
+  }>> => {
     return api.get('/admin/transactions');
   },
 
   processPayouts: async (transactionId?: string): Promise<ApiResponse> => {
     return api.post('/admin/transactions/process-payouts', { transactionId });
+  },
+
+  settleRiderCod: async (riderId: string): Promise<ApiResponse> => {
+    return api.post('/admin/transactions/settle-rider-cod', { riderId });
+  },
+
+  processRefund: async (orderId: string): Promise<ApiResponse> => {
+    return api.post('/admin/transactions/process-refund', { orderId });
   },
 
   // Complaints & Disputes
@@ -55,8 +97,8 @@ export const adminService = {
     return api.get('/admin/counts');
   },
 
-  // Admin Platform Overview Stats (Users, Revenue, 7-Day Chart, Recent Orders)
-  getOverviewStats: async (): Promise<ApiResponse<{
+  // Admin Platform Overview Stats (Users, Revenue, 7-Day Chart, Recent Orders, Rankings)
+  getOverviewStats: async (params?: { fresh?: boolean }): Promise<ApiResponse<{
     customers?: number;
     vendors?: number;
     riders?: number;
@@ -68,15 +110,41 @@ export const adminService = {
     todayRevenue?: number;
     totalPlatformRevenue?: number;
     todayPlatformRevenue?: number;
+    totalPlatformFee?: number;
+    todayPlatformFee?: number;
+    clearedCodDebt?: number;
+    todayClearedCodDebt?: number;
+    onlineGrossInflow?: number;
+    onlineSettledVendorPayouts?: number;
+    onlineSettledRiderPayouts?: number;
+    codSettledVendorPayouts?: number;
     totalGrossRevenue?: number;
     todayGrossRevenue?: number;
+    pendingCodCollection?: number;
+    pendingCodDebt?: number;
+    vendorPayouts?: {
+      total: number;
+      pending: number;
+      settled: number;
+    };
+    riderPayouts?: {
+      total: number;
+      pending: number;
+      settled: number;
+    };
+    ranks?: {
+      vendors: any[];
+      riders: any[];
+      clusters: any[];
+    };
     pendingApprovals?: number;
     revenueChart?: { name: string; revenue: number }[];
     revenueTrend?: { name: string; revenue: number }[];
     recentOrders?: any[];
     stats?: any;
   }>> => {
-    return api.get('/admin/overview');
+    const q = params?.fresh ? '?fresh=true' : '';
+    return api.get(`/admin/overview${q}`);
   },
 };
 

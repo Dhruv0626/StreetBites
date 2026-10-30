@@ -417,6 +417,8 @@ export const Checkout: React.FC<CheckoutProps> = ({
           : [72.5815, 23.1118];
 
     const customerId = user?.id || (user as any)?._id || localStorage.getItem('streetbites_customer_id');
+    const effectiveRoadDist = Number(currentDistanceKm.toFixed(1));
+    localStorage.setItem('last_checkout_distance', String(effectiveRoadDist));
 
     const payload = {
       customer_id: customerId,
@@ -434,12 +436,18 @@ export const Checkout: React.FC<CheckoutProps> = ({
       delivery_address: fullAddress,
       delivery_coordinates: resolvedDeliveryCoords,
       delivery_notes: deliveryNotes,
+      distance_km: effectiveRoadDist,
     };
 
     if (paymentMethod === 'cod') {
       try {
         const res = await razorpayService.createCodOrder(payload);
         if (res.success) {
+          const rawRes: any = res;
+          const orderId = rawRes.data?.orderId || rawRes.orderId;
+          const orderNumber = rawRes.data?.orderNumber || rawRes.orderNumber;
+          if (orderId) localStorage.setItem(`order_distance_${orderId}`, String(effectiveRoadDist));
+          if (orderNumber) localStorage.setItem(`order_distance_${orderNumber}`, String(effectiveRoadDist));
           clearCart();
           if (typeof onConfirmOrder === 'function') {
             onConfirmOrder(cartItems, 'COD');
@@ -485,9 +493,15 @@ export const Checkout: React.FC<CheckoutProps> = ({
                 delivery_address: payload.delivery_address,
                 delivery_coordinates: payload.delivery_coordinates,
                 delivery_notes: payload.delivery_notes,
+                distance_km: effectiveRoadDist,
               });
 
               if (verifyRes.success) {
+                const rawVRes: any = verifyRes;
+                const orderId = rawVRes.data?.orderId || rawVRes.orderId;
+                const orderNumber = rawVRes.data?.orderNumber || rawVRes.orderNumber;
+                if (orderId) localStorage.setItem(`order_distance_${orderId}`, String(effectiveRoadDist));
+                if (orderNumber) localStorage.setItem(`order_distance_${orderNumber}`, String(effectiveRoadDist));
                 clearCart();
                 if (typeof onConfirmOrder === 'function') {
                   onConfirmOrder(

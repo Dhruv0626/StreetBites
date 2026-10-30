@@ -23,7 +23,7 @@ import { notificationService } from '../../services/notificationService';
 export const CustomerHeader: React.FC = () => {
   const navigate = useNavigate();
   const { cartItems } = useCart();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
 
@@ -133,7 +133,7 @@ export const CustomerHeader: React.FC = () => {
     }
   };
 
-  const displayName = isAuthenticated && user ? user.name.split(' ')[0] : 'Sign In';
+  const displayName = isAuthenticated && user ? user.name.split(' ')[0] : (isLoading ? '...' : 'Sign In');
 
   // Format real display labels for header location
   const locationTitle = activeAddress ? activeAddress.label : 'Select Location';
@@ -297,7 +297,10 @@ export const CustomerHeader: React.FC = () => {
             </button>
 
             <button
-              onClick={() => navigate(isAuthenticated ? '/profile' : '/signin')}
+              onClick={() => {
+                if (isLoading) return;
+                navigate(isAuthenticated ? '/profile' : '/signin');
+              }}
               className="flex items-center gap-2 text-[#4B5563] cursor-pointer hover:text-[#1C1917] font-bold text-sm transition-colors"
             >
               <div className="w-8 h-8 rounded-full bg-[#F0ECE4] text-[#D94A38] font-bold text-xs flex items-center justify-center overflow-hidden border border-[#E8E2D7]">
@@ -337,7 +340,10 @@ export const CustomerHeader: React.FC = () => {
           </button>
 
           <button
-            onClick={() => navigate(isAuthenticated ? '/profile' : '/signin')}
+            onClick={() => {
+              if (isLoading) return;
+              navigate(isAuthenticated ? '/profile' : '/signin');
+            }}
             className="w-9 h-9 rounded-full bg-[#E5E0D8] text-[#4B5563] text-xs font-semibold flex items-center justify-center border border-[#DCD6CC] overflow-hidden"
           >
             {isAuthenticated && user?.name ? (

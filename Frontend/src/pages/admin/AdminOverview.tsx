@@ -9,7 +9,11 @@ import {
   Clock,
   ArrowUpRight,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Trophy,
+  Banknote,
+  Star,
+  MapPin
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { adminService } from '../../services/adminService';
@@ -41,6 +45,27 @@ export interface OverviewStatsState {
   liveOrders: number;
   totalRevenue: number;
   todayRevenue: number;
+  clearedCodDebt: number;
+  onlineGrossInflow: number;
+  onlineSettledVendorPayouts: number;
+  onlineSettledRiderPayouts: number;
+  codSettledVendorPayouts: number;
+  pendingCodCollection: number;
+  vendorPayouts: {
+    total: number;
+    pending: number;
+    settled: number;
+  };
+  riderPayouts: {
+    total: number;
+    pending: number;
+    settled: number;
+  };
+  ranks: {
+    vendors: any[];
+    riders: any[];
+    clusters: any[];
+  };
   pendingApprovals: number;
   revenueChart: { name: string; revenue: number }[];
   recentOrders: RecentOrder[];
@@ -57,20 +82,30 @@ export const AdminOverview: React.FC = () => {
     liveOrders: 0,
     totalRevenue: 0,
     todayRevenue: 0,
+    clearedCodDebt: 0,
+    onlineGrossInflow: 0,
+    onlineSettledVendorPayouts: 0,
+    onlineSettledRiderPayouts: 0,
+    codSettledVendorPayouts: 0,
+    pendingCodCollection: 0,
+    vendorPayouts: { total: 0, pending: 0, settled: 0 },
+    riderPayouts: { total: 0, pending: 0, settled: 0 },
+    ranks: { vendors: [], riders: [], clusters: [] },
     pendingApprovals: 0,
     revenueChart: [],
     recentOrders: [],
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [activeRankTab, setActiveRankTab] = useState<'vendors' | 'riders' | 'clusters'>('vendors');
 
   const loadOverviewData = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     try {
-      const res = await adminService.getOverviewStats();
+      const res = await adminService.getOverviewStats({ fresh: showRefresh });
       if (res.success && res.data) {
-        const d = res.data;
-        const s = d.stats || {};
+        const d: any = res.data;
+        const s: any = d.stats || {};
         const chartList = Array.isArray(d.revenueChart) && d.revenueChart.length > 0
           ? d.revenueChart
           : Array.isArray(d.revenueTrend) && d.revenueTrend.length > 0
@@ -78,6 +113,10 @@ export const AdminOverview: React.FC = () => {
             : Array.isArray(s.revenueTrend) && s.revenueTrend.length > 0
               ? s.revenueTrend
               : [];
+
+        const vp = d.vendorPayouts || s.vendorPayouts || { total: 0, pending: 0, settled: 0 };
+        const rp = d.riderPayouts || s.riderPayouts || { total: 0, pending: 0, settled: 0 };
+        const rk = d.ranks || s.ranks || { vendors: [], riders: [], clusters: [] };
 
         setStats({
           customers: Number(d.customers ?? s.customers ?? 0),
@@ -89,6 +128,27 @@ export const AdminOverview: React.FC = () => {
           liveOrders: Number(d.liveOrders ?? s.liveOrders ?? 0),
           totalRevenue: Number(d.totalPlatformRevenue ?? d.totalRevenue ?? s.totalPlatformRevenue ?? s.totalRevenue ?? 0),
           todayRevenue: Number(d.todayPlatformRevenue ?? d.todayRevenue ?? s.todayPlatformRevenue ?? s.todayRevenue ?? 0),
+          clearedCodDebt: Number(d.clearedCodDebt ?? s.clearedCodDebt ?? 0),
+          onlineGrossInflow: Number(d.onlineGrossInflow ?? s.onlineGrossInflow ?? 0),
+          onlineSettledVendorPayouts: Number(d.onlineSettledVendorPayouts ?? s.onlineSettledVendorPayouts ?? 0),
+          onlineSettledRiderPayouts: Number(d.onlineSettledRiderPayouts ?? s.onlineSettledRiderPayouts ?? 0),
+          codSettledVendorPayouts: Number(d.codSettledVendorPayouts ?? s.codSettledVendorPayouts ?? 0),
+          pendingCodCollection: Number(d.pendingCodCollection ?? s.pendingCodCollection ?? 0),
+          vendorPayouts: {
+            total: Number(vp.total || 0),
+            pending: Number(vp.pending || 0),
+            settled: Number(vp.settled || 0),
+          },
+          riderPayouts: {
+            total: Number(rp.total || 0),
+            pending: Number(rp.pending || 0),
+            settled: Number(rp.settled || 0),
+          },
+          ranks: {
+            vendors: Array.isArray(rk.vendors) ? rk.vendors : [],
+            riders: Array.isArray(rk.riders) ? rk.riders : [],
+            clusters: Array.isArray(rk.clusters) ? rk.clusters : [],
+          },
           pendingApprovals: Number(d.pendingApprovals ?? s.pendingApprovals ?? 0),
           revenueChart: chartList.map((item: any) => ({
             name: String(item.name || 'Day'),
@@ -192,13 +252,13 @@ export const AdminOverview: React.FC = () => {
         </div>
       </div>
 
-      {/* ── High-Impact Executive KPI Cards ── */}
+      {/* ── Financial Command & Operations KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Total Platform Revenue */}
+        {/* 1. Total Platform Revenue */}
         <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-300 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Platform Revenue</span>
-            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80 shadow-2xs group-hover:bg-slate-900 group-hover:text-white transition-all">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/80 shadow-2xs group-hover:bg-slate-900 group-hover:text-white transition-all">
               <IndianRupee className="w-5 h-5" />
             </div>
           </div>
@@ -211,15 +271,97 @@ export const AdminOverview: React.FC = () => {
               </h3>
             )}
             <div className="mt-2.5 flex items-center gap-2 text-xs font-bold text-slate-600">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-200/80">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 +₹{Number(stats.todayRevenue || 0).toLocaleString('en-IN')} today
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Net commission & platform earnings</p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-1.5 leading-relaxed">
+              Online inflows (- payouts) + ₹{Number(stats.clearedCodDebt || 0).toLocaleString('en-IN')} cleared COD collections (- COD vendor payouts)
+            </p>
           </div>
         </div>
 
+        {/* 2. Platform Pending COD Collection */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Pending COD Collection</span>
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/80 shadow-2xs group-hover:bg-amber-600 group-hover:text-white transition-all">
+              <Banknote className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            {isLoading ? (
+              <Skeleton className="w-24 h-9 rounded-lg" />
+            ) : (
+              <h3 className="text-3xl sm:text-4xl font-black text-amber-600 font-mono tracking-tight">
+                ₹{Number(stats.pendingCodCollection || 0).toLocaleString('en-IN')}
+              </h3>
+            )}
+            <div className="mt-2.5 flex items-center justify-between text-xs font-bold text-slate-500">
+              <span className="text-amber-700 font-semibold">Held by delivery riders</span>
+              <Link
+                to="/admin/Dashboard/transactions"
+                className="text-slate-900 hover:text-[#D94A38] flex items-center gap-0.5 font-extrabold hover:underline transition-colors"
+              >
+                Settle <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Floating cash debt in field awaiting deposit</p>
+          </div>
+        </div>
+
+        {/* 3. Vendor Payouts */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Vendor Payouts</span>
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80 shadow-2xs group-hover:bg-slate-900 group-hover:text-white transition-all">
+              <Store className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            {isLoading ? (
+              <Skeleton className="w-24 h-9 rounded-lg" />
+            ) : (
+              <h3 className="text-3xl sm:text-4xl font-black text-slate-900 font-mono tracking-tight">
+                ₹{Number(stats.vendorPayouts.total || 0).toLocaleString('en-IN')}
+              </h3>
+            )}
+            <div className="mt-2.5 text-xs font-bold text-slate-600 flex items-center gap-1.5">
+              <span className="text-emerald-700 font-extrabold">₹{Number(stats.vendorPayouts.settled || 0).toLocaleString('en-IN')} settled</span>
+              <span className="text-slate-400">• ₹{Number(stats.vendorPayouts.pending || 0).toLocaleString('en-IN')} pending</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1.5">95% food revenue for participating stalls</p>
+          </div>
+        </div>
+
+        {/* 4. Rider Payouts */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-300 relative overflow-hidden group">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Rider Payouts</span>
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80 shadow-2xs group-hover:bg-slate-900 group-hover:text-white transition-all">
+              <Bike className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            {isLoading ? (
+              <Skeleton className="w-24 h-9 rounded-lg" />
+            ) : (
+              <h3 className="text-3xl sm:text-4xl font-black text-slate-900 font-mono tracking-tight">
+                ₹{Number(stats.riderPayouts.total || 0).toLocaleString('en-IN')}
+              </h3>
+            )}
+            <div className="mt-2.5 text-xs font-bold text-slate-600 flex items-center gap-1.5">
+              <span className="text-emerald-700 font-extrabold">₹{Number(stats.riderPayouts.settled || 0).toLocaleString('en-IN')} paid</span>
+              <span className="text-slate-400">• ₹{Number(stats.riderPayouts.pending || 0).toLocaleString('en-IN')} in transit</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1.5">100% delivery fees + surge incentives</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Operational Dispatch & Queue Telemetry ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
         {/* Live Active Orders */}
         <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-300 relative overflow-hidden group">
           <div className="flex items-center justify-between">
@@ -353,7 +495,231 @@ export const AdminOverview: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Charts & System Telemetry ── */}
+      {/* ── Official Platform Performance Rankings (Leaderboards) ── */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">Platform Performance Rankings</h2>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md border border-amber-200">
+                Official Ranks
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">Top-ranked food vendors, delivery riders, and Khau Galli clusters.</p>
+          </div>
+
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl shrink-0 self-start sm:self-auto">
+            <button
+              onClick={() => setActiveRankTab('vendors')}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeRankTab === 'vendors' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Top Vendors ({stats.ranks.vendors?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveRankTab('riders')}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeRankTab === 'riders' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Top Riders ({stats.ranks.riders?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveRankTab('clusters')}
+              className={`text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeRankTab === 'clusters' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Top Khau Gallis ({stats.ranks.clusters?.length || 0})
+            </button>
+          </div>
+        </div>
+
+        {/* Vendors Leaderboard */}
+        {activeRankTab === 'vendors' && (
+          <div className="space-y-3">
+            {stats.ranks.vendors && stats.ranks.vendors.length > 0 ? (
+              stats.ranks.vendors.map((v: any, idx: number) => {
+                const rankColor =
+                  idx === 0
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : idx === 1
+                    ? 'bg-slate-200 text-slate-800 border-slate-300'
+                    : idx === 2
+                    ? 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200';
+
+                return (
+                  <div
+                    key={v.id || idx}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 transition-all hover:shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs border shrink-0 ${rankColor}`}>
+                        #{v.rank || idx + 1}
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#D94A38] flex items-center justify-center shrink-0 border border-orange-100">
+                        <Store className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-slate-900 truncate">{v.name}</h4>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            {v.rating}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
+                          {v.ownerName} · <span className="font-semibold text-slate-700">{v.clusterName}</span> ({v.city})
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Orders</span>
+                        <span className="text-sm font-bold text-slate-900">{v.totalOrders} fulfilled</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Platform Revenue (15%)</span>
+                        <span className="text-sm font-black text-emerald-600 font-mono">
+                          ₹{Number(v.totalRevenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                No vendor sales records yet. Completed stall orders will rank top vendors automatically.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Riders Leaderboard */}
+        {activeRankTab === 'riders' && (
+          <div className="space-y-3">
+            {stats.ranks.riders && stats.ranks.riders.length > 0 ? (
+              stats.ranks.riders.map((r: any, idx: number) => {
+                const rankColor =
+                  idx === 0
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : idx === 1
+                    ? 'bg-slate-200 text-slate-800 border-slate-300'
+                    : idx === 2
+                    ? 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200';
+
+                return (
+                  <div
+                    key={r.id || idx}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 transition-all hover:shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs border shrink-0 ${rankColor}`}>
+                        #{r.rank || idx + 1}
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                        <Bike className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-slate-900 truncate">{r.name}</h4>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            {r.rating}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
+                          Phone: <span className="font-mono text-slate-700">{r.phone}</span> · On-Time: <span className="text-emerald-700 font-bold">{r.onTimeRate}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Trips</span>
+                        <span className="text-sm font-bold text-slate-900">{r.completedDeliveries} completed</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Earnings</span>
+                        <span className="text-sm font-black text-emerald-600 font-mono">
+                          ₹{Number(r.totalEarnings || 0).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                No delivery trips recorded yet. Completed rider deliveries will populate leaderboard.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Khau Gallis Leaderboard */}
+        {activeRankTab === 'clusters' && (
+          <div className="space-y-3">
+            {stats.ranks.clusters && stats.ranks.clusters.length > 0 ? (
+              stats.ranks.clusters.map((c: any, idx: number) => {
+                const rankColor =
+                  idx === 0
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : idx === 1
+                    ? 'bg-slate-200 text-slate-800 border-slate-300'
+                    : idx === 2
+                    ? 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200';
+
+                return (
+                  <div
+                    key={c.id || idx}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 transition-all hover:shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs border shrink-0 ${rankColor}`}>
+                        #{c.rank || idx + 1}
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-slate-900 truncate">{c.name}</h4>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
+                          City: <span className="font-semibold text-slate-700">{c.city}</span> · Active Stalls: <span className="font-bold text-slate-900">{c.activeStalls}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Orders</span>
+                        <span className="text-sm font-bold text-slate-900">{c.totalOrders} orders</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Gross Volume</span>
+                        <span className="text-sm font-black text-slate-900 font-mono">
+                          ₹{Number(c.totalVolume || 0).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                No Khau Galli order volumes recorded yet.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main 7-Day Revenue Trend Chart */}
         <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col min-h-[420px]">
