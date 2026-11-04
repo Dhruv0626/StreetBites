@@ -35,7 +35,7 @@ const onRefreshed = (success: boolean) => {
 
 const refreshAuthTokens = async (): Promise<boolean> => {
   try {
-    const storedRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+    const storedRefreshToken = typeof window !== "undefined" && !import.meta.env.PROD ? localStorage.getItem("streetbites_refresh_token") : null;
     const res = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -48,8 +48,8 @@ const refreshAuthTokens = async (): Promise<boolean> => {
     }
 
     const data = await res.json().catch(() => ({}));
-    if (data && data.success && data.data?.accessToken) {
-      if (typeof window !== "undefined") {
+    if (data && data.success) {
+      if (typeof window !== "undefined" && !import.meta.env.PROD && data.data?.accessToken) {
         localStorage.setItem("streetbites_access_token", data.data.accessToken);
         if (data.data.refreshToken) {
           localStorage.setItem("streetbites_refresh_token", data.data.refreshToken);
@@ -82,9 +82,10 @@ export async function apiRequest<T = any>(
     return Boolean(t && t !== "undefined" && t !== "null" && t !== "[object Object]" && t.trim().length > 20);
   };
 
+  const isProd = import.meta.env.PROD;
   const storedCustomerId = typeof window !== "undefined" ? localStorage.getItem("streetbites_customer_id") : null;
-  const storedToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
-  const storedRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+  const storedToken = typeof window !== "undefined" && !isProd ? localStorage.getItem("streetbites_access_token") : null;
+  const storedRefreshToken = typeof window !== "undefined" && !isProd ? localStorage.getItem("streetbites_refresh_token") : null;
   const configHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     ...(isValidToken(storedToken) ? { Authorization: `Bearer ${storedToken}` } : {}),
@@ -108,8 +109,8 @@ export async function apiRequest<T = any>(
 
     clearTimeout(timeoutId);
 
-    // Pick up sliding session tokens from response headers
-    if (typeof window !== "undefined") {
+    // Pick up sliding session tokens from response headers (development only)
+    if (typeof window !== "undefined" && !import.meta.env.PROD) {
       const headerAccessToken = response.headers.get("x-access-token");
       const headerRefreshToken = response.headers.get("x-refresh-token");
       if (headerAccessToken) localStorage.setItem("streetbites_access_token", headerAccessToken);
@@ -126,8 +127,8 @@ export async function apiRequest<T = any>(
         if (refreshed) {
           onRefreshed(true);
           // Retry original request with newly minted token
-          const freshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
-          const freshRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+          const freshToken = typeof window !== "undefined" && !import.meta.env.PROD ? localStorage.getItem("streetbites_access_token") : null;
+          const freshRefreshToken = typeof window !== "undefined" && !import.meta.env.PROD ? localStorage.getItem("streetbites_refresh_token") : null;
           const retryHeaders = {
             ...configHeaders,
             ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
@@ -145,8 +146,8 @@ export async function apiRequest<T = any>(
         const retryOriginalRequest = new Promise<Response>((resolve) => {
           subscribeTokenRefresh(async (refreshed: boolean) => {
             if (refreshed) {
-              const freshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_access_token") : null;
-              const freshRefreshToken = typeof window !== "undefined" ? localStorage.getItem("streetbites_refresh_token") : null;
+              const freshToken = typeof window !== "undefined" && !import.meta.env.PROD ? localStorage.getItem("streetbites_access_token") : null;
+              const freshRefreshToken = typeof window !== "undefined" && !import.meta.env.PROD ? localStorage.getItem("streetbites_refresh_token") : null;
               const retryHeaders = {
                 ...configHeaders,
                 ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
@@ -172,8 +173,14 @@ export async function apiRequest<T = any>(
     if (typeof window !== "undefined") {
       const token = resJson?.data?.accessToken || resJson?.accessToken;
       const refToken = resJson?.data?.refreshToken || resJson?.refreshToken;
-      if (token) localStorage.setItem("streetbites_access_token", token);
-      if (refToken) localStorage.setItem("streetbites_refresh_token", refToken);
+      if (!import.meta.env.PROD) {
+        if (token) localStorage.setItem("streetbites_access_token", token);
+        if (refToken) localStorage.setItem("streetbites_refresh_token", refToken);
+      } else {
+        // Enforce strict zero-token exposure in localStorage on live server
+        localStorage.removeItem("streetbites_access_token");
+        localStorage.removeItem("streetbites_refresh_token");
+      }
     }
 
     if (!response.ok) {

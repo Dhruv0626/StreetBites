@@ -46,14 +46,23 @@ let initialUserFromToken: User | null = null;
 
 if (typeof window !== "undefined") {
   try {
+    // In production / live deployment, purge any sensitive tokens from localStorage
+    if (import.meta.env.PROD) {
+      localStorage.removeItem("streetbites_access_token");
+      localStorage.removeItem("streetbites_refresh_token");
+    }
+
     const searchParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = searchParams.get("oauth_token");
     const refreshTokenFromUrl = searchParams.get("refresh_token");
     if (tokenFromUrl) {
       initialOAuthToken = tokenFromUrl;
-      localStorage.setItem("streetbites_access_token", tokenFromUrl);
-      if (refreshTokenFromUrl) {
-        localStorage.setItem("streetbites_refresh_token", refreshTokenFromUrl);
+      // In development only, allow local storage fallback; never store in production
+      if (!import.meta.env.PROD) {
+        localStorage.setItem("streetbites_access_token", tokenFromUrl);
+        if (refreshTokenFromUrl) {
+          localStorage.setItem("streetbites_refresh_token", refreshTokenFromUrl);
+        }
       }
 
       // Synchronously decode token payload for immediate zero-delay identity hydration
@@ -99,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     if (initialOAuthToken && !initialUserFromToken) return true;
     if (typeof window !== "undefined") {
-      const hasStoredToken = Boolean(localStorage.getItem("streetbites_access_token"));
+      const hasStoredToken = !import.meta.env.PROD && Boolean(localStorage.getItem("streetbites_access_token"));
       const hasSessionCookie = typeof document !== "undefined" && document.cookie.includes("sb_auth_active");
       const hasCachedUser = Boolean(localStorage.getItem(CACHED_USER_KEY));
       if ((hasStoredToken || hasSessionCookie) && !hasCachedUser) {
@@ -120,11 +129,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userData.id || (userData as any)._id) {
           localStorage.setItem("streetbites_customer_id", userData.id || (userData as any)._id);
         }
-        if (accessToken) {
-          localStorage.setItem("streetbites_access_token", accessToken);
-        }
-        if (refreshToken) {
-          localStorage.setItem("streetbites_refresh_token", refreshToken);
+        // In production / live deployment, tokens are handled strictly via HTTP-Only cookies
+        if (!import.meta.env.PROD) {
+          if (accessToken) {
+            localStorage.setItem("streetbites_access_token", accessToken);
+          }
+          if (refreshToken) {
+            localStorage.setItem("streetbites_refresh_token", refreshToken);
+          }
+        } else {
+          // Ensure zero token exposure in localStorage in production
+          localStorage.removeItem("streetbites_access_token");
+          localStorage.removeItem("streetbites_refresh_token");
         }
       } else {
         localStorage.removeItem(CACHED_USER_KEY);
@@ -150,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const hasSessionIndicator =
         hasOAuthToken ||
         (typeof window !== "undefined" && Boolean(localStorage.getItem(CACHED_USER_KEY))) ||
-        (typeof window !== "undefined" && Boolean(localStorage.getItem("streetbites_access_token"))) ||
+        (typeof window !== "undefined" && !import.meta.env.PROD && Boolean(localStorage.getItem("streetbites_access_token"))) ||
         (typeof document !== "undefined" && (document.cookie.includes("sb_auth_active") || document.cookie.includes("accessToken") || document.cookie.includes("token")));
 
       if (!hasSessionIndicator) {
@@ -173,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           handleSessionResult(res.data.user, (res.data as any)?.accessToken, (res.data as any)?.refreshToken);
         } else if (res.message && (res.message.includes("401") || res.message.includes("Unauthorized") || res.message.includes("Session expired"))) {
           // If profile call failed with 401, check if we still have tokens in localStorage or active user before resetting
-          const hasStoredToken = typeof window !== "undefined" && Boolean(localStorage.getItem("streetbites_access_token"));
+          const hasStoredToken = typeof window !== "undefined" && !import.meta.env.PROD && Boolean(localStorage.getItem("streetbites_access_token"));
           if (!hasStoredToken) {
             handleSessionResult(null);
           } else {
