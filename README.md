@@ -1,203 +1,256 @@
-# StreetBites — Hyperlocal Street Food Discovery & Cluster Delivery Platform
+# 🍔 StreetBites — Hyperlocal Street Food Discovery & Cluster Delivery Platform
 
-> **Definition:**  
+> ### 📖 Platform Definition
 > **StreetBites** is a full-stack, cluster-based hyperlocal street food discovery and on-demand delivery platform designed to organize and digitize the informal street food economy. The platform enables consumers to discover geofenced street food hubs and place unified orders across multiple independent street food stalls in a single transaction with a single delivery fee, while equipping vendors with digital order management and automated onboarding, delivery partners with multi-point cluster routing and cash reconciliation, and platform operators with centralized KYC verification and real-time operational governance.
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 
-- [Core Value Proposition](#core-value-proposition)
-- [System Portals & Roles](#system-portals--roles)
-  - [Customer Portal](#customer-portal)
-  - [Vendor Management System](#vendor-management-system)
-  - [Rider Delivery Fleet](#rider-delivery-fleet)
-  - [Admin Governance & Verification](#admin-governance--verification)
-- [Multi-Stall Order Lifecycle](#multi-stall-order-lifecycle)
-- [Technology Stack](#technology-stack)
-- [Project Directory Layout](#project-directory-layout)
-- [Configuration & Environment Variables](#configuration--environment-variables)
-- [Local Setup & Execution](#local-setup--execution)
-- [API Route Reference](#api-route-reference)
-- [Security Architecture](#security-architecture)
-
----
-
-## Core Value Proposition
-
-Street food vendors typically operate in tight geographic clusters (such as street food courts, night markets, and khau gallis) without individual digital storefronts. Traditional delivery models require a separate delivery fee for each stall. StreetBites solves this problem through:
-
-1. **Geofenced Food Clusters:** Grouping nearby vendors into defined spatial clusters with geographic boundaries.
-2. **Multi-Vendor Single Cart (`SubOrder` Model):** Allowing customers to select items from multiple stalls in the same cluster within one unified checkout.
-3. **Coordinated Cluster Pickups:** Directing delivery partners to gather packages sequentially across designated stalls within the cluster before completing a single drop-off to the customer.
-4. **Digital Vendor & Rider Onboarding:** Client-side document compilation and structured KYC workflows with administrator verification.
+- [🌟 Core Innovation & Problem Solved](#-core-innovation--problem-solved)
+- [👥 Four-Sided Ecosystem & Portals](#-four-sided-ecosystem--portals)
+  - [🛒 1. Customer Experience Portal](#-1-customer-experience-portal)
+  - [👨‍🍳 2. Vendor Management Hub](#-2-vendor-management-hub)
+  - [🛵 3. Rider Logistics & Fleet Portal](#-3-rider-logistics--fleet-portal)
+  - [🛡️ 4. Master Admin Governance Portal](#-4-master-admin-governance-portal)
+- [🔄 Multi-Stall Order & Delivery Lifecycle](#-multi-stall-order--delivery-lifecycle)
+- [💻 Technology Stack](#-technology-stack)
+- [📂 Project Directory Layout](#-project-directory-layout)
+- [⚙️ Configuration & Environment Variables](#-configuration--environment-variables)
+- [🚀 Local Setup & Quickstart](#-local-setup--quickstart)
+- [🔌 Comprehensive API Route Reference](#-comprehensive-api-route-reference)
+  - [🔐 Authentication & Session](#-authentication--session-routes)
+  - [🛍️ Customer & Marketplace](#-customer--marketplace-routes)
+  - [🍳 Vendor Operations](#-vendor-operations-routes)
+  - [📦 Rider Logistics](#-rider-logistics-routes)
+  - [⚙️ Admin Controls](#-admin-controls-routes)
+- [🔒 Security, Privacy & PII Compliance](#-security-privacy--pii-compliance)
 
 ---
 
-## System Portals & Roles
+## 🌟 Core Innovation & Problem Solved
 
-### Customer Portal
-- **Location-Based Discovery:** Browse nearby food clusters and stalls using live coordinates and TomTom map visualization.
-- **Menu Exploration:** Search items across dietary preferences (Vegetarian, Jain, Non-Vegetarian), categories, and pricing.
-- **Unified Cart & Checkout:** Add items from multiple vendors within the same active cluster; choose between digital payment (Razorpay) or Cash on Delivery (COD).
-- **Order Tracking:** Track preparation and delivery statuses through real-time state transitions.
-- **Reviews & Bookmarks:** Submit vendor feedback and save preferred stalls.
+Traditional food delivery applications treat every restaurant as a standalone pick-up point, charging separate delivery fees and dispatching separate drivers. In street food hubs (*Khau Gallis, night markets, food squares*), multiple micro-vendors operate within meters of each other. 
 
-### Vendor Management System
-- **Stall Onboarding:** Register stall profile, upload FSSAI credentials, and submit bank settlement details.
-- **Kitchen Display System (KDS):** Receive incoming sub-orders, accept requests, and mark preparation progress (`NEW` -> `PREPARING` -> `READY`).
-- **Menu Management:** Add and update dishes, set pricing, assign food categories, and toggle live availability.
-- **Settlement Ledger:** Monitor daily sales, platform commissions, and net payout statuses.
+StreetBites introduces **Cluster-Aware Fulfillment**:
 
-### Rider Delivery Fleet
-- **Rider Verification:** Submit driving license, vehicle registration, and identity documents for administrative approval.
-- **Dispatch Queue:** View nearby delivery assignments with visible pickup cluster points and drop-off destinations.
-- **Cluster Route Navigation:** Execute sequential pickups across multiple stalls followed by final customer drop-off using TomTom turn-by-turn routing.
-- **Cash Management:** Reconcile cash collected on delivery with platform commission tracking.
-
-### Admin Governance & Verification
-- **Operational Metrics:** Monitor gross transaction value, active delivery partners, open orders, and platform commission.
-- **KYC Verification Center:** Review submitted vendor and rider applications, inspect uploaded credentials, and record approval/rejection audit logs.
-- **Cluster Management:** Configure cluster coordinates, geofence radiuses, and operational schedules.
-- **Promotions & Settings:** Configure discount coupons, base delivery rates, surge multipliers, and maintenance settings.
+| 🛑 Traditional Delivery Platforms | ✨ StreetBites Cluster Architecture |
+| :--- | :--- |
+| ❌ Order from 2 stalls = 2 separate orders & 2 delivery fees | ✅ Single unified cart spanning multiple stalls in a cluster |
+| ❌ 2 riders dispatched to the same street food corner | ✅ 1 rider gathers all sub-orders sequentially in one visit |
+| ❌ Informal vendors excluded due to complex onboarding | ✅ Self-serve digital KYC with auto-generated verification documents |
+| ❌ No support for daily cash debt reconciliation | ✅ Integrated double-entry COD cash ledger for delivery partners |
 
 ---
 
-## Multi-Stall Order Lifecycle
+## 👥 Four-Sided Ecosystem & Portals
 
 ```
-Customer Application          API Gateway & Database            Vendor Stalls          Delivery Partner
-        |                               |                             |                       |
-        |--- 1. Place Cluster Order --->|                             |                       |
-        |    (Stall A + Stall B)        |--- 2. Create Master Order ->|                       |
-        |                               |    & Split into SubOrders   |                       |
-        |                               |                             |                       |
-        |                               |--- 3. SubOrder Notification>|                       |
-        |                               |       (Stall A & Stall B)   |                       |
-        |                               |<-- 4. Mark "READY" ---------|                       |
-        |                               |                                                     |
-        |                               |--- 5. Assign Cluster Order ------------------------>|
-        |                               |                                                     |
-        |                               |<-- 6. Confirm Sequential Pickups -------------------|
-        |                               |       (Picks up from Stall A, then Stall B)         |
-        |                               |                                                     |
-        |<-- 7. Deliver Order & OTP Verification ---------------------------------------------|
-        |                               |                                                     |
-        |                               |--- 8. Update Ledger, Settle Commission & Payouts -->|
+                             ┌───────────────────────────────┐
+                             │    🍔 StreetBites Platform    │
+                             └───────────────┬───────────────┘
+                                             │
+             ┌─────────────────┬─────────────┴─────────────┬─────────────────┐
+             ▼                 ▼                           ▼                 ▼
+   ┌──────────────────┐ ┌──────────────────┐     ┌──────────────────┐ ┌──────────────────┐
+   │   🛒 CUSTOMER    │ │    👨‍🍳 VENDOR     │     │     🛵 RIDER     │ │     🛡️ ADMIN     │
+   │ Foodie Discovery │ │ Kitchen Display  │     │ Fleet Logistics  │ │ Master Control   │
+   │   & Multi-Cart   │ │  & Menu Studio   │     │  & GPS Routing   │ │ & KYC Governance │
+   └──────────────────┘ └──────────────────┘     └──────────────────┘ └──────────────────┘
+```
+
+### 🛒 1. Customer Experience Portal
+* **📍 Hyperlocal Geofencing:** Automatic detection of nearby street food clusters via GPS coordinates and interactive TomTom mapping.
+* **🍜 Category & Dietary Filters:** Real-time filtering for vegetarian, non-vegetarian, Jain-friendly, popular snacks, and beverages.
+* **🛍️ Multi-Stall Unified Cart:** Add items from multiple vendors within the same active cluster; the system automatically creates linked sub-orders.
+* **💳 Flexible Payment Options:** Seamless checkout supporting digital payments via Razorpay, built-in wallet balances, and Cash on Delivery (COD).
+* **📦 Live Visual Tracking:** Real-time state progress indicators (*Order Placed $\rightarrow$ Preparing $\rightarrow$ Picked Up $\rightarrow$ Delivering $\rightarrow$ Completed*).
+* **⭐ Feedback & Bookmarks:** Leave ratings and text reviews for individual stalls; bookmark preferred stalls for one-tap access.
+
+### 👨‍🍳 2. Vendor Management Hub
+* **📝 Self-Serve Onboarding:** Guided digital registration capturing stall details, FSSAI registration numbers, and banking details.
+* **🛎️ Kitchen Display System (KDS):** Incoming sub-orders update live with audio notifications; one-click transitions (`NEW` $\rightarrow$ `PREPARING` $\rightarrow$ `READY`).
+* **📋 Dynamic Menu Studio:** Add or update dishes, adjust pricing, upload food photography via Cloudinary, and toggle instant item availability.
+* **📊 Visual Earnings & Analytics:** Recharts-powered sales trends, popular dish analytics, commission deductions, and pending payout balances.
+* **🧼 Hygiene Compliance:** Access to food safety benchmarks, packaging guidelines, and platform hygiene ratings.
+
+### 🛵 3. Rider Logistics & Fleet Portal
+* **🪪 Partner Verification:** Driver profile submission including Driving License, Vehicle Registration (RC), and identity details.
+* **📍 Proximity Order Queue:** Real-time broadcast of available cluster orders within rider operating zones.
+* **🗺️ Multi-Point Waypoint Navigation:** Route sequence guiding the rider to each vendor stall in the cluster before navigating to the customer.
+* **💵 COD Cash Debt Tracking:** Running reconciliation of physical cash collected from customers, platform service cuts, and net earnings.
+* **🛡️ Rider Support & Guidelines:** Road safety protocols, bad-weather compensation rules, and direct emergency dispatch.
+
+### 🛡️ 4. Master Admin Governance Portal
+* **📈 Executive Analytics:** Live overview of platform Gross Merchandise Value (GMV), active delivery fleet count, open orders, and commissions.
+* **✅ KYC Verification Center:** Review submitted vendor and rider applications, inspect documents, view generated PDF files, and record audit notes.
+* **🗺️ Cluster Boundary Manager:** Define geographic cluster centroids, geofence radiuses, operating hours, and active/inactive states.
+* **🏷️ Promotions & Coupon Engine:** Create percentage-based or flat discount codes with minimum order values, usage limits, and expiration windows.
+* **⚖️ Dispute & Complaint Management:** Review customer dispute tickets, rider fulfillment issues, and handle compensation requests.
+* **⚙️ Global Platform Controls:** Dynamic adjustments for base delivery fees, distance surcharges, platform commissions, and maintenance modes.
+
+---
+
+## 🔄 Multi-Stall Order & Delivery Lifecycle
+
+```
+[Customer]                [API Gateway & DB]            [Vendor Stalls]          [Rider Partner]
+    │                             │                            │                        │
+    ├── 1. Checkout Multi-Cart ──>│                            │                        │
+    │   (Stall A + Stall B)       ├── 2. Save Master Order ────┤                        │
+    │                             │   & Split Sub-Orders       │                        │
+    │                             │                            │                        │
+    │                             ├── 3. Broadcast Sub-Orders ─┤                        │
+    │                             │      (Stall A & Stall B)   │                        │
+    │                             │<── 4. Stalls Mark "READY" ─┤                        │
+    │                             │                                                     │
+    │                             ├── 5. Dispatch to Cluster Queue ────────────────────>│
+    │                             │                                                     │
+    │                             │<── 6. Accept & Perform Waypoint Pickups ────────────┤
+    │                             │      (Pick up Stall A, then Stall B)                │
+    │                             │                                                     │
+    │<── 7. Deliver & OTP Verify ───────────────────────────────────────────────────────┤
+    │                             │                                                     │
+    │                             ├── 8. Settle Vendor Ledgers & Record Rider Debt ────>│
 ```
 
 ---
 
-## Technology Stack
+## 💻 Technology Stack
 
-| Layer | Component | Description |
-| :--- | :--- | :--- |
-| **Frontend** | React 19, TypeScript, Vite | Single-page client architecture |
-| **Styling** | Tailwind CSS 4, Lucide Icons | Responsive UI layout system |
-| **Mapping** | TomTom Web SDK Maps v6 | Geofencing, coordinate mapping, and route calculation |
-| **Data Views** | Recharts | Visual sales and platform performance charts |
-| **Backend** | Express 5.2, TypeScript, Bun / Node.js | Modular REST service architecture |
-| **Database** | MongoDB Atlas, Mongoose 8.9 | Document storage with sub-order relational references |
-| **Authentication** | JWT, Argon2 | Role-based token access and password hashing |
-| **File Storage** | Cloudinary | Cloud storage for stall and menu imagery |
-| **Payments** | Razorpay SDK, In-House COD Ledger | Payment processing and cash reconciliation |
+### Frontend Architecture
+- **Framework:** React 19 with TypeScript
+- **Build Tool:** Vite 6
+- **Styling:** Tailwind CSS 4
+- **Icons:** Lucide React & React Icons
+- **Mapping:** TomTom Web SDK Maps v6
+- **Data Visualization:** Recharts v3
+- **Document Engine:** Client-Side ISO 32000-1 Compliant PDF Generator (`pdfGenerator.ts`)
+
+### Backend Architecture
+- **Runtime:** Bun 1.1 / Node.js 20+
+- **Framework:** Express 5.2 (REST Architecture)
+- **Database:** MongoDB Atlas via Mongoose 8.9 ODM
+- **Authentication:** Dual-Token JWT (Access + Refresh in HTTP-Only Cookies)
+- **Password Security:** Argon2id
+- **HTTP Hardening:** Helmet 8
+- **Traffic Control:** Sliding-Window In-Memory Rate Limiting
+- **Cloud Assets:** Cloudinary SDK v2
+- **Payment Gateway:** Razorpay SDK Integration
 
 ---
 
-## Project Directory Layout
+## 📂 Project Directory Layout
 
 ```text
 streetBites/
-├── backend/
+├── 🌐 backend/
 │   ├── src/
-│   │   ├── config/              # Database connection
-│   │   ├── controllers/         # Business logic for auth, orders, riders, vendors, admin
-│   │   ├── middlewares/         # Role authentication, rate limiting, and HTTP hardening
-│   │   ├── models/              # Mongoose schemas (Order, SubOrder, Stall, Cluster, User)
-│   │   ├── routes/              # Express API endpoints
-│   │   ├── seeds/               # Seed data for clusters and stalls
-│   │   └── utils/               # Audit logger, image upload, and PII masking
-│   ├── .env                     # Backend configuration
-│   ├── index.ts                 # Server entry point
+│   │   ├── config/              # MongoDB Mongoose database connection
+│   │   ├── controllers/         # Business logic handlers (Auth, Orders, Riders, Stalls)
+│   │   ├── middlewares/         # Role-based guards, rate limiting, and Helmet security
+│   │   ├── models/              # Mongoose schemas (User, Stall, Cluster, Order, SubOrder)
+│   │   ├── routes/              # Express API endpoint definitions
+│   │   ├── seeds/               # Initial cluster and vendor seed datasets
+│   │   └── utils/               # Cloudinary uploader, audit logger, and PII masking
+│   ├── .env                     # Backend environment configuration
+│   ├── index.ts                 # Server bootstrap and middleware pipeline
 │   └── package.json
 │
-├── Frontend/
+├── 🎨 Frontend/
 │   ├── src/
-│   │   ├── components/          # Reusable interface components
-│   │   ├── context/             # State providers (Auth, Cart)
+│   │   ├── components/          # Reusable UI widgets, navigation bars, and modals
+│   │   ├── context/             # Global React state (AuthContext, CartContext)
+│   │   ├── hooks/               # Custom hooks (geolocation, debounced inputs)
 │   │   ├── pages/
-│   │   │   ├── admin/           # Admin verification, clusters, overview
-│   │   │   ├── auth/            # Sign in, sign up, password recovery
+│   │   │   ├── admin/           # Admin dashboards (Overview, Verification, Clusters)
+│   │   │   ├── auth/            # Authentication (Sign In, Sign Up, Password Reset)
 │   │   │   ├── customer/        # Customer storefront, cart, orders, profile
-│   │   │   ├── rider/           # Queue, route navigation, earnings, cash ledger
-│   │   │   └── vendor/          # Kitchen display, menu editor, payouts, KYC
-│   │   ├── services/            # API communication services
-│   │   ├── utils/               # PDF generation and date formatters
-│   │   ├── App.tsx              # Application route tree
-│   │   └── main.tsx             # DOM initialization
-│   ├── .env                     # Client configuration
+│   │   │   ├── legal/           # Terms of Service, Privacy, Food Hygiene standards
+│   │   │   ├── rider/           # Rider order queue, GPS route, earnings, debt ledger
+│   │   │   └── vendor/          # Kitchen display, menu studio, payouts, KYC form
+│   │   ├── services/            # Axios / Fetch HTTP client layer
+│   │   ├── utils/               # PDF generator and date formatting utilities
+│   │   ├── App.tsx              # Application routing tree
+│   │   └── main.tsx             # React DOM entry point
+│   ├── .env                     # Client environment configuration
 │   └── package.json
-└── README.md
+│
+└── 📄 README.md                 # Project documentation
 ```
 
 ---
 
-## Configuration & Environment Variables
+## ⚙️ Configuration & Environment Variables
 
-### Backend (`backend/.env`)
+### Backend Configuration (`backend/.env`)
 
-```ini
-PORT=3000
-MONGODB_URI=your_mongodb_connection_string
-JWT_ACCESS_SECRET=your_jwt_access_secret
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=your_jwt_refresh_secret
-JWT_REFRESH_EXPIRES_IN=7d
-CLIENT_URL=http://localhost:5173
-ADMIN_SECRET_KEY=your_admin_registration_secret
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-TOMTOM_API_KEY=your_tomtom_api_key
-RAZORPAY_KEY_ID=your_razorpay_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-```
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `PORT` | Optional | Server port (defaults to `3000`) |
+| `MONGODB_URI` | **Yes** | MongoDB connection string |
+| `JWT_ACCESS_SECRET` | **Yes** | Secret for signing short-lived access tokens |
+| `JWT_ACCESS_EXPIRES_IN`| Optional | Access token expiration (e.g., `15m`) |
+| `JWT_REFRESH_SECRET` | **Yes** | Secret for signing long-lived refresh tokens |
+| `JWT_REFRESH_EXPIRES_IN`| Optional| Refresh token expiration (e.g., `7d`) |
+| `CLIENT_URL` | Optional | Allowed CORS origin (e.g., `http://localhost:5173`) |
+| `ADMIN_SECRET_KEY` | **Yes** | Passphrase required to register system administrators |
+| `CLOUDINARY_CLOUD_NAME`| **Yes** | Cloudinary account identifier |
+| `CLOUDINARY_API_KEY` | **Yes** | Cloudinary public API key |
+| `CLOUDINARY_API_SECRET`| **Yes** | Cloudinary private API secret |
+| `TOMTOM_API_KEY` | **Yes** | TomTom developer API key for location lookups |
+| `RAZORPAY_KEY_ID` | **Yes** | Razorpay public key ID |
+| `RAZORPAY_KEY_SECRET` | **Yes** | Razorpay secret key |
 
-### Frontend (`Frontend/.env`)
+### Frontend Configuration (`Frontend/.env`)
 
-```ini
-VITE_API_BASE_URL=http://localhost:3000/api
-VITE_TOMTOM_API_KEY=your_tomtom_api_key
-VITE_RAZORPAY_KEY_ID=your_razorpay_key_id
-```
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `VITE_API_BASE_URL` | **Yes** | Base URL pointing to the backend API (`http://localhost:3000/api`) |
+| `VITE_TOMTOM_API_KEY` | **Yes** | TomTom public key for rendering client maps |
+| `VITE_RAZORPAY_KEY_ID` | **Yes** | Razorpay public key for checkout initialization |
 
 ---
 
-## Local Setup & Execution
+## 🚀 Local Setup & Quickstart
 
 ### Prerequisites
-- Node.js (version 20 or higher) or Bun (version 1.1 or higher)
-- An active MongoDB connection string
-- Valid TomTom, Cloudinary, and Razorpay API credentials
+- **Node.js** (v20+) or **Bun** (v1.1+)
+- **MongoDB** (local server or MongoDB Atlas cluster)
+- API keys for **TomTom Maps**, **Cloudinary**, and **Razorpay**
 
 ### 1. Backend Service
 ```bash
+# Navigate to backend directory
 cd backend
+
+# Install dependencies
 npm install
+# or with Bun:
+# bun install
+
+# Start development server
 npm run dev
+# or with Bun:
+# bun run dev
 ```
-*The API service runs on `http://localhost:3000`.*
+*Backend server starts on `http://localhost:3000`.*
 
 ### 2. Frontend Application
 ```bash
-cd ../Frontend
+# Navigate to Frontend directory (in a new terminal)
+cd Frontend
+
+# Install dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
-*The web client runs on `http://localhost:5173`.*
+*Frontend application starts on `http://localhost:5173`.*
 
 ### 3. Concurrent Startup
-To run both backend and frontend from the frontend directory:
+To run both backend and frontend concurrently from the `Frontend` folder:
 ```bash
 cd Frontend
 npm start
@@ -205,59 +258,77 @@ npm start
 
 ---
 
-## API Route Reference
+## 🔌 Comprehensive API Route Reference
 
-Base URL prefix: `/api`
+Base API Path: `/api`
 
-### Authentication (`/api/auth`)
-- `POST /api/auth/signup` — Register a customer, vendor, or rider account
-- `POST /api/auth/signin` — Authenticate user and issue session tokens
-- `POST /api/auth/refresh` — Issue a new access token via refresh token
-- `POST /api/auth/logout` — Terminate session and invalidate tokens
-- `GET /api/auth/me` — Retrieve the currently authenticated profile
+### 🔐 Authentication & Session Routes
+| HTTP Method | Route | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/signup` | Public | Register customer, vendor, or rider account |
+| `POST` | `/api/auth/signin` | Public | Authenticate user and issue JWT cookies |
+| `POST` | `/api/auth/refresh` | Public | Renew access token via refresh token |
+| `POST` | `/api/auth/logout` | Authenticated | Invalidate session cookies |
+| `POST` | `/api/auth/forgot-password` | Public | Request password reset token |
+| `POST` | `/api/auth/reset-password` | Public | Reset password using one-time verification token |
+| `GET` | `/api/auth/me` | Authenticated | Retrieve current user profile |
 
-### Marketplace & Customer (`/api/clusters`, `/api/cart`, `/api/payment`, `/api/orders`)
-- `GET /api/clusters` — Retrieve all active food clusters
-- `GET /api/clusters/:id` — Retrieve cluster details and associated stalls
-- `GET /api/stalls/near-me` — Proximity query for stalls near given coordinates
-- `GET /api/cart` — Fetch customer cart contents
-- `POST /api/cart/add` — Add an item to the cart (enforcing single-cluster rule)
-- `POST /api/payment/checkout` — Generate master order and sub-orders
-- `GET /api/orders/my-orders` — View customer order history and statuses
+### 🛍️ Customer & Marketplace Routes
+| HTTP Method | Route | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/clusters` | Public | Fetch all active food clusters |
+| `GET` | `/api/clusters/:id` | Public | Retrieve cluster info and member stalls |
+| `GET` | `/api/stalls/near-me` | Public | Spatial query for stalls within radius |
+| `GET` | `/api/stalls/:id` | Public | Fetch stall menu, ratings, and hygiene score |
+| `GET` | `/api/cart` | Customer | Retrieve customer cart contents |
+| `POST` | `/api/cart/add` | Customer | Add item to cart (validates single cluster rule) |
+| `POST` | `/api/payment/checkout` | Customer | Place master order and generate sub-orders |
+| `GET` | `/api/orders/my-orders` | Customer | Retrieve personal order history and live statuses |
+| `POST` | `/api/reviews` | Customer | Submit feedback for a fulfilled stall order |
 
-### Vendor Operations (`/api/vendor`, `/api/onboarding`)
-- `POST /api/onboarding/vendor` — Submit vendor profile and verification documents
-- `GET /api/vendor/menu` — List menu items for the authenticated vendor's stall
-- `POST /api/vendor/menu` — Add a new dish to the stall menu
-- `PUT /api/vendor/menu/:id` — Edit an existing dish or change availability
-- `GET /api/vendor/orders` — View active sub-orders for kitchen preparation
-- `PUT /api/vendor/orders/:id/status` — Advance sub-order status (`PREPARING` / `READY`)
-- `GET /api/vendor/payouts` — Review earnings ledger and settlement records
+### 🍳 Vendor Operations Routes
+| HTTP Method | Route | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/onboarding/vendor` | User | Submit vendor KYC, FSSAI, and stall profile |
+| `GET` | `/api/vendor/menu` | Vendor | Retrieve all menu items for the stall |
+| `POST` | `/api/vendor/menu` | Vendor | Add new menu item with Cloudinary image |
+| `PUT` | `/api/vendor/menu/:id` | Vendor | Update pricing, description, or availability |
+| `DELETE` | `/api/vendor/menu/:id` | Vendor | Remove an item from the menu |
+| `GET` | `/api/vendor/orders` | Vendor | Fetch active sub-orders for kitchen display |
+| `PUT` | `/api/vendor/orders/:id/status`| Vendor | Advance sub-order status (`PREPARING` / `READY`)|
+| `GET` | `/api/vendor/payouts` | Vendor | View financial statements and payout records |
 
-### Rider Logistics (`/api/rider`, `/api/onboarding`)
-- `POST /api/onboarding/rider` — Submit driver credentials and vehicle verification
-- `GET /api/rider/queue` — Query available delivery assignments
-- `POST /api/rider/accept/:id` — Accept an open delivery assignment
-- `PUT /api/rider/orders/:id/status` — Update transit status (`PICKED_UP` / `DELIVERING`)
-- `POST /api/rider/orders/:id/complete` — Finalize delivery with OTP confirmation
-- `GET /api/rider/earnings` — View trip compensation and summaries
-- `GET /api/rider/debt` — View cash-on-delivery balance pending platform settlement
+### 📦 Rider Logistics Routes
+| HTTP Method | Route | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/onboarding/rider` | User | Submit vehicle registration and driver license |
+| `GET` | `/api/rider/queue` | Rider | View available cluster delivery jobs |
+| `POST` | `/api/rider/accept/:id` | Rider | Accept a cluster delivery job |
+| `PUT` | `/api/rider/orders/:id/status` | Rider | Update transit status (`PICKED_UP` / `DELIVERING`)|
+| `POST` | `/api/rider/orders/:id/complete`| Rider | Complete drop-off with customer OTP verification |
+| `GET` | `/api/rider/earnings` | Rider | View trip compensation and summaries |
+| `GET` | `/api/rider/debt` | Rider | View collected COD cash pending remittance |
 
-### Administration (`/api/admin`)
-- `GET /api/admin/overview` — High-level platform KPIs (GMV, active orders, live partners)
-- `GET /api/admin/verifications` — List pending vendor and rider onboarding records
-- `PUT /api/admin/verify/:id` — Approve or reject an onboarding request with notes
-- `POST /api/admin/clusters` — Define a new geofenced food cluster
-- `PUT /api/admin/clusters/:id` — Update cluster boundaries and operational settings
-- `PUT /api/admin/settings` — Configure platform fee parameters and operational toggles
+### ⚙️ Admin Controls Routes
+| HTTP Method | Route | Access | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/admin/overview` | Admin | Overall metrics (GMV, active orders, active riders) |
+| `GET` | `/api/admin/verifications` | Admin | List pending vendor and rider KYC applications |
+| `PUT` | `/api/admin/verify/:id` | Admin | Approve or reject onboarding with audit notes |
+| `POST` | `/api/admin/clusters` | Admin | Create a new geofenced food cluster |
+| `PUT` | `/api/admin/clusters/:id` | Admin | Edit cluster coordinates, boundary, or status |
+| `POST` | `/api/admin/offers` | Admin | Create promotional discount codes |
+| `GET` | `/api/admin/transactions` | Admin | Full double-entry financial audit ledger |
+| `PUT` | `/api/admin/settings` | Admin | Update platform commission and delivery fees |
 
 ---
 
-## Security Architecture
+## 🔒 Security, Privacy & PII Compliance
 
-- **Password Cryptography:** User passwords are encrypted using Argon2id before persistence.
-- **Session Tokens:** Authentication uses short-lived JWT access tokens paired with refresh tokens delivered over secure HTTP-only cookies.
-- **Route Authorization:** Middleware guards verify permissions against user roles (`Customer`, `Vendor`, `Rider`, `Admin`) on every protected route.
-- **Data Protection:** Personal identification numbers and sensitive banking values are masked prior to client serialization.
-- **Header Hardening:** Standard security headers (Content Security Policy, frame protection, and HSTS) are applied via Helmet middleware.
-- **Abuse Prevention:** Sliding-window rate limiting is enforced on sensitive endpoints to protect against automated credential abuse.
+- **Argon2id Hashing:** Password security uses the Argon2id algorithm with dedicated memory-cost and time-cost parameters to resist brute-force cracking.
+- **Dual-Token Session Architecture:** Short-lived access tokens (15-minute validity) paired with long-lived refresh tokens (7-day validity) stored in `HttpOnly`, `SameSite=Strict` cookies.
+- **Role-Based Access Control (RBAC):** Middleware checks verify user permissions (`Customer`, `Vendor`, `Rider`, `Admin`) before granting access to protected endpoints.
+- **PII Data Masking:** Phone numbers, bank account identifiers, and national identity numbers are masked prior to client-side serialization.
+- **Audit Trails:** Administrative approvals, rejections, and fee changes are permanently logged to an immutable `KycAuditLog` collection.
+- **HTTP Header Hardening:** Helmet middleware applies Content Security Policy (CSP), frame protection, and HSTS headers.
+- **Sliding-Window Rate Limiting:** Protects sensitive authentication and verification routes against automated abuse.
