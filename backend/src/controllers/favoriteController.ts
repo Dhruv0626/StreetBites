@@ -27,10 +27,6 @@ const getUserId = (req: AuthenticatedRequest): string | null => {
   return null;
 };
 
-/**
- * @desc    Get all favorite stalls for current user
- * @route   GET /api/favorites
- */
 export const getFavorites = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
@@ -104,10 +100,6 @@ export const getFavorites = async (req: AuthenticatedRequest, res: Response): Pr
   }
 };
 
-/**
- * @desc    Add a stall to user's favorites
- * @route   POST /api/favorites or POST /api/favorites/:stallId
- */
 export const addFavorite = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
@@ -171,10 +163,6 @@ export const addFavorite = async (req: AuthenticatedRequest, res: Response): Pro
   }
 };
 
-/**
- * @desc    Remove a stall from user's favorites
- * @route   DELETE /api/favorites/:stallId or DELETE /api/favorites
- */
 export const removeFavorite = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);

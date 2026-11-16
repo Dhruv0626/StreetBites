@@ -10,10 +10,6 @@ import { logKycAccess } from "../utils/auditLogger.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
 import { maskBankAccount, maskUpiId, encryptPii, decryptPii } from "../utils/securityPii.ts";
 
-/**
- * @desc    Rider Onboarding (Uploads documents to Cloudinary & saves URLs in User profile)
- * @route   POST /api/onboarding/rider
- */
 export const registerRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
@@ -191,10 +187,6 @@ const getAuthUserId = (req: Request): string | null => {
   return null;
 };
 
-/**
- * @desc    Vendor Onboarding (Uploads stall photo & KYC documents to Cloudinary & registers Stall + Vendor)
- * @route   POST /api/onboarding/vendor
- */
 export const registerVendorDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -430,10 +422,6 @@ export const registerVendorDetails = async (req: Request, res: Response): Promis
   }
 };
 
-/**
- * @desc    Get Rider Onboarding Details & Documents
- * @route   GET /api/onboarding/rider
- */
 export const getRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -481,18 +469,10 @@ export const getRiderDetails = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Update Rider Onboarding Details (PUT)
- * @route   PUT /api/onboarding/rider
- */
 export const updateRiderDetails = async (req: Request, res: Response): Promise<void> => {
   return registerRiderDetails(req, res);
 };
 
-/**
- * @desc    Delete / Reset Rider Onboarding
- * @route   DELETE /api/onboarding/rider
- */
 export const deleteRiderDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -538,10 +518,6 @@ export const deleteRiderDetails = async (req: Request, res: Response): Promise<v
   }
 };
 
-/**
- * @desc    Get Vendor Onboarding Details & Stall
- * @route   GET /api/onboarding/vendor
- */
 export const getVendorDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -588,18 +564,10 @@ export const getVendorDetails = async (req: Request, res: Response): Promise<voi
   }
 };
 
-/**
- * @desc    Update Vendor Onboarding Details (PUT)
- * @route   PUT /api/onboarding/vendor
- */
 export const updateVendorDetails = async (req: Request, res: Response): Promise<void> => {
   return registerVendorDetails(req, res);
 };
 
-/**
- * @desc    Toggle Vendor Stall Online / Accepting Orders status
- * @route   PUT /api/onboarding/vendor/toggle-status
- */
 export const toggleVendorOnlineStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req) || req.query.userId || req.body.userId;
@@ -656,10 +624,6 @@ export const toggleVendorOnlineStatus = async (req: Request, res: Response): Pro
   }
 };
 
-/**
- * @desc    Delete / Reset Vendor Onboarding & Stall
- * @route   DELETE /api/onboarding/vendor
- */
 export const deleteVendorDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -700,10 +664,6 @@ export const deleteVendorDetails = async (req: Request, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Get General Onboarding & Verification Status
- * @route   GET /api/onboarding/status
- */
 export const getOnboardingStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
@@ -737,10 +697,6 @@ export const getOnboardingStatus = async (req: Request, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Get All Verification Applications (Admin KYC review - Metadata summary without bulk document leakage)
- * @route   GET /api/onboarding/verifications
- */
 export const getVerifications = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status, type } = req.query;
@@ -844,10 +800,6 @@ export const getVerifications = async (req: Request, res: Response): Promise<voi
   }
 };
 
-/**
- * @desc    Get Single Verification Application with Full KYC Documents (Audited on-demand inspection)
- * @route   GET /api/onboarding/verifications/:id
- */
 export const getVerificationById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -997,10 +949,6 @@ export const getVerificationById = async (req: Request, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Get KYC Security Audit Logs (DPDP Compliance & Anti-Scraping Monitoring)
- * @route   GET /api/onboarding/verifications-audit
- */
 export const getKycAuditLogs = async (req: Request, res: Response): Promise<void> => {
   try {
     const logs = await KycAuditLog.find()
@@ -1022,10 +970,6 @@ export const getKycAuditLogs = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Update Application Verification Status (Approve / Reject) with Audit Trail
- * @route   PUT /api/onboarding/verify/:id
- */
 export const updateVerificationStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

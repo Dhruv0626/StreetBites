@@ -63,11 +63,6 @@ const formatTimeAgo = (date: Date | string): string => {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
-/**
- * @desc    Get live incoming and historical orders for Vendor Kitchen
- * @route   GET /api/vendor/orders
- * @access  Vendor
- */
 export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -367,11 +362,6 @@ export const getVendorOrders = async (req: AuthRequest, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Update status of an order for this vendor's stall
- * @route   PATCH /api/vendor/orders/:id/status
- * @access  Vendor
- */
 export const updateVendorOrderStatus = async (
   req: AuthRequest,
   res: Response
@@ -678,11 +668,6 @@ export const updateVendorOrderStatus = async (
   }
 };
 
-/**
- * @desc    Dedicated endpoint to reject an incoming order with reason
- * @route   POST /api/vendor/orders/:id/reject
- * @access  Vendor
- */
 export const rejectVendorOrder = async (
   req: AuthRequest,
   res: Response
@@ -691,11 +676,6 @@ export const rejectVendorOrder = async (
   return updateVendorOrderStatus(req, res);
 };
 
-/**
- * @desc    Quick count of live orders for vendor navbar badge
- * @route   GET /api/vendor/orders/metrics
- * @access  Vendor
- */
 export const getVendorMetrics = async (
   req: AuthRequest,
   res: Response
@@ -730,11 +710,6 @@ export const getVendorMetrics = async (
   }
 };
 
-/**
- * @desc    Get real analytics, KPI metrics, sales chart breakdown, and top items
- * @route   GET /api/vendor/orders/analytics
- * @access  Vendor
- */
 export const getVendorAnalytics = async (
   req: AuthRequest,
   res: Response
@@ -1055,8 +1030,6 @@ export const getVendorAnalytics = async (
   }
 };
 
-// @desc    Vendor Request Payout Withdrawal
-// @route   POST /api/vendor/orders/payouts/withdraw
 export const requestVendorWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -1162,9 +1135,6 @@ export const requestVendorWithdrawal = async (req: AuthRequest, res: Response): 
   }
 };
 
-// @desc    Get vendor payout & settlement transaction history
-// @route   GET /api/vendor/orders/payouts
-// @access  Vendor
 export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -1242,8 +1212,6 @@ export const getVendorPayoutHistory = async (req: AuthRequest, res: Response): P
   }
 };
 
-// @desc    Update Vendor Bank & Payout Details
-// @route   PUT /api/vendor/orders/payouts/bank-details
 export const updateVendorBankDetails = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);

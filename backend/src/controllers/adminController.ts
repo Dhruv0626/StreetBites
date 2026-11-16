@@ -11,9 +11,6 @@ import { SubOrder } from "../models/SubOrder.ts";
 import { memoryCache } from "../utils/cache.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
 
-// @desc    Get admin dashboard overview statistics & dynamic revenue trend
-// @route   GET /api/admin/overview
-// @access  Admin
 export const getAdminOverviewStats = async (_req: Request, res: Response): Promise<void> => {
   try {
     const isFresh = _req.query.fresh === "true";
@@ -24,7 +21,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         return;
       }
     }
-    // 1. User counts
     const [
       customersCount,
       vendorsCount,
@@ -86,7 +82,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         : "Recent",
     }));
 
-    // 2. Order metrics, platform revenue & payouts
     const [orders, transactions] = await Promise.all([
       Order.find({ status: { $ne: "CANCELLED" } })
         .select("total_amount food_items_total delivery_fee tax_amount platform_fee_earned status payment_method payment_status cod_deposit_status cod_amount_held rider_earned_fee rider_id cluster_id delivered_at order_number createdAt updatedAt")
@@ -94,7 +89,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       Transaction.find().lean(),
     ]);
 
-    // Build fast transaction lookup map for real-time settlement synchronization
     const txnMap = new Map<string, any>();
     (transactions || []).forEach((t: any) => {
       if (t.order_id) txnMap.set(t.order_id.toString(), t);
@@ -158,23 +152,17 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       const isOnline = o.payment_method === "ONLINE";
       const isCod = o.payment_method === "COD";
 
-      // Synchronize Vendor Settlement Status:
-      // An order's vendor payout is settled once delivered, completed in Transaction, or credited to wallet
       const isVendorSettled =
         isDelivered ||
         txn?.settlement_status === "COMPLETED" ||
         (Array.isArray(txn?.vendor_payouts) && txn.vendor_payouts.some((vp: any) => vp.status === "COMPLETED"));
 
-      // Synchronize Rider Settlement Status:
-      // An order's rider payout is settled/paid once delivered, completed in Transaction, or credited
       const isRiderSettled =
         isDelivered ||
         txn?.settlement_status === "COMPLETED" ||
         txn?.rider_payout?.status === "COMPLETED";
 
       if (isOnline) {
-        // 1. ONLINE PAYMENT LOGIC:
-        // Customer pays full amount online -> first added in platform revenue
         onlineGrossInflow += amt;
 
         if (isVendorSettled) {
@@ -191,14 +179,11 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
           pendingRiderPayouts += riderShare;
         }
       } else if (isCod) {
-        // 2. COD ORDER LOGIC:
-        // Rider collects full cash amount directly from customer; rider takes full amount.
         const netDebt = o.cod_amount_held !== undefined && o.cod_amount_held < amt
           ? Number(o.cod_amount_held)
           : Math.max(0, amt - riderShare);
 
         if (isVendorSettled) {
-          // Vendor payout is cut from platform (platform disburses vendor's food earnings)
           settledVendorPayouts += vendorShare;
           codSettledVendorPayouts += vendorShare;
         } else {
@@ -206,14 +191,12 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
         }
 
         if (isRiderSettled) {
-          // Rider payout retained by rider from cash collected
           settledRiderPayouts += riderShare;
         } else {
           pendingRiderPayouts += riderShare;
         }
 
         if (o.cod_deposit_status === "DEPOSITED_TO_ADMIN") {
-          // When rider clears COD debt -> amount added in platform revenue
           clearedCodDebt += netDebt;
           if ((o.delivered_at && new Date(o.delivered_at) >= todayStart) || (o.updatedAt && new Date(o.updatedAt) >= todayStart)) {
             todayClearedCodDebt += netDebt;
@@ -264,7 +247,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
     pendingRiderPayouts = Math.round(pendingRiderPayouts * 100) / 100;
     settledRiderPayouts = Math.round(settledRiderPayouts * 100) / 100;
 
-    // 2b. Compute Real-Time Stakeholder Rankings (Top Vendors, Riders, Clusters)
     const [allStalls, subOrders, allRiders, allClusters] = await Promise.all([
       Stall.find().populate("vendor_id", "name email phone_number").populate("cluster_id", "name city").lean(),
       SubOrder.find().lean(),
@@ -272,16 +254,14 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       Cluster.find().lean(),
     ]);
 
-    // Vendor rankings map: Calculate 15% Platform Take (5% vendor commission + 10% customer markup) stall wise
+    // 15% Platform Take (5% vendor commission + 10% customer markup)
     const stallStatsMap = new Map<string, { orders: number; revenue: number }>();
     subOrders.forEach((so: any) => {
       const sId = (so.stall_id?._id || so.stall_id)?.toString();
       if (!sId) return;
-      // Derive food base price from 95% vendor earned amount or subtotal
       const foodBase = so.vendor_earned_amount
         ? (Number(so.vendor_earned_amount) / 0.95)
         : (Number(so.subtotal) || 0);
-      // 15% Platform Revenue earned from this stall (5% vendor commission + 10% markup)
       const platformEarned15 = Math.round(foodBase * 0.15 * 100) / 100;
 
       const prev = stallStatsMap.get(sId) || { orders: 0, revenue: 0 };
@@ -310,7 +290,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       .slice(0, 5)
       .map((v, idx) => ({ ...v, rank: idx + 1 }));
 
-    // Rider rankings map
     const deliveredOrders = orders.filter((o: any) => {
       const statusUpper = String(o.status || "").trim().toUpperCase();
       return statusUpper === "DELIVERED" || statusUpper === "COMPLETED" || Boolean(o.delivered_at);
@@ -346,7 +325,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       .slice(0, 5)
       .map((r, idx) => ({ ...r, rank: idx + 1 }));
 
-    // Cluster rankings map
     const clusterStatsMap = new Map<string, { orders: number; volume: number }>();
     orders.forEach((o: any) => {
       if (!o.cluster_id) return;
@@ -378,7 +356,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       .slice(0, 5)
       .map((c, idx) => ({ ...c, rank: idx + 1 }));
 
-    // 3. Last 7 Days Daily Revenue Trend Breakdown (Platform Fee Earnings)
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dailyTrend: {
       name: string;
@@ -391,7 +368,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
       orders: number;
     }[] = [];
 
-    // Build last 7 days array (from 6 days ago up to today)
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
@@ -540,7 +516,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
           totalOrders: orders.length,
           liveOrders: liveOrdersCount,
           todayGrossRevenue: Math.round(todayGrossRevenue * 100) / 100,
-          todayPlatformRevenue: todayPlatformRevenue,
           todayOrdersCount,
           pendingApprovals,
         },
@@ -560,9 +535,6 @@ export const getAdminOverviewStats = async (_req: Request, res: Response): Promi
   }
 };
 
-// @desc    Get all transactions & financial summaries
-// @route   GET /api/admin/transactions
-// @access  Admin
 export const getAdminTransactions = async (_req: Request, res: Response): Promise<void> => {
   try {
     const isFresh = _req.query.fresh === "true";
@@ -573,7 +545,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
         return;
       }
     }
-    // 1. Auto-synchronize: Ensure all orders have a corresponding Transaction record
     try {
       const existingTxOrderIds = await Transaction.distinct("order_id");
       const existingIdSet = new Set((existingTxOrderIds || []).map((id: any) => id?.toString()));
@@ -642,7 +613,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
       console.warn("Background order transaction sync notice:", syncErr);
     }
 
-    // 2. Fetch all transactions
     const transactions = await Transaction.find()
       .populate("customer_id", "name email phone_number")
       .populate("rider_payout.rider_id", "name phone_number")
@@ -761,7 +731,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
 
     const totalWithdrawn = withdrawals.reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
 
-    // 3. Query all online customer refund requests & settlements
     const refundedOrders = await Order.find({
       payment_method: "ONLINE",
       $or: [
@@ -802,7 +771,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
       };
     });
 
-    // 4. Calculate floating COD cash held by riders in field & grouped rider ledger
     const pendingCodOrders = await Order.find({
       payment_method: "COD",
       cod_deposit_status: "PENDING_DEPOSIT",
@@ -846,7 +814,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
       totalDebt: Math.round(item.totalDebt * 100) / 100,
     }));
 
-    // 5. Total Platform Commission & Stakeholder Payout Totals
     const allDeliveredOrders = await Order.find({ status: { $ne: "CANCELLED" } })
       .select("total_amount food_items_total delivery_fee platform_fee_earned status payment_method payment_status cod_deposit_status cod_amount_held rider_earned_fee delivered_at order_number")
       .lean();
@@ -998,9 +965,6 @@ export const getAdminTransactions = async (_req: Request, res: Response): Promis
   }
 };
 
-// @desc    Process pending payouts & settle transactions
-// @route   POST /api/admin/transactions/process-payouts
-// @access  Admin
 export const processPendingPayouts = async (req: Request, res: Response): Promise<void> => {
   try {
     const { transactionId } = req.body;
@@ -1050,9 +1014,6 @@ export const processPendingPayouts = async (req: Request, res: Response): Promis
   }
 };
 
-// @desc    Settle and confirm rider COD cash deposit to platform
-// @route   POST /api/admin/transactions/settle-rider-cod
-// @access  Admin
 export const settleRiderCodDebt = async (req: Request, res: Response): Promise<void> => {
   try {
     const { riderId } = req.body;
@@ -1137,9 +1098,6 @@ export const settleRiderCodDebt = async (req: Request, res: Response): Promise<v
   }
 };
 
-// @desc    Process customer refund for online order & notify customer UPI payout
-// @route   POST /api/admin/transactions/process-refund
-// @access  Admin
 export const processCustomerRefund = async (req: Request, res: Response): Promise<void> => {
   try {
     const { orderId } = req.body;
@@ -1228,9 +1186,6 @@ export const processCustomerRefund = async (req: Request, res: Response): Promis
   }
 };
 
-// @desc    Get all complaints & disputes
-// @route   GET /api/admin/complaints
-// @access  Admin
 export const getAdminComplaints = async (_req: Request, res: Response): Promise<void> => {
   try {
     const complaints = await Feedback.find({ feedback_type: "COMPLAINT" })
@@ -1274,9 +1229,6 @@ export const getAdminComplaints = async (_req: Request, res: Response): Promise<
   }
 };
 
-// @desc    Update complaint status
-// @route   PATCH /api/admin/complaints/:id/status
-// @access  Admin
 export const updateComplaintStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -1309,9 +1261,6 @@ export const updateComplaintStatus = async (req: Request, res: Response): Promis
   }
 };
 
-// @desc    Get live active orders for admin map tracking
-// @route   GET /api/admin/orders
-// @access  Admin
 export const getAdminLiveOrders = async (_req: Request, res: Response): Promise<void> => {
   try {
     const orders = await Order.find({
@@ -1425,9 +1374,6 @@ export const getAdminLiveOrders = async (_req: Request, res: Response): Promise<
   }
 };
 
-// @desc    Get all food items (master categories) for admin review & approval
-// @route   GET /api/admin/food-items
-// @access  Admin
 export const getAdminFoodItems = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status } = req.query;
@@ -1582,9 +1528,6 @@ export const getAdminFoodItems = async (req: Request, res: Response): Promise<vo
   }
 };
 
-// @desc    Get real-time admin counts for sidebar badges (Approvals, Live Orders, Complaints)
-// @route   GET /api/admin/counts
-// @access  Admin
 export const getAdminCounts = async (_req: Request, res: Response): Promise<void> => {
   try {
     const pendingKyc = await User.countDocuments({
@@ -1626,9 +1569,6 @@ export const getAdminCounts = async (_req: Request, res: Response): Promise<void
   }
 };
 
-// @desc    Update food item approval status (Approve / Reject / Reset)
-// @route   PATCH /api/admin/food-items/:id/status
-// @access  Admin
 export const updateFoodItemStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

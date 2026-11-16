@@ -13,10 +13,6 @@ const resolveUser = async (req: Request) => {
   return User.findById(userId);
 };
 
-/**
- * @desc    Get In-App Notifications for Current User
- * @route   GET /api/notifications
- */
 export const getUserNotifications = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveUser(req);
@@ -88,10 +84,6 @@ export const getUserNotifications = async (req: Request, res: Response): Promise
   }
 };
 
-/**
- * @desc    Mark All Notifications as Read
- * @route   PUT /api/notifications/mark-all-read
- */
 export const markAllNotificationsRead = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveUser(req);
@@ -115,10 +107,6 @@ export const markAllNotificationsRead = async (req: Request, res: Response): Pro
   }
 };
 
-/**
- * @desc    Mark Single Notification as Read
- * @route   PUT /api/notifications/:id/read
- */
 export const markSingleNotificationRead = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -142,10 +130,6 @@ export const markSingleNotificationRead = async (req: Request, res: Response): P
   }
 };
 
-/**
- * @desc    Get Unread Notifications Count
- * @route   GET /api/notifications/unread-count
- */
 export const getUnreadCount = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveUser(req);

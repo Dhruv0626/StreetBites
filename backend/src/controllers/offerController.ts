@@ -2,10 +2,6 @@ import type { Request, Response } from "express";
 import { Offer } from "../models/Offer.ts";
 import { memoryCache } from "../utils/cache.ts";
 
-/**
- * @desc    Get All Offers / Promotions (with optional search and audience filtering)
- * @route   GET /api/offers
- */
 export const getOffers = async (req: Request, res: Response): Promise<void> => {
   try {
     const { audience, active, search, fresh } = req.query;
@@ -65,10 +61,6 @@ export const getOffers = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-/**
- * @desc    Get Single Offer by ID
- * @route   GET /api/offers/:id
- */
 export const getOfferById = async (req: Request, res: Response): Promise<void> => {
   try {
     const offer = await Offer.findById(req.params.id);
@@ -189,10 +181,6 @@ export const updateOffer = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-/**
- * @desc    Toggle Offer Active Status
- * @route   PUT /api/offers/:id/toggle
- */
 export const toggleOfferStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const offer = await Offer.findById(req.params.id);
@@ -216,10 +204,6 @@ export const toggleOfferStatus = async (req: Request, res: Response): Promise<vo
   }
 };
 
-/**
- * @desc    Delete Offer
- * @route   DELETE /api/offers/:id
- */
 export const deleteOffer = async (req: Request, res: Response): Promise<void> => {
   try {
     const offer = await Offer.findByIdAndDelete(req.params.id);

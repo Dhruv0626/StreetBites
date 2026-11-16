@@ -28,10 +28,6 @@ const getCustomerId = (req: AuthenticatedRequest): string | null => {
   return req.user.id;
 };
 
-/**
- * @desc    Get all saved addresses for the customer
- * @route   GET /api/addresses
- */
 export const getAddresses = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -254,10 +250,6 @@ export const geocodeAddressBackend = async (options: {
   return null;
 };
 
-/**
- * @desc    Create a new delivery address
- * @route   POST /api/addresses
- */
 export const createAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = req.user?.id;
@@ -387,10 +379,6 @@ export const createAddress = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
-/**
- * @desc    Update an existing delivery address
- * @route   PUT /api/addresses/:id
- */
 export const updateAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = req.user?.id;
@@ -491,10 +479,6 @@ export const updateAddress = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
-/**
- * @desc    Delete a delivery address
- * @route   DELETE /api/addresses/:id
- */
 export const deleteAddress = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = req.user?.id;

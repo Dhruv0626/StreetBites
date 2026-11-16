@@ -6,25 +6,21 @@ import { maskBankAccount, maskUpiId } from "../utils/securityPii.ts";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// ─── Helpers ──────────────────────────────────────────────────────────
-
-// Set secure HTTP-only cookies and client-readable session indicator
 export const setAuthCookies = (res: Response, accessToken: string, refreshToken: string): void => {
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    maxAge: 24 * 60 * 60 * 1000,
   });
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 
-  // Client-accessible session hint cookie so frontend JavaScript can detect active session
   res.cookie("sb_auth_active", "1", {
     httpOnly: false,
     secure: isProduction,
@@ -33,7 +29,6 @@ export const setAuthCookies = (res: Response, accessToken: string, refreshToken:
   });
 };
 
-// Clear auth cookies on logout
 export const clearAuthCookies = (res: Response): void => {
   res.clearCookie("accessToken", {
     httpOnly: true,
@@ -52,7 +47,6 @@ export const clearAuthCookies = (res: Response): void => {
   });
 };
 
-// Helper: Append OAuth authentication token parameter to redirect URL safely
 const appendAuthParam = (targetUrl: string, token: string, refreshToken?: string): string => {
   const delimiter = targetUrl.includes("?") ? "&" : "?";
   let url = `${targetUrl}${delimiter}oauth_token=${encodeURIComponent(token)}`;
@@ -62,7 +56,6 @@ const appendAuthParam = (targetUrl: string, token: string, refreshToken?: string
   return url;
 };
 
-// Generate Access & Refresh tokens (with identity claims for immediate client-side hydration)
 export const generateTokens = (userId: string, role: string, name?: string, email?: string) => {
   const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "";
   const refreshSecret = process.env.JWT_REFRESH_SECRET || "";
@@ -71,14 +64,12 @@ export const generateTokens = (userId: string, role: string, name?: string, emai
   if (name) payload.name = name;
   if (email) payload.email = email;
 
-  // 24 hours access token + 30 days refresh token for stable user experience
   const accessToken = jwt.sign(payload, accessSecret, { expiresIn: "24h" });
   const refreshToken = jwt.sign(payload, refreshSecret, { expiresIn: "30d" });
 
   return { accessToken, refreshToken };
 };
 
-// Format user data for API responses (with PII masking)
 const formatUserResponse = (user: any) => ({
   id: user._id,
   name: user.name,
@@ -95,15 +86,10 @@ const formatUserResponse = (user: any) => ({
   upi_id: maskUpiId(user.upi_id),
 });
 
-// ─── Controller Handlers ──────────────────────────────────────────────
-
-// @desc    Register new user
-// @route   POST /api/auth/register
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password, phone_number, role = "CUSTOMER", ...otherFields } = req.body || {};
 
-    // Field-level validation with user-friendly messages
     if (!name || !String(name).trim()) {
       res.status(400).json({ success: false, field: "name", message: "Please enter your full name." });
       return;
@@ -114,7 +100,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(String(email).trim())) {
       res.status(400).json({ success: false, field: "email", message: "Please enter a valid email address." });
@@ -150,11 +135,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // Hash password with Argon2
     const hashedPassword = await argon2.hash(password);
     const userRole: UserRole = (role ? String(role).toUpperCase() : "CUSTOMER") as UserRole;
 
-    // Enforce Admin Secret Key validation — exact match against ADMIN_SECRET_KEY in .env
     if (userRole === "ADMIN") {
       const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
       const providedSecret = (req.body.secretKey || req.body.secret_key || req.body.SecretKey || "").trim();
@@ -170,7 +153,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // For ADMIN role, verification_status is set to VERIFIED automatically (no KYC data entry required)
     const verificationStatus: VerificationStatus | undefined =
       userRole === "ADMIN" ? "VERIFIED" : undefined;
 
@@ -205,7 +187,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     console.error("Register Error:", error);
-    // Handle MongoDB duplicate key error (race condition: two simultaneous requests with same email/phone)
     if (error?.code === 11000) {
       const field = Object.keys(error?.keyValue || {})[0] || "email";
       const fieldMap: Record<string, { field: string; message: string }> = {
@@ -216,7 +197,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ success: false, field: info.field, message: info.message });
       return;
     }
-    // Handle Mongoose validation errors
     if (error?.name === "ValidationError") {
       const firstError = Object.entries(error.errors || {})[0];
       if (firstError) {
@@ -232,8 +212,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// @desc    User Login
-// @route   POST /api/auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, phone_number } = req.body || {};
@@ -256,7 +234,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Verify Argon2 password
     const isMatch = await argon2.verify(user.password, password);
     if (!isMatch) {
       res.status(401).json({ success: false, field: "password", message: "Incorrect password. Please try again or reset your password." });
@@ -265,7 +242,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const requestedRole = req.body.role ? String(req.body.role).trim().toUpperCase() : null;
 
-    // Block Admin accounts from non-Admin logins
     if (user.role === "ADMIN" && requestedRole !== "ADMIN") {
       res.status(403).json({
         success: false,
@@ -274,7 +250,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Strict Role Enforcement: verify user's account role matches the active tab / role context
     if (requestedRole) {
       const userRole = String(user.role || "CUSTOMER").toUpperCase();
       if (userRole !== requestedRole) {
@@ -287,7 +262,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // If user is ADMIN, verify Admin Secret Key against .env ADMIN_SECRET_KEY
     if (user.role === "ADMIN") {
       const serverAdminSecret = (process.env.ADMIN_SECRET_KEY || "").trim();
       const providedSecret = (req.body.secretKey || req.body.secret_key || req.body.SecretKey || "").trim();
@@ -325,8 +299,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// @desc    Refresh Token
-// @route   POST /api/auth/refresh-token
 export const refreshAccessToken = async (req: Request, res: Response): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
@@ -369,7 +341,6 @@ export const refreshAccessToken = async (req: Request, res: Response): Promise<v
   }
 };
 
-// Helper: fetch Google user from Google OAuth
 const fetchGoogleProfile = async (googleToken?: string, code?: string) => {
   if (googleToken) {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(googleToken)}`);
@@ -405,8 +376,6 @@ const fetchGoogleProfile = async (googleToken?: string, code?: string) => {
   return null;
 };
 
-// @desc    Google Sign-In / Sign-Up API
-// @route   POST /api/auth/google
 export const googleAuth = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, id_token, credential, code, action = "signin", role: requestedRole } = req.body || {};
@@ -442,7 +411,6 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     }
 
     if (!user) {
-      // Option B: If attempting to sign in but account does not exist, reject!
       if (action === "signin") {
         res.status(404).json({
           success: false,
@@ -451,7 +419,6 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
         return;
       }
 
-      // If action is signup, create account
       user = new User({
         name: googleUser.name,
         email: googleUser.email.toLowerCase(),
@@ -482,8 +449,6 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// @desc    Google OAuth2 Callback redirect handler
-// @route   GET /api/auth/google/callback
 export const googleCallback = async (req: Request, res: Response): Promise<void> => {
   const clientUrl = process.env.CLIENT_URL || "";
   try {
@@ -492,7 +457,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     const [action, roleParam] = rawState.split(":");
     const normalizedRole = (roleParam || "CUSTOMER").toUpperCase().trim();
 
-    // Security Check: Strictly prevent Admin privilege escalation via OAuth state manipulation
     if (normalizedRole === "ADMIN") {
       console.warn("Security Alert: Blocked attempted Admin privilege escalation via Google OAuth state manipulation.");
       res.redirect(
@@ -528,7 +492,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
     let isNewUser = false;
 
     if (!user) {
-      // Option B: If user is on Sign In and does not have an account in database, redirect with error
       if (action === "signin") {
         res.redirect(
           `${clientUrl}/signin?error=${encodeURIComponent("No account found with this Google email. Please create an account first.")}`
@@ -536,7 +499,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
         return;
       }
 
-      // If action is signup, create user account with specified role
       isNewUser = true;
       user = new User({
         name: googleUser.name,
@@ -551,7 +513,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       await user.save();
     }
 
-    // Role Verification on Sign In: Enforce that selected role matches user's registered role
     if (user && !isNewUser && action === "signin" && targetRole) {
       const userRole = String(user.role || "CUSTOMER").toUpperCase();
       const expectedRole = String(targetRole).toUpperCase();
@@ -571,10 +532,8 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
 
     setAuthCookies(res, accessToken, refreshToken);
 
-    // Role & Flow-based Navigation:
     const effectiveRole = (user.role || "CUSTOMER").toUpperCase();
 
-    // If Customer signing up or missing mobile number -> redirect to enter mobile number
     if (effectiveRole === "CUSTOMER" && (isNewUser || !user.phone_number || action === "signup")) {
       if (!user.phone_number) {
         res.redirect(appendAuthParam(`${clientUrl}/signup?step=phone`, accessToken, refreshToken));
@@ -584,7 +543,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // If Vendor
     if (effectiveRole === "VENDOR") {
       if (!user.verification_status) {
         res.redirect(appendAuthParam(`${clientUrl}/vendor/registration`, accessToken, refreshToken));
@@ -594,7 +552,6 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // If Rider
     if (effectiveRole === "RIDER") {
       if (!user.verification_status) {
         res.redirect(appendAuthParam(`${clientUrl}/rider/registration`, accessToken, refreshToken));
@@ -604,21 +561,17 @@ export const googleCallback = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // If Admin (safety check: Admin portal access strictly requires Secret Key)
     if (effectiveRole === "ADMIN") {
       res.redirect(`${clientUrl}/admin/signin?error=${encodeURIComponent("Admin accounts require secure password and Secret Key authentication.")}`);
       return;
     }
 
-    // Default Customer
     res.redirect(appendAuthParam(`${clientUrl}/home`, accessToken, refreshToken));
   } catch (error: any) {
     console.error("Google Callback Error:", error);
     res.redirect(`${clientUrl}/signin?error=${encodeURIComponent("Server error during Google auth")}`);
   }
 };
-
-// ─── Facebook OAuth Helpers ──────────────────────────────────────────
 
 const fetchFacebookProfile = async (accessToken?: string, code?: string) => {
   const clientId = (process.env.FACEBOOK_CLIENT_ID || "").trim();
@@ -663,8 +616,6 @@ const fetchFacebookProfile = async (accessToken?: string, code?: string) => {
   return null;
 };
 
-// @desc    Facebook Sign-In / Sign-Up API (Direct Token / Mobile)
-// @route   POST /api/auth/facebook
 export const facebookAuth = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, code, action = "signin", role: requestedRole } = req.body || {};
@@ -740,8 +691,6 @@ export const facebookAuth = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// @desc    Facebook OAuth2 Callback redirect handler
-// @route   GET /api/auth/facebook/callback
 export const facebookCallback = async (req: Request, res: Response): Promise<void> => {
   const clientUrl = process.env.CLIENT_URL || "";
   try {
@@ -750,7 +699,6 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
     const [action, roleParam] = rawState.split(":");
     const normalizedRole = (roleParam || "CUSTOMER").toUpperCase().trim();
 
-    // Security Check: Strictly prevent Admin privilege escalation via OAuth state manipulation
     if (normalizedRole === "ADMIN") {
       console.warn("Security Alert: Blocked attempted Admin privilege escalation via Facebook OAuth state manipulation.");
       res.redirect(
@@ -811,7 +759,6 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
       await user.save();
     }
 
-    // Role Verification on Sign In: Enforce that selected role matches user's registered role
     if (user && !isNewUser && action === "signin" && targetRole) {
       const userRole = String(user.role || "CUSTOMER").toUpperCase();
       const expectedRole = String(targetRole).toUpperCase();
@@ -872,8 +819,6 @@ export const facebookCallback = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// @desc    Get Facebook OAuth2 URL
-// @route   GET /api/auth/facebook/url
 export const getFacebookAuthUrl = (req: Request, res: Response): void => {
   const rootUrl = "https://www.facebook.com/v19.0/dialog/oauth";
   const action = (req.query.action as string) || "signin";
@@ -902,18 +847,15 @@ export const getFacebookAuthUrl = (req: Request, res: Response): void => {
   });
 };
 
-// @desc    Get Google OAuth2 URL
-// @route   GET /api/auth/google/url
 export const getGoogleAuthUrl = (req: Request, res: Response): void => {
   const rootUrl = "https://accounts.google.com/o/oauth2/v2/auth";
-  const action = (req.query.action as string) || "signin"; // 'signin' or 'signup'
+  const action = (req.query.action as string) || "signin";
   const requestedRole = String(req.query.role || "customer").toLowerCase().trim();
   const safeRole = ["customer", "vendor", "rider"].includes(requestedRole) ? requestedRole : "customer";
 
   const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
   const callbackUrl = (process.env.GOOGLE_CALLBACK_URL || ``).trim();
 
-  // Combine action and sanitized safe role into state (e.g., 'signup:customer', 'signup:vendor', 'signin:customer')
   const state = `${action}:${safeRole}`;
 
   const qs = new URLSearchParams({
@@ -932,8 +874,6 @@ export const getGoogleAuthUrl = (req: Request, res: Response): void => {
   });
 };
 
-// @desc    Logout & clear cookies
-// @route   POST /api/auth/logout
 export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
@@ -954,8 +894,6 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// @desc    Get Current User Profile
-// @route   GET /api/auth/profile
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
@@ -987,8 +925,6 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// @desc    Update Current User Profile (e.g., mobile number, name, notification preferences)
-// @route   PUT /api/auth/profile
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
@@ -1039,8 +975,6 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-// @desc    Forgot Password - Request Reset Link / OTP
-// @route   POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body || {};
@@ -1053,7 +987,6 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      // Graceful response for security (prevents account enumeration)
       res.status(200).json({
         success: true,
         message: "If an account with this email exists, a password reset code has been dispatched.",
@@ -1061,16 +994,13 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Cryptographically secure 6-digit verification code
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
     user.reset_password_token = resetToken;
-    user.reset_password_expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
+    user.reset_password_expires = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
-    // Log securely on server terminal for development/testing visibility
-    console.log(`🔑 [StreetBites Auth] Password Reset Code for ${cleanEmail}: ${resetToken}`);
+    console.log(`Password reset code for ${cleanEmail}: ${resetToken}`);
 
-    // SECURITY: Never return resetToken in the client HTTP response payload
     res.status(200).json({
       success: true,
       message: "Password reset instructions and 6-digit code sent to your email.",
@@ -1081,8 +1011,6 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// @desc    Reset Password with New Credentials
-// @route   POST /api/auth/reset-password
 export const resetPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, token, password, newPassword } = req.body || {};
@@ -1106,8 +1034,6 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanToken = String(token).trim();
 
-    // SECURITY: Strictly require BOTH matching email AND valid, non-expired token
-    // NEVER fall back to email-only lookup
     const user = await User.findOne({
       email: cleanEmail,
       reset_password_token: cleanToken,
@@ -1122,11 +1048,10 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Hash the new password with Argon2
     user.password = await argon2.hash(finalPassword);
     user.reset_password_token = null;
     user.reset_password_expires = null;
-    user.refresh_token = null; // Revoke existing sessions for security
+    user.refresh_token = null;
     await user.save();
 
     res.status(200).json({
@@ -1139,8 +1064,6 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-// @desc    User self-delete account
-// @route   DELETE /api/auth/profile
 export const deleteSelfAccount = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id || (req as any).user?._id;
@@ -1172,8 +1095,7 @@ export const deleteSelfAccount = async (req: Request, res: Response): Promise<vo
     res.status(500).json({ success: false, message: error?.message || "Failed to delete account." });
   }
 };
-// @desc    Get All Users with optional role and search filters (Admin)
-// @route   GET /api/auth/users
+
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const { role, search } = req.query;
@@ -1216,8 +1138,6 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// @desc    Update User Account Status (Suspend / Activate) (Admin)
-// @route   PUT /api/auth/users/:id/status
 export const updateUserStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -1245,8 +1165,6 @@ export const updateUserStatus = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// @desc    Delete User Account (Admin)
-// @route   DELETE /api/auth/users/:id
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

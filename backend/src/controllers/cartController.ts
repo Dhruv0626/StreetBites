@@ -11,9 +11,6 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-/**
- * Helper to safely resolve customer ID from token, headers, query, body, or cookies
- */
 const getCustomerId = (req: AuthenticatedRequest): string | null => {
   const id =
     req.user?.id ||
@@ -39,9 +36,6 @@ const getCustomerId = (req: AuthenticatedRequest): string | null => {
   return trimmed;
 };
 
-/**
- * Helper to format cart response from the single consolidated Cart document
- */
 const formatCartResponse = async (customerId: string) => {
   if (
     !customerId ||
@@ -146,7 +140,7 @@ const formatCartResponse = async (customerId: string) => {
   }
 
   const subtotal = items.reduce((acc, i) => acc + (i.price || 0) * i.quantity, 0);
-  const deliveryFee = subtotal > 0 ? 30 : 0; // Flat single delivery fee for all stalls in this Khau Galli
+  const deliveryFee = subtotal > 0 ? 30 : 0;
   const taxes = Math.round(subtotal * 0.05 * 10) / 10;
   const total = Math.round((subtotal + deliveryFee + taxes) * 10) / 10;
 
@@ -162,10 +156,6 @@ const formatCartResponse = async (customerId: string) => {
   };
 };
 
-/**
- * @desc    Get current user's unified cart
- * @route   GET /api/cart
- */
 export const getCart = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -200,10 +190,6 @@ export const getCart = async (req: AuthenticatedRequest, res: Response): Promise
   }
 };
 
-/**
- * @desc    Add item to unified cart with strict single Khau Galli restriction
- * @route   POST /api/cart/add
- */
 export const addToCart = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -245,7 +231,6 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    // 1. Resolve stall and its assigned Khau Galli (cluster_id)
     let incomingClusterId = khauGalliId || "";
     let incomingClusterName = khauGalliName || "Khau Galli";
     let resolvedStallName = stallName || vendorName || "Stall";
@@ -269,17 +254,15 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       ],
     };
 
-    // 2. Fetch customer's single unified Cart document
     let cart = await Cart.findOne(customerQuery);
 
     if (cart && cart.items && cart.items.length > 0) {
       const currentClusterId = String(cart.cluster_id?._id || cart.cluster_id || "");
       const currentClusterName = cart.khau_galli_name || "Current Khau Galli";
 
-      // 3. STRICT RULE ENFORCEMENT: Cannot mix stalls from different Khau Gallis
+      // Prevent mixing stalls from different Khau Gallis
       if (incomingClusterId && currentClusterId && currentClusterId !== incomingClusterId) {
         if (!replaceCart) {
-          // Return 409 Conflict so the UI can prompt the user
           res.status(409).json({
             success: false,
             code: "KHAU_GALLI_CONFLICT",
@@ -296,14 +279,12 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
           return;
         }
 
-        // User explicitly consented to discard and start a new cart for this Khau Galli
         cart.cluster_id = incomingClusterId;
         cart.khau_galli_name = incomingClusterName;
         cart.items = [];
       }
     }
 
-    // If no cart exists yet for this customer, initialize a new single Cart document
     if (!cart) {
       cart = new Cart({
         customer_id: String(customerId),
@@ -318,7 +299,6 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       cart.khau_galli_name = incomingClusterName;
     }
 
-    // 4. Look for the item in cart.items array
     const itemIndex = cart.items.findIndex(
       (i) => String(i.stall_id) === String(stallId) && String(i.item_id) === String(itemId)
     );
@@ -346,7 +326,6 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       await cart.save();
     } catch (saveErr: any) {
       if (saveErr.code === 11000) {
-        // E11000 duplicate key error, drop legacy index and merge into existing cart
         try {
           await mongoose.connection.collection("carts").dropIndex("customer_id_1_stall_id_1_item_id_1");
         } catch {}
@@ -382,7 +361,6 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
       }
     }
 
-    // 5. Return freshly calculated cart
     const data = await formatCartResponse(customerId);
     res.status(200).json({
       success: true,
@@ -398,10 +376,6 @@ export const addToCart = async (req: AuthenticatedRequest, res: Response): Promi
   }
 };
 
-/**
- * @desc    Update quantity of an item in the unified cart
- * @route   PUT /api/cart/item
- */
 export const updateCartItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -475,10 +449,6 @@ export const updateCartItem = async (req: AuthenticatedRequest, res: Response): 
   }
 };
 
-/**
- * @desc    Remove an item from unified cart (or decrement by 1)
- * @route   DELETE /api/cart/item/:stallId/:itemId
- */
 export const removeCartItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -546,10 +516,6 @@ export const removeCartItem = async (req: AuthenticatedRequest, res: Response): 
   }
 };
 
-/**
- * @desc    Clear entire cart for user
- * @route   DELETE /api/cart/clear
- */
 export const clearCart = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);

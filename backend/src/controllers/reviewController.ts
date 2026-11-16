@@ -62,10 +62,6 @@ export const recalculateStallAverageRating = async (stallId: mongoose.Types.Obje
   return { averageRating: avg, totalReviews: reviews.length };
 };
 
-/**
- * @desc    Submit reviews / ratings for an order (single stall or multiple stalls)
- * @route   POST /api/reviews
- */
 export const submitReview = async (req: Request, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -211,10 +207,6 @@ export const submitReview = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-/**
- * @desc    Get reviews submitted for a specific order by the customer
- * @route   GET /api/reviews/order/:orderId
- */
 export const getOrderReviews = async (req: Request, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);
@@ -251,10 +243,6 @@ export const getOrderReviews = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Get all public reviews and average rating for a stall
- * @route   GET /api/reviews/stall/:stallId
- */
 export const getStallReviews = async (req: Request, res: Response): Promise<void> => {
   try {
     const { stallId } = req.params;
@@ -320,10 +308,6 @@ export const getStallReviews = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Submit a complaint / report an issue for an order
- * @route   POST /api/reviews/complaint
- */
 export const submitCustomerComplaint = async (req: Request, res: Response): Promise<void> => {
   try {
     const customerId = getCustomerId(req);

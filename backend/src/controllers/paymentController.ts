@@ -181,10 +181,6 @@ const verifyHmacSignature = (
   }
 };
 
-/**
- * @desc    Create Razorpay Order for Customer Checkout
- * @route   POST /api/payments/razorpay/create-order
- */
 export const createRazorpayOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const { items, cluster_id, delivery_fee = 0, delivery_address, delivery_notes = "" } = req.body;
@@ -262,10 +258,6 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Verify Razorpay Payment & Finalize Master Order + Sub-Orders
- * @route   POST /api/payments/razorpay/verify
- */
 export const verifyRazorpayPayment = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveCustomer(req);
@@ -572,10 +564,6 @@ export const verifyRazorpayPayment = async (req: Request, res: Response): Promis
   }
 };
 
-/**
- * @desc    Create Cash on Delivery (COD) Order
- * @route   POST /api/payments/cod/create-order
- */
 export const createCodOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveCustomer(req);
@@ -856,10 +844,6 @@ export const createCodOrder = async (req: Request, res: Response): Promise<void>
   }
 };
 
-/**
- * @desc    Create Razorpay Order for Rider Debt Repayment
- * @route   POST /api/payments/rider/repay-debt/create-order
- */
 export const createRiderRepayOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const riderId = (req as any).user?.id || req.body.riderId || req.query.riderId;
@@ -933,10 +917,6 @@ export const createRiderRepayOrder = async (req: Request, res: Response): Promis
   }
 };
 
-/**
- * @desc    Verify Rider Debt Repayment & Reset Floating Debt
- * @route   POST /api/payments/rider/repay-debt/verify
- */
 export const verifyRiderRepay = async (req: Request, res: Response): Promise<void> => {
   try {
     const riderId = (req as any).user?.id || req.body.riderId;
@@ -1046,10 +1026,6 @@ export const verifyRiderRepay = async (req: Request, res: Response): Promise<voi
   }
 };
 
-/**
- * @desc    Get Global Platform Financial Overview (For Superadmin & All Admin Users)
- * @route   GET /api/payments/admin/overview
- */
 export const getAdminFinancialOverview = async (_req: Request, res: Response): Promise<void> => {
   try {
     const allTransactions = await Transaction.find().sort({ createdAt: -1 }).lean();
@@ -1162,10 +1138,6 @@ export const getAdminFinancialOverview = async (_req: Request, res: Response): P
   }
 };
 
-/**
- * @desc    Get Customer's Order History
- * @route   GET /api/payments/my-orders
- */
 export const getCustomerOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await resolveCustomer(req);
@@ -1308,10 +1280,6 @@ export const getCustomerOrders = async (req: Request, res: Response): Promise<vo
   }
 };
 
-/**
- * @desc    Cancel customer order
- * @route   POST /api/payments/orders/:orderId/cancel
- */
 export const cancelCustomerOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const customer = await resolveCustomer(req);

@@ -7,10 +7,6 @@ import { Order } from "../models/Order.ts";
 import { uploadToCloudinary, DocumentValidationError } from "../utils/cloudinary.ts";
 import { memoryCache } from "../utils/cache.ts";
 
-/**
- * @desc    Get all clusters with their nested stalls & live counts from MongoDB
- * @route   GET /api/clusters
- */
 export const getClusters = async (req: Request, res: Response): Promise<void> => {
   try {
     const isFresh = req.query.fresh === "true" || req.headers["x-fresh"] === "true";
@@ -141,10 +137,6 @@ export const getClusters = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-/**
- * @desc    Get single cluster by ID with its stalls & menu
- * @route   GET /api/clusters/:id
- */
 export const getClusterById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -225,10 +217,6 @@ export const getClusterById = async (req: Request, res: Response): Promise<void>
   }
 };
 
-/**
- * @desc    Create new Food Cluster (Admin)
- * @route   POST /api/clusters
- */
 export const createCluster = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, city, imageUrl, coordinates } = req.body;
@@ -306,10 +294,6 @@ export const createCluster = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-/**
- * @desc    Update Food Cluster (Admin)
- * @route   PUT /api/clusters/:id
- */
 export const updateCluster = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -383,10 +367,6 @@ export const updateCluster = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-/**
- * @desc    Delete Food Cluster (Admin)
- * @route   DELETE /api/clusters/:id
- */
 export const deleteCluster = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

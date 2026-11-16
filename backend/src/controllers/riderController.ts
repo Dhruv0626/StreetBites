@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.ts";
 import Order from "../models/Order.ts";
 import SubOrder from "../models/SubOrder.ts";
-import Stall from "../models/Stall.ts";
 import Transaction from "../models/Transaction.ts";
 import PlatformSetting from "../models/PlatformSetting.ts";
 import Address from "../models/Address.ts";
@@ -15,8 +14,8 @@ import { maskBankAccount, maskUpiId, encryptPii } from "../utils/securityPii.ts"
 import { memoryCache } from "../utils/cache.ts";
 
 /**
- * Helper to safely resolve rider user document from authenticated session.
- * Strictly prevents silent fallback and data leakage.
+  Helper to safely resolve rider user document from authenticated session.
+  Strictly prevents silent fallback and data leakage.
  */
 const resolveRider = async (req: Request) => {
   const authUser = (req as any).user;
@@ -42,7 +41,6 @@ const resolveRider = async (req: Request) => {
   return rider;
 };
 
-// Helper to calculate exact net COD debt held by rider (Order Total - Rider Delivery Earnings)
 const getOrderNetCodDebt = (order: any): number => {
   if (order.payment_method !== "COD") return 0;
   if (order.cod_amount_held !== undefined && order.cod_amount_held < (order.total_amount || 0)) {
@@ -52,10 +50,6 @@ const getOrderNetCodDebt = (order: any): number => {
   return Math.max(0, Math.round(((order.total_amount || 0) - riderFee) * 100) / 100);
 };
 
-/**
- * @desc    Get Rider Dashboard Statistics & Earnings (Real data, zeroed if fresh)
- * @route   GET /api/rider/stats
- */
 export const getRiderStats = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -429,10 +423,6 @@ function getHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: 
   return R * c;
 }
 
-/**
- * @desc    Toggle Rider Online / Offline Duty Status & Update Live Location
- * @route   PUT /api/rider/toggle-online
- */
 export const toggleRiderOnlineStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -479,10 +469,6 @@ export const toggleRiderOnlineStatus = async (req: Request, res: Response): Prom
   }
 };
 
-/**
- * @desc    Update Rider Dispatch Settings (Max Delivery Radius, Auto-accept, Push Notifs)
- * @route   PUT /api/rider/settings
- */
 export const updateRiderSettings = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -531,18 +517,10 @@ export const updateRiderSettings = async (req: Request, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Get Rider Order Queue (Orders waiting for rider pickup)
- *          Enforces:
- *          1. Only ONLINE riders can view and receive incoming orders.
- *          2. Filters orders within the rider's configured delivery range radius.
- * @route   GET /api/rider/queue
- */
 export const getRiderQueue = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
 
-    // Rule 1: If rider is OFFLINE, do not show any order accept data
     if (!rider || !rider.is_online) {
       res.status(200).json({
         success: true,
@@ -704,10 +682,6 @@ export const getRiderQueue = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-/**
- * @desc    Decline / Skip an order from queue (Immediately forwards to next available rider)
- * @route   PUT /api/rider/orders/:id/decline
- */
 export const declineQueueOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -744,11 +718,6 @@ export const declineQueueOrder = async (req: Request, res: Response): Promise<vo
   }
 };
 
-/**
- * @desc    Accept an order from queue
- *          Enforces: Rider must be ONLINE to accept an order.
- * @route   PUT /api/rider/orders/:id/accept
- */
 export const acceptQueueOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -858,10 +827,6 @@ export const acceptQueueOrder = async (req: Request, res: Response): Promise<voi
   }
 };
 
-/**
- * @desc    Get Active Delivery Route for Rider
- * @route   GET /api/rider/active-route
- */
 export const getActiveRoute = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -984,7 +949,7 @@ export const getActiveRoute = async (req: Request, res: Response): Promise<void>
       };
     });
 
-    // ── Resolve Exact Customer Delivery Drop Coordinates ──────────────────
+    // Customer delivery drop coordinates
     let dropCoords: [number, number] | null = null;
 
     const isCentralDefault = (coords?: [number, number] | null) => {
@@ -1090,10 +1055,6 @@ export const getActiveRoute = async (req: Request, res: Response): Promise<void>
   }
 };
 
-/**
- * @desc    Advance checkpoint or mark stall pickup collected
- * @route   POST /api/rider/orders/:id/collect-checkpoint
- */
 export const collectRouteCheckpoint = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1156,10 +1117,6 @@ export const collectRouteCheckpoint = async (req: Request, res: Response): Promi
   }
 };
 
-/**
- * @desc    Mark Rider Arrived at Customer Doorstep
- * @route   POST /api/rider/orders/:id/at-door
- */
 export const markRiderAtDoor = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1218,10 +1175,6 @@ export const markRiderAtDoor = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Get Rider Delivery History
- * @route   GET /api/rider/history
- */
 export const getRiderHistory = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1277,10 +1230,6 @@ export const getRiderHistory = async (req: Request, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Verify Customer OTP and Mark Order Delivered
- * @route   POST /api/rider/orders/:id/verify-otp
- */
 export const completeDeliveryWithOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1491,10 +1440,6 @@ export const completeDeliveryWithOtp = async (req: Request, res: Response): Prom
   }
 };
 
-/**
- * @desc    Settle COD Debt (Instant Settlement)
- * @route   POST /api/rider/settle-debt
- */
 export const settleRiderDebt = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1558,8 +1503,6 @@ export const settleRiderDebt = async (req: Request, res: Response): Promise<void
   }
 };
 
-// @desc    Get Rider Compensation Claims
-// @route   GET /api/rider/claims
 export const getRiderClaims = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1611,8 +1554,6 @@ export const getRiderClaims = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// @desc    Submit Rider Compensation Claim
-// @route   POST /api/rider/claims
 export const submitRiderClaim = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1670,8 +1611,6 @@ export const submitRiderClaim = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// @desc    Rider Request Payout Withdrawal
-// @route   POST /api/rider/payouts/withdraw
 export const requestRiderWithdrawal = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);
@@ -1762,8 +1701,6 @@ export const requestRiderWithdrawal = async (req: Request, res: Response): Promi
   }
 };
 
-// @desc    Update Rider Bank & Payout Details
-// @route   PUT /api/rider/bank-details
 export const updateRiderBankDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const rider = await resolveRider(req);

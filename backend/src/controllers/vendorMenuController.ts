@@ -73,11 +73,6 @@ const getItemCategory = (item: any, masterItems: any[]): string => {
   return masterItems.length > 0 ? masterItems[0].name : "General";
 };
 
-/**
- * @desc    Get current vendor's stall menu, items & categories (purely from FoodItem schema)
- * @route   GET /api/vendor/menu
- * @access  Private (Vendor)
- */
 export const getVendorMenu = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -181,11 +176,6 @@ export const getVendorMenu = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-/**
- * @desc    Add a new variety of food to the vendor's stall menu_items array in MongoDB
- * @route   POST /api/vendor/menu/item
- * @access  Private (Vendor)
- */
 export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -294,11 +284,6 @@ export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-/**
- * @desc    Create a new Food Category in master FoodItem collection (Status: Review_pending)
- * @route   POST /api/vendor/menu/category
- * @access  Private (Vendor)
- */
 export const addFoodCategory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, image_url, imageUrl } = req.body;
@@ -353,11 +338,6 @@ export const addFoodCategory = async (req: AuthRequest, res: Response): Promise<
   }
 };
 
-/**
- * @desc    Toggle menu item availability (In-Stock / Out-of-Stock)
- * @route   PATCH /api/vendor/menu/item/:id/availability
- * @access  Private (Vendor)
- */
 export const toggleItemAvailability = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -397,11 +377,6 @@ export const toggleItemAvailability = async (req: AuthRequest, res: Response): P
   }
 };
 
-/**
- * @desc    Update an existing food item variety in vendor's stall
- * @route   PUT /api/vendor/menu/item/:id
- * @access  Private (Vendor)
- */
 export const updateMenuItem = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);
@@ -501,11 +476,6 @@ export const updateMenuItem = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
-/**
- * @desc    Delete food item variety from stall
- * @route   DELETE /api/vendor/menu/item/:id
- * @access  Private (Vendor)
- */
 export const deleteMenuItem = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = await resolveUserId(req);

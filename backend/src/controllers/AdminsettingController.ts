@@ -3,10 +3,6 @@ import { PlatformSetting } from "../models/PlatformSetting.ts";
 import User from "../models/User.ts";
 import { createNotification } from "../utils/notificationHelper.ts";
 
-/**
- * @desc    Get Public Platform Settings
- * @route   GET /api/settings
- */
 export const getPlatformSettings = async (_req: Request, res: Response): Promise<void> => {
   try {
     let settings = await PlatformSetting.findOne();
@@ -43,10 +39,6 @@ export const getPlatformSettings = async (_req: Request, res: Response): Promise
   }
 };
 
-/**
- * @desc    Update Platform Settings (Admin)
- * @route   PUT /api/settings
- */
 export const updatePlatformSettings = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -79,7 +71,6 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
 
     await settings.save();
 
-    // ─── Broadcast Notification to Riders on Incentive Activation ───
     if (
       (is_weather_surge_enabled === true && !prevWeatherSurge) ||
       (is_festival_incentive_enabled === true && !prevFestivalIncentive)
@@ -123,10 +114,6 @@ export const updatePlatformSettings = async (req: Request, res: Response): Promi
   }
 };
 
-/**
- * @desc    Create / Initialize Platform Settings
- * @route   POST /api/settings
- */
 export const createPlatformSettings = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -178,10 +165,6 @@ export const createPlatformSettings = async (req: Request, res: Response): Promi
   }
 };
 
-/**
- * @desc    Reset / Delete Custom Platform Settings to defaults
- * @route   DELETE /api/settings
- */
 export const deletePlatformSettings = async (_req: Request, res: Response): Promise<void> => {
   try {
     await PlatformSetting.deleteMany({});
