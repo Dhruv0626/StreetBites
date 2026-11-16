@@ -1,4 +1,4 @@
-# 🍔 StreetBites — Hyperlocal Street Food Discovery & Cluster Delivery Platform
+# 🍔 StreetBites — Hyperlocal Multi-Stall Street Food Ordering & Delivery Platform
 
 > ### 📖 Platform Definition
 > **StreetBites** is a full-stack, cluster-based hyperlocal street food discovery and on-demand delivery platform designed to organize and digitize the informal street food economy. The platform enables consumers to discover geofenced street food hubs and place unified orders across multiple independent street food stalls in a single transaction with a single delivery fee, while equipping vendors with digital order management and automated onboarding, delivery partners with multi-point cluster routing and cash reconciliation, and platform operators with centralized KYC verification and real-time operational governance.
