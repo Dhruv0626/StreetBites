@@ -68,7 +68,7 @@ export const Cart: React.FC = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-      {/* ─── DESKTOP VIEW ─── */}
+      {/* DESKTOP VIEW */}
       <div className="hidden md:block">
         {/* Header Breadcrumbs & Details */}
         <div className="flex justify-between items-center mb-6">
@@ -299,7 +299,7 @@ export const Cart: React.FC = () => {
         )}
       </div>
 
-      {/* ─── MOBILE VIEW ─── */}
+      {/* MOBILE VIEW */}
       <div className="md:hidden block bg-[#FAF7F2] min-h-screen pb-24">
         {/* Header */}
         <div className="bg-white border-b border-[#EAE4DA] p-4 sticky top-0 z-30 flex items-center justify-between">

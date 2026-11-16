@@ -223,7 +223,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // ── Catch-all ─────────────────────────────────────────────────────────────
+  // Catch-all
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
 

@@ -28,7 +28,6 @@ export const AdminVerification: React.FC = () => {
   // Top-level Section Switcher: 'kyc' | 'foodItems' | 'audit'
   const [activeSection, setActiveSection] = useState<'kyc' | 'foodItems' | 'audit'>('foodItems');
 
-  // --- KYC Applications State ---
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [applications, setApplications] = useState<any[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
@@ -38,16 +37,13 @@ export const AdminVerification: React.FC = () => {
   const [kycError, setKycError] = useState<string | null>(null);
   const [isProcessingKyc, setIsProcessingKyc] = useState<boolean>(false);
 
-  // --- On-Demand KYC Document Inspection Cache (Threat 3 Defense) ---
   const [inspectedAppCache, setInspectedAppCache] = useState<Record<string, any>>({});
   const [isLoadingSingleDoc, setIsLoadingSingleDoc] = useState<boolean>(false);
 
-  // --- KYC Security Audit Trail State ---
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
   const [auditError, setAuditError] = useState<string | null>(null);
 
-  // --- Food Items Approvals State ---
   const [foodTab, setFoodTab] = useState<'all' | 'Review_pending' | 'Approved' | 'Rejected'>('Review_pending');
   const [foodSearch, setFoodSearch] = useState<string>('');
   const [foodItems, setFoodItems] = useState<any[]>([]);

@@ -521,7 +521,7 @@ export const Profile: React.FC = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto md:mt-4 pb-20 font-sans">
-      {/* ─── Hero Section ─── */}
+      
       <div className="bg-gradient-to-r from-[#D94A38] to-[#993427] md:rounded-3xl relative overflow-hidden px-6 pt-12 pb-24 md:pt-16 md:pb-28 shadow-lg">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-black opacity-10 rounded-full blur-2xl translate-y-1/3 -translate-x-1/4"></div>
@@ -548,7 +548,7 @@ export const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* ─── Real Stats Bar ─── */}
+      
       <div className="px-4 sm:px-6 lg:px-8 -mt-12 relative z-20 mb-8">
         <div className="bg-white rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-[#EAE4DA] flex justify-between md:justify-around items-center divide-x divide-[#F5F0E8]">
           <div
@@ -579,7 +579,7 @@ export const Profile: React.FC = () => {
       </div>
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* ─── Guest Welcome Banner (When Not Logged In) ─── */}
+        
         {!isAuthenticated && (
           <div className="bg-amber-50 border border-[#D94A38] rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
@@ -599,7 +599,7 @@ export const Profile: React.FC = () => {
           </div>
         )}
 
-        {/* ─── Role Dashboard Shortcut (If Vendor, Rider, or Admin) ─── */}
+        
         {isAuthenticated && user && user.role !== 'CUSTOMER' && (
           <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-5 shadow-sm flex items-center justify-between">
             <div className="flex items-center gap-3.5">
@@ -628,7 +628,7 @@ export const Profile: React.FC = () => {
           </div>
         )}
 
-        {/* ─── Quick Actions Grid ─── */}
+        
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => navigate(isAuthenticated ? '/orders' : '/signin')}
@@ -651,7 +651,7 @@ export const Profile: React.FC = () => {
           </button>
         </div>
 
-        {/* ─── Account Settings Accordion ─── */}
+        
         <div>
           <h3 className="text-xs font-black uppercase tracking-widest text-[#8E8B85] mb-3 ml-2">Account Settings</h3>
           <div className="bg-white rounded-3xl border border-[#EAE4DA] overflow-hidden shadow-2xs">
@@ -1250,7 +1250,7 @@ export const Profile: React.FC = () => {
           </div>
         </div>
 
-        {/* ─── Bottom Action Button (Log Out for User vs Sign In for Guest) ─── */}
+        
         {isAuthenticated ? (
           <button
             className="w-full flex items-center justify-center gap-2 p-4 text-[#D94A38] bg-white rounded-2xl border border-[#EAE4DA] shadow-sm hover:bg-[#FCE8E6] transition-colors mt-8 font-black uppercase tracking-wider text-sm cursor-pointer"
@@ -1269,7 +1269,7 @@ export const Profile: React.FC = () => {
           </button>
         )}
 
-        {/* ─── Address Modal with Interactive Map Adjuster ─── */}
+        
         <AddressModal
           isOpen={isAddressModalOpen}
           onClose={() => setIsAddressModalOpen(false)}

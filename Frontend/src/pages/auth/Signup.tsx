@@ -295,7 +295,7 @@ export const Signup: React.FC = () => {
                 </div>
               )}
 
-              {/* ─── Completed State ─── */}
+              
               {currentStep === 'completed' && (
                 <div className="bg-[#FAF7F2] border border-[#E8E2D7] text-stone-800 p-6 rounded-2xl text-center my-6 shadow-sm">
                   <CheckCircle2 className="w-10 h-10 text-[#E54B3C] mx-auto mb-2" />
@@ -308,7 +308,7 @@ export const Signup: React.FC = () => {
                 </div>
               )}
 
-              {/* ─── Main Registration Form (Includes Mobile Number Strictly) ─── */}
+              {/* Main Registration Form (Includes Mobile Number Strictly) */}
               {currentStep === 'form' && (
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   {/* Full Name */}
@@ -517,7 +517,7 @@ export const Signup: React.FC = () => {
                 </form>
               )}
 
-              {/* ─── OAuth Missing Phone Step ─── */}
+              
               {currentStep === 'oauth_phone' && (
                 <form onSubmit={handleOAuthPhoneSubmit} className="space-y-4 animate-fadeIn">
                   <div>

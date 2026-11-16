@@ -41,7 +41,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
 
   const apiKeyValid = isTomTomApiKeyConfigured();
 
-  // ── 1. Dynamically Load Official TomTom SDK Script & Stylesheet ──────────────
+  // Dynamically Load Official TomTom SDK Script & Stylesheet
   useEffect(() => {
     // Check if TomTom SDK is already available on window
     if ((window as any).tt && (window as any).tt.map) {
@@ -92,7 +92,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     }
   }, []);
 
-  // ── 2. Map Canvas Initialization & StrictMode Protection ─────────────────────
+  // Map Canvas Initialization & StrictMode Protection
   useEffect(() => {
     if (!apiKeyValid || !sdkReady) {
       if (!apiKeyValid) setIsLoading(false);
@@ -190,7 +190,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     };
   }, [sdkReady, apiKeyValid]);
 
-  // ── 3. Dynamic Center / Zoom / Pitch / Bearing Updates ────────────────────────
+  // Dynamic Center / Zoom / Pitch / Bearing Updates
   const lastPropCenterRef = useRef<[number, number]>([center[0], center[1]]);
   const lastPropZoomRef = useRef<number>(zoom);
   const lastPropPitchRef = useRef<number>(pitch);
@@ -237,7 +237,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     }
   }, [center?.[0], center?.[1], zoom, pitch, bearing]);
 
-  // ── 4. Marker Synchronization & Smooth Animation Updates ─────────────────────
+  // Marker Synchronization & Smooth Animation Updates
   useEffect(() => {
     const map = mapInstanceRef.current;
     const ttSDK = (window as any).tt;
@@ -325,7 +325,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     });
   }, [markers, apiKeyValid, sdkReady, showMarkers]);
 
-  // ── 5. Route Polyline Synchronization & Dynamic Bounds Fitting ────────────────
+  // Route Polyline Synchronization & Dynamic Bounds Fitting
   useEffect(() => {
     const map = mapInstanceRef.current;
     const ttSDK = (window as any).tt;
@@ -421,7 +421,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
     }
   }, [routeCoordinates, apiKeyValid, sdkReady]);
 
-  // ── Render Fallback Banner if TomTom API Key is missing ──────────────────────
+  // Render Fallback Banner if TomTom API Key is missing
   if (!apiKeyValid) {
     return (
       <div className={`${className} bg-stone-100 flex items-center justify-center p-6 text-center border-2 border-dashed border-amber-300`}>
@@ -541,7 +541,7 @@ export const TomTomMap: React.FC<TomTomMapProps> = ({
   );
 };
 
-// ── HELPER FUNCTIONS FOR ATTRACTIVE & MEANINGFUL MARKER STYLING ─────────────────
+// HELPER FUNCTIONS FOR ATTRACTIVE & MEANINGFUL MARKER STYLING
 
 function applyMarkerElementDimensions(el: HTMLElement, _type?: string) {
   el.style.width = '0px';

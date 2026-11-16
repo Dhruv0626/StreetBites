@@ -64,7 +64,7 @@ export const RiderRoute: React.FC = () => {
   const [riderLiveLocation, setRiderLiveLocation] = useState<[number, number] | null>(null);
   const [deviceGpsHeading, setDeviceGpsHeading] = useState<number | null>(null);
 
-  // ── 3D Turn-By-Turn Navigation Mode State ──────────────────────────────────
+  // 3D Turn-By-Turn Navigation Mode State
   const [isNavigating, setIsNavigating] = useState<boolean>(false);
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
 
@@ -91,7 +91,7 @@ export const RiderRoute: React.FC = () => {
     }
   };
 
-  // ── 1. Live GPS Location Tracking for Rider ────────────────────────────────
+  // Live GPS Location Tracking for Rider
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -283,7 +283,7 @@ export const RiderRoute: React.FC = () => {
     riderLiveLocation?.[1] ? Number(riderLiveLocation[1].toFixed(3)) : null,
   ]);
 
-  // ── Calculate Precise Forward Bearing along the Road / Next Step ─────────────
+  // Calculate Precise Forward Bearing along the Road / Next Step
   const riderHeading = React.useMemo(() => {
     if (!riderLiveLocation || !Array.isArray(riderLiveLocation) || riderLiveLocation.length < 2) {
       return 0;
@@ -613,7 +613,7 @@ export const RiderRoute: React.FC = () => {
             </div>
           )}
 
-          {/* ─── Google Maps Style Turn-by-Turn Top Navigation HUD ─── */}
+          
           {isNavigating && (
             <div className="absolute top-4 left-4 right-4 z-30 animate-fadeIn">
               <div className="bg-[#054E3B] text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center justify-between gap-3">

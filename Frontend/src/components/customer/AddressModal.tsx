@@ -292,7 +292,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
         {/* Body Layout: 2 Columns on Desktop (Map Left, Form Right), Stacked on Mobile */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 overflow-y-auto md:overflow-hidden">
-          {/* ─── LEFT COLUMN: Interactive Map & Live GPS (md:col-span-6 lg:col-span-6) ─── */}
+          
           <div className="md:col-span-6 lg:col-span-6 bg-[#FAF7F2]/60 p-4 sm:p-5 flex flex-col gap-3 border-b md:border-b-0 md:border-r border-[#EAE4DA] md:overflow-y-auto">
             {/* Warning Message */}
             {warningMsg && (
@@ -405,7 +405,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
             )}
           </div>
 
-          {/* ─── RIGHT COLUMN: Structured Address Form (md:col-span-6 lg:col-span-6) ─── */}
+          
           <div className="md:col-span-6 lg:col-span-6 bg-white p-4 sm:p-5 flex flex-col justify-between md:overflow-y-auto">
             <form id="address-form" onSubmit={handleSubmit} className="space-y-3.5">
               {/* Step indicator / Header */}

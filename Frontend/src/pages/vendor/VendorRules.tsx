@@ -250,7 +250,7 @@ export const VendorRulesPage: React.FC = () => {
 
   return (
     <div className="animate-fadeIn pb-24 max-w-4xl mx-auto space-y-8 font-sans">
-      {/* ─── Header ─── */}
+      
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -272,7 +272,7 @@ export const VendorRulesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─── 💰 Transparent 95% / 5% Revenue Split Card ─── */}
+      
       <div className="bg-gradient-to-br from-[#1C1917] to-[#2D2826] text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
           <div>
@@ -330,7 +330,7 @@ export const VendorRulesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─── Search & Category Filters ─── */}
+      
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
@@ -377,7 +377,7 @@ export const VendorRulesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ─── Categorized Rules Grid ─── */}
+      
       {filteredCategories.length === 0 ? (
         <div className="bg-white rounded-3xl border border-[#EAE4DA] p-12 text-center space-y-3 shadow-3xs">
           <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mx-auto">
@@ -439,7 +439,7 @@ export const VendorRulesPage: React.FC = () => {
         </div>
       )}
 
-      {/* ─── Compliance Notice Banner ─── */}
+      
       <div className="bg-[#FAF7F2] border border-[#EAE4DA] rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-3xs">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-2xl bg-white border border-[#EAE4DA] flex items-center justify-center text-[#D94A38] shrink-0 shadow-3xs">

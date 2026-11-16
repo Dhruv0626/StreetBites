@@ -205,7 +205,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* ─── DESKTOP VIEW ─── */}
+      {/* DESKTOP VIEW */}
       <div className="hidden md:block">
         {/* Breadcrumbs & Back Button */}
         <div className="flex items-center gap-3 mb-5 pt-4">
@@ -583,7 +583,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
         </div>
       </div>
 
-      {/* ─── MOBILE VIEW ─── */}
+      {/* MOBILE VIEW */}
       <div className="md:hidden p-4 pb-32">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -753,7 +753,7 @@ export const StallDetail: React.FC<StallDetailProps> = () => {
               )}
             </div>
 
-            {/* ─── CUSTOMER REVIEWS & RATINGS SECTION ─── */}
+            
             <div className="mt-10 pt-8 border-t border-[#EAE4DA] space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>

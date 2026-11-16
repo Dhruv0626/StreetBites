@@ -344,7 +344,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
 
   const liveItems: any[] = Array.isArray(currentLiveOrder?.items) ? currentLiveOrder.items : [];
 
-  // ── Calculate Distance & Live Estimated Arrival Time (ETA) ─────────────────
+  // Calculate Distance & Live Estimated Arrival Time (ETA)
   const calculateDistanceKm = (c1?: [number, number] | null, c2?: [number, number] | null): number => {
     if (!c1 || !c2 || !Array.isArray(c1) || !Array.isArray(c2) || c1.length < 2 || c2.length < 2) {
       return 2.4;
@@ -672,7 +672,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 pb-24">
-      {/* ─── DESKTOP VIEW ─── */}
+      {/* DESKTOP VIEW */}
       <div className="hidden md:block">
         {/* Navigation Tabs Header */}
         <div className="flex justify-between items-center mb-6">
@@ -724,7 +724,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           </div>
         </div>
 
-        {/* ─── DESKTOP LIVE ORDER VIEW ─── */}
+        {/* DESKTOP LIVE ORDER VIEW */}
         {activeTab === 'live' && (
           <div className="animate-fadeIn">
             {currentLiveOrder ? (() => {
@@ -844,7 +844,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                     </div>
                   </div>
 
-                  {/* ─── LIVE ESTIMATED ARRIVAL TIME (ETA) & DISTANCE BANNER ─── */}
+                  
                   {!isDelivered && (
                     <div className="bg-gradient-to-r from-[#1C1917] via-[#241F1D] to-[#1C1917] text-white rounded-3xl p-6 shadow-xl border border-stone-800 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-64 h-64 bg-[#D94A38]/15 rounded-full blur-3xl pointer-events-none" />
@@ -902,7 +902,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
                     </div>
                   )}
 
-                  {/* ─── 4-STAGE FULL TRACKING FLOW STEPPER ─── */}
+                  
                   <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 shadow-2xs">
                     <div className="flex justify-between items-center mb-6">
                       <div className="flex items-center gap-2">
@@ -1261,7 +1261,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
           </div>
         )}
 
-        {/* ─── DESKTOP ORDER HISTORY VIEW ─── */}
+        {/* DESKTOP ORDER HISTORY VIEW */}
         {activeTab === 'past' && (
           <div className="mt-4">
             <h1 className="text-2xl font-bold text-[#1C1917] mb-6 flex items-center gap-2">
@@ -1272,7 +1272,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         )}
       </div>
 
-      {/* ─── MOBILE VIEW ─── */}
+      {/* MOBILE VIEW */}
       <div className="md:hidden block">
         {/* Top Mobile Bar */}
         <div className="flex items-center justify-between py-3.5 px-2 bg-white border-b border-[#EAE4DA] sticky top-0 z-30 mb-4">
@@ -1609,7 +1609,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         )}
       </div>
 
-      {/* ─── CANCEL ORDER CONFIRMATION MODAL ─── */}
+      
       {cancellingOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-4">
@@ -1690,7 +1690,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         </div>
       )}
 
-      {/* ─── RATE & REVIEW MODAL ─── */}
+      
       {reviewOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-5 max-h-[90vh] overflow-y-auto">
@@ -1796,7 +1796,7 @@ export const Orders: React.FC<OrdersProps> = ({ activeOrder, onNavigate }) => {
         </div>
       )}
 
-      {/* ─── REPORT ISSUE / COMPLAINT MODAL ─── */}
+      
       {complaintOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#EAE4DA] space-y-4">

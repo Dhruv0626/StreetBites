@@ -286,7 +286,7 @@ export async function calculateTomTomRoute(
 }
 
 /**
- * ─── TomTom Matrix Routing API ─────────────────────────────────────────────
+ * TomTom Matrix Routing API
  */
 export async function calculateTomTomMatrix(
   origins: [number, number][],
@@ -382,7 +382,7 @@ export async function calculateTomTomMatrix(
 }
 
 /**
- * ─── Multi-Stall Delivery Optimizer ─────────────────────────────────────────
+ * Multi-Stall Delivery Optimizer
  */
 export async function optimizeMultiStopCheckpoints(
   riderPosition: [number, number],

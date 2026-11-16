@@ -13,7 +13,7 @@ export const Skeleton: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   );
 };
 
-// ─── 1. KHAU GALLI CLUSTER CARD SKELETON ───
+// KHAU GALLI CLUSTER CARD SKELETON
 export const ClusterCardSkeleton: React.FC = () => (
   <div className="bg-white rounded-3xl border border-[#EAE4DA] overflow-hidden shadow-2xs p-3.5 flex flex-col gap-3 h-full">
     <div className="skeleton w-full h-40 sm:h-44 rounded-2xl" />
@@ -31,7 +31,7 @@ export const ClusterCardSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 2. STALL CARD SKELETON (4-Col Grids) ───
+// STALL CARD SKELETON (4-Col Grids)
 export const StallCardSkeleton: React.FC = () => (
   <div className="bg-white rounded-3xl overflow-hidden shadow-2xs border border-[#EAE4DA] p-4 flex flex-col gap-3">
     <div className="skeleton w-full h-44 rounded-2xl" />
@@ -49,7 +49,7 @@ export const StallCardSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 3. HOME PAGE SKELETON ───
+// HOME PAGE SKELETON
 export const HomeSkeleton: React.FC = () => (
   <div className="bg-[#FAF7F2] min-h-screen">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12 animate-fadeIn">
@@ -106,7 +106,7 @@ export const HomeSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 4. STALL DETAIL & STALLS NEAR ME SKELETON ───
+// STALL DETAIL & STALLS NEAR ME SKELETON
 export const StallDetailSkeleton: React.FC = () => (
   <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 space-y-8 animate-fadeIn">
     {/* Breadcrumbs & Back */}
@@ -180,7 +180,7 @@ export const StallDetailSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 5. ALL CLUSTERS PAGE SKELETON ───
+// ALL CLUSTERS PAGE SKELETON
 export const AllClustersSkeleton: React.FC = () => (
   <div className="w-full max-w-7xl mx-auto md:mt-4 px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 space-y-8 animate-fadeIn pb-20">
     <div className="hidden md:flex justify-between items-center mb-6">
@@ -199,7 +199,7 @@ export const AllClustersSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 6. ALL STALLS PAGE SKELETON ───
+// ALL STALLS PAGE SKELETON
 export const AllStallsSkeleton: React.FC = () => (
   <div className="w-full max-w-7xl mx-auto md:mt-4 px-4 sm:px-6 lg:px-8 pt-6 md:pt-10 space-y-8 animate-fadeIn pb-20">
     <div className="space-y-2 mb-6">
@@ -214,7 +214,7 @@ export const AllStallsSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 7. SEARCH PAGE SKELETON ───
+// SEARCH PAGE SKELETON
 export const SearchSkeleton: React.FC = () => (
   <div className="bg-[#FAF7F2] min-h-screen pb-20 animate-fadeIn">
     <div className="bg-white px-4 py-3 shadow-sm flex gap-3 items-center">
@@ -239,7 +239,7 @@ export const SearchSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 8. CART & CHECKOUT SKELETON ───
+// CART & CHECKOUT SKELETON
 export const CartSkeleton: React.FC = () => (
   <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn pb-24">
     <div className="skeleton w-40 h-8 rounded-xl" />
@@ -264,7 +264,7 @@ export const CartSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 9. ORDERS & HISTORY SKELETON ───
+// ORDERS & HISTORY SKELETON
 export const OrdersSkeleton: React.FC = () => (
   <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn pb-24">
     <div className="flex justify-between items-center">
@@ -287,7 +287,7 @@ export const OrdersSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 10. PROFILE SKELETON ───
+// PROFILE SKELETON
 export const ProfileSkeleton: React.FC = () => (
   <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6 animate-fadeIn pb-24">
     <div className="bg-white rounded-3xl border border-[#EAE4DA] p-6 flex items-center gap-5 shadow-2xs">
@@ -309,7 +309,7 @@ export const ProfileSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 11. ADMIN DASHBOARD SKELETON ───
+// ADMIN DASHBOARD SKELETON
 export const AdminPageSkeleton: React.FC = () => (
   <div className="space-y-6 max-w-6xl mx-auto w-full animate-fadeIn pb-8">
     <div className="space-y-1.5">
@@ -345,7 +345,7 @@ export const AdminPageSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 12. VENDOR DASHBOARD SKELETON ───
+// VENDOR DASHBOARD SKELETON
 export const VendorPageSkeleton: React.FC = () => (
   <div className="space-y-6 max-w-6xl mx-auto w-full animate-fadeIn pb-8">
     <div className="flex justify-between items-center">
@@ -367,7 +367,7 @@ export const VendorPageSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 13. RIDER DASHBOARD SKELETON ───
+// RIDER DASHBOARD SKELETON
 export const RiderPageSkeleton: React.FC = () => (
   <div className="space-y-6 max-w-5xl mx-auto w-full animate-fadeIn pb-8">
     <div className="flex justify-between items-center">
@@ -382,7 +382,7 @@ export const RiderPageSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 14. TABLE ROWS SKELETON (Admin tables, lists) ───
+// TABLE ROWS SKELETON (Admin tables, lists)
 export const TableRowsSkeleton: React.FC<{ columns?: number; rows?: number }> = ({
   columns = 5,
   rows = 5,
@@ -411,7 +411,7 @@ export const TableRowsSkeleton: React.FC<{ columns?: number; rows?: number }> = 
   </>
 );
 
-// ─── 15. FOOD CATEGORIES 3D SKELETON ("What's on your mind?") ───
+// FOOD CATEGORIES 3D SKELETON ("What's on your mind?")
 export const FoodCategoriesSkeleton: React.FC = () => (
   <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-6 pt-2 px-2 no-scrollbar -mx-2 animate-fadeIn">
     {[1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -423,7 +423,7 @@ export const FoodCategoriesSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 16. QUEUE ITEM SKELETON (Deliveries, KYC applications, Food queue) ───
+// QUEUE ITEM SKELETON (Deliveries, KYC applications, Food queue)
 export const QueueItemSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) => (
   <div className="space-y-3 animate-fadeIn">
     {Array.from({ length: count }).map((_, idx) => (
@@ -445,7 +445,7 @@ export const QueueItemSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) =
   </div>
 );
 
-// ─── 17. AUTH / SIGNIN / SIGNUP FORM SKELETON ───
+// AUTH / SIGNIN / SIGNUP FORM SKELETON
 export const AuthPageSkeleton: React.FC = () => (
   <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center p-4 animate-fadeIn">
     <div className="w-full max-w-md bg-white rounded-3xl border border-[#EAE4DA] p-8 shadow-sm space-y-6">
@@ -469,7 +469,7 @@ export const AuthPageSkeleton: React.FC = () => (
   </div>
 );
 
-// ─── 18. VENDOR & RIDER REGISTRATION MULTI-STEP SKELETON ───
+// VENDOR & RIDER REGISTRATION MULTI-STEP SKELETON
 export const RegistrationPageSkeleton: React.FC = () => (
   <div className="min-h-screen bg-[#FAF7F2] py-10 px-4 animate-fadeIn">
     <div className="max-w-3xl mx-auto space-y-6">

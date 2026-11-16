@@ -134,7 +134,7 @@ export function calculateETA(distanceKm: number, roadTravelMinutes?: number): st
 }
 
 /**
- * ─── Accurate Road-by-Road Distance & Delivery Fee Calculation ───────────────
+ * Accurate Road-by-Road Distance & Delivery Fee Calculation
  * Queries TomTom Routing API (with OSRM fallback) to get the true road driving distance,
  * winding road coordinates polyline, and live traffic travel time.
  */

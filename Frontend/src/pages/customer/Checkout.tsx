@@ -236,7 +236,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
     return getKhauGalliCoordinates(activeKhauGalli, displayKhauGalliName);
   }, [activeKhauGalli, displayKhauGalliName]);
 
-  // ── 2. Real-Time Road-by-Road Distance & Delivery Fee Calculation ──────────────
+  // Real-Time Road-by-Road Distance & Delivery Fee Calculation
   useEffect(() => {
     let isCancelled = false;
 
@@ -283,7 +283,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
   const extraStallsCount = Math.max(0, uniqueVendorsCount - 1);
   const extraStallFee = extraStallsCount * extraStallRate;
 
-  // ── 3. Pre-Calculate Road Distance for Address Switcher Selection List in Parallel ──────────
+  // Pre-Calculate Road Distance for Address Switcher Selection List in Parallel
   useEffect(() => {
     let isCancelled = false;
 
@@ -662,7 +662,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 mb-16">
-      {/* ─── DESKTOP VIEW ─── */}
+      {/* DESKTOP VIEW */}
       <div className="hidden md:block">
         {/* Header Breadcrumbs & Khau Galli Tag */}
         <div className="flex justify-between items-center mb-6">
@@ -1112,7 +1112,7 @@ export const Checkout: React.FC<CheckoutProps> = ({
         </div>
       </div>
 
-      {/* ─── MOBILE VIEW ─── */}
+      {/* MOBILE VIEW */}
       <div className="md:hidden block bg-[#FAF7F2] min-h-screen pb-36">
         {/* Mobile Header */}
         <div className="flex items-center gap-4 py-3.5 px-4 bg-white border-b border-[#EAE4DA] sticky top-0 z-30 shadow-3xs">

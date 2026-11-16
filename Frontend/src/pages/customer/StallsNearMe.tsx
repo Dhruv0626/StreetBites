@@ -229,7 +229,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 pb-20 font-sans">
-      {/* ─── BREADCRUMBS & TOP NAV ─── */}
+      
       <div className="flex items-center gap-3 mb-5">
         <button
           type="button"
@@ -256,7 +256,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
         </div>
       </div>
 
-      {/* ─── CLUSTER SWITCHER PILLS ─── */}
+      
       <div className="mb-6 bg-white p-3 rounded-2xl border border-[#EAE4DA] shadow-3xs">
         <div className="flex items-center gap-2 mb-2 px-1 text-xs font-bold text-stone-500 uppercase tracking-wider">
           <MapPin className="w-3.5 h-3.5 text-[#D94A38]" />
@@ -286,7 +286,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
         </div>
       </div>
 
-      {/* ─── STALL VIEW ─── */}
+      
       {isLoading ? (
         <StallDetailSkeleton />
       ) : stallsList.length === 0 || !currentStall ? (
@@ -310,7 +310,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
         </div>
       ) : (
         <>
-          {/* ─── DESKTOP VIEW ─── */}
+          {/* DESKTOP VIEW */}
           <div className="hidden md:block">
             {/* Stall Header Selector */}
             <div className="flex items-center gap-3 mb-6 bg-white p-3 rounded-2xl border border-[#EAE4DA] shadow-3xs overflow-x-auto no-scrollbar">
@@ -701,7 +701,7 @@ export const StallsNearMe: React.FC<StallsNearMeProps> = () => {
             </div>
           </div>
 
-          {/* ─── MOBILE VIEW ─── */}
+          {/* MOBILE VIEW */}
           <div className="md:hidden">
             {/* Mobile Header Banner */}
             <div className="relative h-60 -mx-4 -mt-4 bg-stone-900 p-4 flex flex-col justify-between text-white">

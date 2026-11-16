@@ -8,7 +8,7 @@ import pavbhajiImg from '../assets/images/dish_pavbhaji.png';
 import nightMarketImg from '../assets/images/hero_market.jpg';
 import logoImg from '../assets/Logo/Logo.png';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// Types
 interface MousePos { x: number; y: number; }
 interface Card {
   id: number;
@@ -23,7 +23,7 @@ interface Card {
   mobileHidden: boolean;
 }
 
-// ─── Card Definitions ─────────────────────────────────────────────────────────
+// Card Definitions
 const CARDS: Card[] = [
   { id: 1, img: dabeliImg, label: 'Dabeli', emoji: '🌮', x: '8%', y: '18%', rotate: -14, scale: 1.05, zIndex: 3, delay: 0.1, mobileHidden: true },
   { id: 2, img: vadapavImg, label: 'Vada Pav', emoji: '🫓', x: '72%', y: '8%', rotate: 10, scale: 1.0, zIndex: 2, delay: 0.25, mobileHidden: true },
@@ -31,7 +31,7 @@ const CARDS: Card[] = [
   { id: 5, img: nightMarketImg, label: 'Khau Galli', emoji: '🌃', x: '3%', y: '62%', rotate: -8, scale: 0.95, zIndex: 2, delay: 0.35, mobileHidden: true },
 ];
 
-// ─── Particle Component ───────────────────────────────────────────────────────
+// Particle Component
 const Particle: React.FC<{ style: React.CSSProperties }> = ({ style }) => (
   <div className="absolute rounded-full pointer-events-none" style={style} />
 );
@@ -47,7 +47,7 @@ const SplashScreen: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [mounted, setMounted] = useState(false);
 
-  // ── Particles config (memoised) ──────────────────────────────────────────
+  // Particles config (memoised)
   const particles = React.useMemo(() =>
     Array.from({ length: 28 }, (_, i) => ({
       id: i,
@@ -60,13 +60,13 @@ const SplashScreen: React.FC = () => {
       color: i % 3 === 0 ? '#D94A38' : i % 3 === 1 ? '#F59E0B' : '#ffffff',
     })), []);
 
-  // ── Mount animation ──────────────────────────────────────────────────────
+  // Mount animation
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 80);
     return () => clearTimeout(t);
   }, []);
 
-  // ── Progress bar + auto-navigate ─────────────────────────────────────────
+  // Progress bar + auto-navigate
   useEffect(() => {
     const DURATION = 4000; // ms total
     const start = performance.now();
@@ -91,7 +91,7 @@ const SplashScreen: React.FC = () => {
     return () => cancelAnimationFrame(raf);
   }, [navigate]);
 
-  // ── Mouse tracking ────────────────────────────────────────────────────────
+  // Mouse tracking
   useEffect(() => {
     const handleMouse = (e: MouseEvent) => {
       const vw = window.innerWidth;
@@ -102,7 +102,7 @@ const SplashScreen: React.FC = () => {
     return () => window.removeEventListener('mousemove', handleMouse);
   }, []);
 
-  // ── 3D card animation loop ────────────────────────────────────────────────
+  // 3D card animation loop
   useEffect(() => {
     const strengths = [28, 20, 32, 22, 16];
     const lerpFactors = [0.06, 0.05, 0.07, 0.055, 0.04];
@@ -156,7 +156,7 @@ const SplashScreen: React.FC = () => {
         transform: isExit ? 'scale(1.04)' : 'scale(1)',
       }}
     >
-      {/* ── Animated grain overlay ── */}
+      {/* Animated grain overlay  */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -165,7 +165,7 @@ const SplashScreen: React.FC = () => {
         }}
       />
 
-      {/* ── Glowing radial accent ── */}
+      {/* Glowing radial accent  */}
       <div
         className="absolute pointer-events-none"
         style={{
@@ -178,7 +178,7 @@ const SplashScreen: React.FC = () => {
         }}
       />
 
-      {/* ── Floating particles ── */}
+      {/* Floating particles  */}
       {particles.map(p => (
         <Particle
           key={p.id}
@@ -193,7 +193,7 @@ const SplashScreen: React.FC = () => {
         />
       ))}
 
-      {/* ── Horizontal ambient lines ── */}
+      {/* Horizontal ambient lines  */}
       {[15, 45, 72, 90].map((pct, i) => (
         <div
           key={i}
@@ -206,7 +206,7 @@ const SplashScreen: React.FC = () => {
         />
       ))}
 
-      {/* ─────────────────────── 3D FOOD CARDS ─────────────────────────── */}
+      
       <div className="absolute inset-0" style={{ perspective: '1200px', perspectiveOrigin: '50% 50%' }}>
         {CARDS.map((card, i) => (
           <div
@@ -293,7 +293,7 @@ const SplashScreen: React.FC = () => {
         ))}
       </div>
 
-      {/* ─────────────────────── CENTER CONTENT ─────────────────────────── */}
+      
       <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ zIndex: 10 }}>
 
         {/* Logo container */}
@@ -419,7 +419,7 @@ const SplashScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Bottom cluster strip ── */}
+      {/* Bottom cluster strip  */}
       <div
         className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3"
         style={{
@@ -431,7 +431,7 @@ const SplashScreen: React.FC = () => {
       >
       </div>
 
-      {/* ── Global keyframe styles ── */}
+      {/* Global keyframe styles  */}
       <style>{`
         @keyframes float-particle {
           0%   { transform: translate(0, 0) scale(1); }
