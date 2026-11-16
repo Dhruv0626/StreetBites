@@ -53,7 +53,7 @@ StreetBites introduces **Cluster-Aware Fulfillment**:
              ┌─────────────────┬─────────────┴─────────────┬─────────────────┐
              ▼                 ▼                           ▼                 ▼
    ┌──────────────────┐ ┌──────────────────┐     ┌──────────────────┐ ┌──────────────────┐
-   │   🛒 CUSTOMER    │ │    👨‍🍳 VENDOR     │     │     🛵 RIDER     │ │     🛡️ ADMIN     │
+   │   🛒 CUSTOMER   │ │    👨‍🍳 VENDOR     │     │     🛵 RIDER    │  │     🛡️ ADMIN     │
    │ Foodie Discovery │ │ Kitchen Display  │     │ Fleet Logistics  │ │ Master Control   │
    │   & Multi-Cart   │ │  & Menu Studio   │     │  & GPS Routing   │ │ & KYC Governance │
    └──────────────────┘ └──────────────────┘     └──────────────────┘ └──────────────────┘
